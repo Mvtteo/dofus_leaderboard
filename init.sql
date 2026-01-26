@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS players (
+    id SERIAL PRIMARY KEY,
+    dofus_pseudo VARCHAR(255) UNIQUE NOT NULL,
+    total_points INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_players_points ON players(total_points DESC);

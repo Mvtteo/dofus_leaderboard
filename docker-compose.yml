@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: dofus_user
+      POSTGRES_PASSWORD: password_super_secret
+      POSTGRES_DB: dofus_db
+    volumes:
+      - dofus_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  bot:
+    build: .
+    restart: always
+    depends_on:
+      - db
+    env_file:
+      - .env  # Il ira chercher les secrets dans le fichier .env du serveur
+
+volumes:
+  dofus_data:
