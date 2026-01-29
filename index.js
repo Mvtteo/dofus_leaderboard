@@ -42,9 +42,11 @@ if (!CHANNEL_ID) {
     process.exit(1);
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL, // <--- Railway remplit ça tout seul
+    ssl: {
+        rejectUnauthorized: false // <--- OBLIGATOIRE sur le Cloud (sinon ça bloque)
+    }
 });
 
 const activeSessions = new Map();
