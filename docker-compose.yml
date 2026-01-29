@@ -4,11 +4,14 @@ services:
     restart: always
     environment:
       POSTGRES_USER: dofus_user
-      POSTGRES_PASSWORD: password_super_secret
+      POSTGRES_PASSWORD: grepallusi0
       POSTGRES_DB: dofus_db
     volumes:
       - dofus_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    # 👇 C'est ICI qu'il faut le mettre (dans le service db) 👇
+    ports:
+      - "5432:5432"
 
   bot:
     build: .
@@ -16,7 +19,7 @@ services:
     depends_on:
       - db
     env_file:
-      - .env  # Il ira chercher les secrets dans le fichier .env du serveur
+      - .env
 
 volumes:
   dofus_data:
