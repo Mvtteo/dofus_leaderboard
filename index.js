@@ -4,13 +4,13 @@ const {
     GatewayIntentBits, 
     ActionRowBuilder, 
     ButtonBuilder, 
-    ButtonStyle,
+    ButtonStyle, 
     EmbedBuilder 
 } = require('discord.js');
 const Tesseract = require('tesseract.js');
 const { Pool } = require('pg');
 
-// --- CHARGEMENT JIMP (Pour le filtre Négatif uniquement) ---
+// --- CHARGEMENT JIMP ---
 let Jimp;
 try {
     const jimpLib = require('jimp');
@@ -39,24 +39,50 @@ const BANNED_WORDS = [
 
 if (!CHANNEL_ID) {
     console.error("❌ ERREUR : CHANNEL_ID manquant.");
-    process.exit(1);
+    // On ne coupe pas le process ici pour laisser le bot démarrer et on verra l'erreur dans les logs
 }
 
+// --- 1. CONNEXION BASE DE DONNÉES ---
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL, // <--- Railway remplit ça tout seul
+    connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // <--- OBLIGATOIRE sur le Cloud (sinon ça bloque)
+        rejectUnauthorized: false // OBLIGATOIRE pour Railway
     }
+});
+
+// --- 2. CRÉATION DU CLIENT (C'est ce qui manquait !) ---
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
 const activeSessions = new Map();
 
-client.once('ready', () => { 
-    console.log(`✅ Bot Connecté (Lecture pure) : ${client.user.tag}`);
+// --- 3. DÉMARRAGE ET CRÉATION TABLE AUTO ---
+client.once('ready', async () => { 
+    console.log(`✅ Bot Connecté : ${client.user.tag}`);
+
+    // Création automatique de la table si elle n'existe pas
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS players (
+                dofus_pseudo VARCHAR(255) PRIMARY KEY,
+                dofus_class VARCHAR(50),
+                total_points INT DEFAULT 0
+            );
+        `);
+        console.log("📂 Table 'players' vérifiée/créée.");
+    } catch (err) {
+        console.error("❌ Erreur BDD (Table):", err);
+    }
+
     updateLeaderboard(); 
 });
 
-// 1. RÉCEPTION
+// --- 4. RÉCEPTION DES IMAGES ---
 client.on('messageCreate', async message => {
     if (message.author.bot || message.channel.id !== CHANNEL_ID) return;
 
@@ -70,17 +96,12 @@ client.on('messageCreate', async message => {
         for (const [id, attachment] of attachments) {
             console.log(`\n--- LECTURE : ${attachment.name} ---`);
             
-            // 1. PRÉ-TRAITEMENT (Indispensable pour Dofus)
-            // On transforme l'image pour que le texte ressorte bien
             const image = await Jimp.read(attachment.url);
             image.greyscale().invert().contrast(0.25).scale(1.5);
             
             const processedBuffer = await image.getBufferAsync("image/png");
-
-            // 2. OCR (Lecture du texte)
             const result = await Tesseract.recognize(processedBuffer, 'eng');
             
-            // 3. ANALYSE DU TEXTE
             const parsedPart = parseScreenData(result.data.text);
             
             if (parsedPart.winners.length > 0) userSession.winners = [...new Set([...userSession.winners, ...parsedPart.winners])];
@@ -109,11 +130,15 @@ client.on('messageCreate', async message => {
     }
 });
 
-// 2. INTERACTION BOUTONS
+// --- 5. INTERACTION BOUTONS ---
 client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
     const userSession = activeSessions.get(interaction.user.id);
-    if (!userSession) return interaction.reply({ content: "❌ Session expirée.", ephemeral: true });
+    
+    // Si pas de session, on vérifie si c'est un bouton "Attaque/Défense" ou un bouton de résultat
+    if (!userSession) {
+        return interaction.reply({ content: "❌ Session expirée ou inconnue.", ephemeral: true });
+    }
 
     if (interaction.customId === 'reset') {
         activeSessions.delete(interaction.user.id);
@@ -131,6 +156,9 @@ client.on('interactionCreate', async interaction => {
 
     else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
         const hasWon = interaction.customId === 'result_win';
+        
+        // Logique de points inversée selon Attaque ou Défense ? (A toi de voir, ici je laisse simple)
+        // Si je suis en attaque et que je gagne -> +50 aux gagnants
         const finalPlayers = hasWon ? userSession.winners : userSession.losers;
         const pointsToAdd = hasWon ? POINTS_WIN : POINTS_LOSE;
 
@@ -147,7 +175,13 @@ client.on('interactionCreate', async interaction => {
 // --- FONCTIONS BASE DE DONNÉES ---
 
 async function updatePlayerPoints(pseudo, points) {
-    const query = `INSERT INTO players (dofus_pseudo, total_points) VALUES ($1, $2) ON CONFLICT (dofus_pseudo) DO UPDATE SET total_points = players.total_points + $2;`;
+    // Requête sécurisée (si le joueur n'existe pas, on le crée)
+    const query = `
+        INSERT INTO players (dofus_pseudo, total_points) 
+        VALUES ($1, $2) 
+        ON CONFLICT (dofus_pseudo) 
+        DO UPDATE SET total_points = players.total_points + $2;
+    `;
     await pool.query(query, [pseudo, points]);
 }
 
@@ -183,13 +217,14 @@ async function updateLeaderboard() {
     }
 }
 
-// --- FONCTION DE LECTURE (SANS ANALYSE D'ICÔNE) ---
+// --- FONCTION DE LECTURE ---
 function parseScreenData(text) {
     const lines = text.split('\n');
     const winners = [];
     const losers = [];
     let currentSection = 'winners';
     
+    // Détection basique si l'image commence direct par les perdants
     if (text.substring(0, 100).toUpperCase().includes('PERDANTS')) currentSection = 'losers';
 
     lines.forEach((line) => {
@@ -200,7 +235,6 @@ function parseScreenData(text) {
         if (upperLine.includes('PERDANT') || upperLine.includes('LOSER')) { currentSection = 'losers'; return; }
         if (line.length < 3) return;
 
-        // Nettoyage standard
         const cleanLine = line.replace(/[\[\]\(\)\|\@\:\.\,\*\+\!]/g, ' '); 
         const rawWords = cleanLine.split(/\s+/);
         
@@ -208,23 +242,21 @@ function parseScreenData(text) {
 
         for (const w of rawWords) {
             let word = w.replace(/[^a-zA-Z0-9-]/g, '');
-            word = word.replace(/^\d+/, ''); // Retire les chiffres au début (Fix Desmot)
+            word = word.replace(/^\d+/, ''); 
 
             if (word.length < 3) continue;
             if (STOP_WORDS.includes(word.toLowerCase())) break;
-            if (BANNED_WORDS.includes(word.toLowerCase())) return; // Ignore toute la ligne si mot banni
+            if (BANNED_WORDS.includes(word.toLowerCase())) return;
 
-            // Filtre anti-bruit (level, xp mal lus)
             if (word.length <= 4 && /\d/.test(word)) continue;
             if (/^\d/.test(word)) continue;
 
             validNameParts.push(word);
         }
 
-        // Si on a trouvé exactement 1 mot valide -> C'est un pseudo joueur
         if (validNameParts.length === 1) {
             const pseudo = validNameParts[0];
-            if (!/^\d+$/.test(pseudo)) { // Sécurité finale (pas que des chiffres)
+            if (!/^\d+$/.test(pseudo)) {
                 console.log(`✅ Joueur trouvé : ${pseudo}`);
                 if (currentSection === 'winners') winners.push(pseudo);
                 else losers.push(pseudo);
