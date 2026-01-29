@@ -129,7 +129,7 @@ client.on('messageCreate', async message => {
         for (const [id, attachment] of attachments) {
             console.log(`\n--- LECTURE : ${attachment.name} ---`);
             
-            const image = await Jimp.read(attachment.url);
+            image.greyscale().scale(2).invert().threshold({ max: 180 });
             image.greyscale().invert().contrast(0.25).scale(1.5);
             
             const processedBuffer = await image.getBufferAsync("image/png");
