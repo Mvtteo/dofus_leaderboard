@@ -129,10 +129,21 @@ client.on('messageCreate', async message => {
         for (const [id, attachment] of attachments) {
             console.log(`\n--- LECTURE : ${attachment.name} ---`);
             
-            image.greyscale().scale(2).invert().threshold({ max: 180 });
+            // 1. D'ABORD : On charge l'image (C'est cette ligne qui manquait !)
+            const image = await Jimp.read(attachment.url);
+
+            // 2. ENSUITE : On applique les filtres (Noir & Blanc violent)
+            image.greyscale()
+                 .scale(2)
+                 .invert()
+                 .threshold({ max: 180 });
             
+            // 3. ENFIN : On envoie à Tesseract
             const processedBuffer = await image.getBufferAsync("image/png");
-            const result = await Tesseract.recognize(processedBuffer, 'eng');
+            const result = await Tesseract.recognize(processedBuffer, 'eng', {
+                tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
+                tessedit_pageseg_mode: '6'
+            });
             
             const parsedPart = parseScreenData(result.data.text);
             
