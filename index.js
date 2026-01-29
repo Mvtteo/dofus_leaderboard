@@ -9,6 +9,39 @@ const {
 } = require('discord.js');
 const Tesseract = require('tesseract.js');
 const { Pool } = require('pg');
+const express = require('express');
+const path = require('path');
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', async (req, res) => {
+    try {
+        // On récupère tout le monde trié par points
+        const result = await pool.query('SELECT * FROM players ORDER BY total_points DESC');
+        const players = result.rows;
+        
+        // Calcul simple pour la stat "Points totaux"
+        const totalPoints = players.reduce((acc, p) => acc + p.total_points, 0);
+
+        // On envoie les données à la page HTML (index.ejs)
+        res.render('index', { 
+            players: players,
+            totalPoints: totalPoints
+        });
+    } catch (err) {
+        console.error(err);
+        res.send("Erreur lors du chargement du classement.");
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`🌍 Site Web actif sur le port ${PORT}`);
+});
 
 // --- CHARGEMENT JIMP ---
 let Jimp;
