@@ -130,7 +130,6 @@ client.on('messageCreate', async message => {
             console.log(`\n--- LECTURE : ${attachment.name} ---`);
             
             image.greyscale().scale(2).invert().threshold({ max: 180 });
-            image.greyscale().invert().contrast(0.25).scale(1.5);
             
             const processedBuffer = await image.getBufferAsync("image/png");
             const result = await Tesseract.recognize(processedBuffer, 'eng');

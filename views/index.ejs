@@ -4,30 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dofus Leaderboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
-    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script> </head>
+</head>
 <body>
 
     <header>
         <div class="logo">🏆</div>
         <h1>DOFUS LEADERBOARD</h1>
-        <p class="subtitle">Les plus grands guerriers du Monde des Douze.</p>
+        <p class="subtitle">Les légendes du serveur</p>
         
         <div class="stats-row">
             <div class="stat-box">
-                <i class="fas fa-users"></i>
-                <div>
-                    <strong><%= players.length %></strong>
-                    <span>Joueurs</span>
-                </div>
+                <strong><%= players.length %></strong>
+                <span>Joueurs</span>
             </div>
             <div class="stat-box">
-                <i class="fas fa-fist-raised"></i>
-                <div>
-                    <strong><%= totalPoints %></strong>
-                    <span>Points Totaux</span>
-                </div>
+                <strong><%= totalPoints.toLocaleString() %></strong>
+                <span>Points Totaux</span>
             </div>
         </div>
     </header>
@@ -37,10 +31,9 @@
         <div class="top-players">
             <% if (players[1]) { %>
             <div class="card silver">
-                <div class="rank-badge">2</div>
+                <div class="rank-badge">#2</div>
                 <div class="avatar">🥈</div>
                 <h3><%= players[1].dofus_pseudo %></h3>
-                <p class="class-name"><%= players[1].dofus_class || 'Inconnu' %></p>
                 <div class="score"><%= players[1].total_points.toLocaleString() %> pts</div>
             </div>
             <% } %>
@@ -50,45 +43,41 @@
                 <div class="crown">👑</div>
                 <div class="avatar">🏆</div>
                 <h3><%= players[0].dofus_pseudo %></h3>
-                <p class="class-name"><%= players[0].dofus_class || 'Inconnu' %></p>
                 <div class="score"><%= players[0].total_points.toLocaleString() %> pts</div>
             </div>
             <% } %>
 
             <% if (players[2]) { %>
             <div class="card bronze">
-                <div class="rank-badge">3</div>
+                <div class="rank-badge">#3</div>
                 <div class="avatar">🥉</div>
                 <h3><%= players[2].dofus_pseudo %></h3>
-                <p class="class-name"><%= players[2].dofus_class || 'Inconnu' %></p>
                 <div class="score"><%= players[2].total_points.toLocaleString() %> pts</div>
             </div>
             <% } %>
         </div>
 
         <div class="search-container">
-            <input type="text" id="search" placeholder="Rechercher un joueur ou une classe..." onkeyup="filterTable()">
+            <input type="text" id="search" placeholder="Rechercher un pseudo..." onkeyup="filterTable()">
         </div>
 
         <div class="table-container">
             <table id="leaderboardTable">
                 <thead>
                     <tr>
-                        <th>Rang</th>
+                        <th style="width: 50px;">#</th>
                         <th>Joueur</th>
-                        <th>Classe</th>
-                        <th>Score</th>
+                        <th style="text-align: right;">Score</th>
                     </tr>
                 </thead>
                 <tbody>
                     <% players.forEach((player, index) => { %>
                         <tr>
-                            <td class="rank">#<%= index + 1 %></td>
+                            <td class="rank"><%= index + 1 %></td>
                             <td class="player-cell">
-                                <span class="player-icon">👤</span>
                                 <%= player.dofus_pseudo %>
+                                <% if(index === 0) { %> 👑 <% } %>
                             </td>
-                            <td><span class="tag"><%= player.dofus_class || '?' %></span></td>
                             <td class="points"><%= player.total_points.toLocaleString() %></td>
                         </tr>
                     <% }); %>
@@ -100,20 +89,15 @@
 
     <script>
         function filterTable() {
-            var input, filter, table, tr, td, i, txtValue;
-            input = document.getElementById("search");
-            filter = input.value.toUpperCase();
-            table = document.getElementById("leaderboardTable");
-            tr = table.getElementsByTagName("tr");
-            for (i = 0; i < tr.length; i++) {
-                td = tr[i].getElementsByTagName("td")[1]; // Colonne Joueur
+            var input = document.getElementById("search");
+            var filter = input.value.toUpperCase();
+            var table = document.getElementById("leaderboardTable");
+            var tr = table.getElementsByTagName("tr");
+            for (var i = 0; i < tr.length; i++) {
+                var td = tr[i].getElementsByTagName("td")[1];
                 if (td) {
-                    txtValue = td.textContent || td.innerText;
-                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                        tr[i].style.display = "";
-                    } else {
-                        tr[i].style.display = "none";
-                    }
+                    var txtValue = td.textContent || td.innerText;
+                    tr[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
                 }       
             }
         }
