@@ -21,14 +21,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', async (req, res) => {
     try {
-        // On récupère tout le monde trié par points
         const result = await pool.query('SELECT * FROM players ORDER BY total_points DESC');
         const players = result.rows;
-        
-        // Calcul simple pour la stat "Points totaux"
         const totalPoints = players.reduce((acc, p) => acc + p.total_points, 0);
-
-        // On envoie les données à la page HTML (index.ejs)
         res.render('index', { 
             players: players,
             totalPoints: totalPoints
@@ -40,7 +35,7 @@ app.get('/', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🌍 Site Web actif sur le port ${PORT}`);
+    console.log(`Site Web actif sur le port ${PORT}`);
 });
 
 // --- CHARGEMENT JIMP ---
@@ -49,7 +44,7 @@ try {
     const jimpLib = require('jimp');
     Jimp = jimpLib.Jimp || jimpLib;
 } catch (e) {
-    console.error("❌ Erreur critique : Jimp mal installé.");
+    console.error("Erreur critique : Jimp mal installe.");
     process.exit(1);
 }
 
@@ -61,29 +56,28 @@ const LEADERBOARD_CHANNEL_ID = process.env.LEADERBOARD_CHANNEL_ID || CHANNEL_ID;
 
 const STOP_WORDS = [
     'niveau', 'level', 'lvl', 'xp', 'oxp', 'orp', 'okp', 'kamas', 'butin', 'total', 
-    'challenge', 'revanche', 'groupe', 'team', 'combat', 'fin'
+    'challenge', 'revanche', 'groupe', 'team', 'combat', 'fin', 'experience', 'gagnee'
 ];
 
 const BANNED_WORDS = [
     'percepteur', 'prisme', 'prism', 'tax', 'collector', 'archimonstre', 'gardien',
     'gagnant', 'gagnants', 'perdant', 'perdants', 'winners', 'losers', 'vs',
-    'nom', 'personnage', 'personage', 'character', 'name', 'exp', 'experience'
+    'nom', 'personnage', 'personage', 'character', 'name', 'exp'
 ];
 
 if (!CHANNEL_ID) {
-    console.error("❌ ERREUR : CHANNEL_ID manquant.");
-    // On ne coupe pas le process ici pour laisser le bot démarrer et on verra l'erreur dans les logs
+    console.error("ERREUR : CHANNEL_ID manquant.");
 }
 
-// --- 1. CONNEXION BASE DE DONNÉES ---
+// --- 1. CONNEXION BASE DE DONNEES ---
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // OBLIGATOIRE pour Railway
+        rejectUnauthorized: false
     }
 });
 
-// --- 2. CRÉATION DU CLIENT (C'est ce qui manquait !) ---
+// --- 2. CREATION DU CLIENT ---
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -94,11 +88,10 @@ const client = new Client({
 
 const activeSessions = new Map();
 
-// --- 3. DÉMARRAGE ET CRÉATION TABLE AUTO ---
+// --- 3. DEMARRAGE ET CREATION TABLE AUTO ---
 client.once('ready', async () => { 
-    console.log(`✅ Bot Connecté : ${client.user.tag}`);
+    console.log(`Bot Connecte : ${client.user.tag}`);
 
-    // Création automatique de la table si elle n'existe pas
     try {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS players (
@@ -107,15 +100,15 @@ client.once('ready', async () => {
                 total_points INT DEFAULT 0
             );
         `);
-        console.log("📂 Table 'players' vérifiée/créée.");
+        console.log("Table 'players' verifiee/creee.");
     } catch (err) {
-        console.error("❌ Erreur BDD (Table):", err);
+        console.error("Erreur BDD (Table):", err);
     }
 
     updateLeaderboard(); 
 });
 
-// --- 4. RÉCEPTION DES IMAGES ---
+// --- 4. RECEPTION DES IMAGES ---
 client.on('messageCreate', async message => {
     if (message.author.bot || message.channel.id !== CHANNEL_ID) return;
 
@@ -123,27 +116,28 @@ client.on('messageCreate', async message => {
     if (attachments.size === 0) return;
 
     let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [] };
-    const msgRef = await message.reply(`🧐 Lecture du classement...`);
+    const msgRef = await message.reply(`Lecture du classement...`);
 
     try {
         for (const [id, attachment] of attachments) {
             console.log(`\n--- LECTURE : ${attachment.name} ---`);
             
-            // 1. D'ABORD : On charge l'image (C'est cette ligne qui manquait !)
+            // 1. Charger l'image
             const image = await Jimp.read(attachment.url);
 
-            // 2. ENSUITE : On applique les filtres (Noir & Blanc violent)
+            // 2. Pretraitement optimise (sans invert/threshold qui detruisent le texte)
             image.greyscale()
-                 .scale(2)
-                 .invert()
-                 .threshold({ max: 180 });
+                 .scale(3)
+                 .contrast(0.3);
             
-            // 3. ENFIN : On envoie à Tesseract
+            // 3. Envoyer a Tesseract
             const processedBuffer = await image.getBufferAsync("image/png");
-            const result = await Tesseract.recognize(processedBuffer, 'eng', {
-                tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
+            const result = await Tesseract.recognize(processedBuffer, 'fra', {
                 tessedit_pageseg_mode: '6'
             });
+            
+            console.log("--- TEXTE BRUT ---");
+            console.log(result.data.text);
             
             const parsedPart = parseScreenData(result.data.text);
             
@@ -155,21 +149,21 @@ client.on('messageCreate', async message => {
 
         if (userSession.winners.length > 0 && userSession.losers.length > 0) {
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('attack').setLabel('🗡️ Attaque').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('defense').setLabel('🛡️ Défense').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('reset').setLabel('🗑️ Reset').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
             await msgRef.edit({ 
-                content: `✅ **Complet !**\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, 
+                content: `**Complet !**\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, 
                 components: [row] 
             });
         } else {
-            await msgRef.edit(`🔍 **Résultat partiel**\nGagnants: ${userSession.winners.length} | Perdants: ${userSession.losers.length}`);
+            await msgRef.edit(`**Resultat partiel**\nGagnants: ${userSession.winners.length} | Perdants: ${userSession.losers.length}\nDetectes: W=${userSession.winners.join(',')} L=${userSession.losers.join(',')}`);
         }
 
     } catch (error) {
         console.error(error);
-        msgRef.edit("❌ Erreur technique.");
+        msgRef.edit("Erreur technique.");
     }
 });
 
@@ -178,47 +172,42 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
     const userSession = activeSessions.get(interaction.user.id);
     
-    // Si pas de session, on vérifie si c'est un bouton "Attaque/Défense" ou un bouton de résultat
     if (!userSession) {
-        return interaction.reply({ content: "❌ Session expirée ou inconnue.", ephemeral: true });
+        return interaction.reply({ content: "Session expiree ou inconnue.", ephemeral: true });
     }
 
     if (interaction.customId === 'reset') {
         activeSessions.delete(interaction.user.id);
-        return interaction.update({ content: "🗑️ Session effacée.", components: [] });
+        return interaction.update({ content: "Session effacee.", components: [] });
     }
 
     if (interaction.customId === 'attack' || interaction.customId === 'defense') {
         userSession.context = interaction.customId;
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('result_win').setLabel('🏆 GAGNÉ').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('result_lose').setLabel('💀 PERDU').setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('result_win').setLabel('GAGNE').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('result_lose').setLabel('PERDU').setStyle(ButtonStyle.Danger)
         );
-        await interaction.update({ content: `Mode : **${interaction.customId}**. Résultat ?`, components: [row] });
+        await interaction.update({ content: `Mode : **${interaction.customId}**. Resultat ?`, components: [row] });
     }
 
     else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
         const hasWon = interaction.customId === 'result_win';
-        
-        // Logique de points inversée selon Attaque ou Défense ? (A toi de voir, ici je laisse simple)
-        // Si je suis en attaque et que je gagne -> +50 aux gagnants
         const finalPlayers = hasWon ? userSession.winners : userSession.losers;
         const pointsToAdd = hasWon ? POINTS_WIN : POINTS_LOSE;
 
-        if (!finalPlayers || finalPlayers.length === 0) return interaction.update({ content: "⚠️ Liste vide.", components: [] });
+        if (!finalPlayers || finalPlayers.length === 0) return interaction.update({ content: "Liste vide.", components: [] });
 
         for (const pseudo of finalPlayers) await updatePlayerPoints(pseudo, pointsToAdd);
         await updateLeaderboard();
 
         activeSessions.delete(interaction.user.id);
-        await interaction.update({ content: `✅ **Enregistré !**\n${finalPlayers.length} joueurs ont reçu +${pointsToAdd} pts.`, components: [] });
+        await interaction.update({ content: `**Enregistre !**\n${finalPlayers.length} joueurs ont recu +${pointsToAdd} pts.`, components: [] });
     }
 });
 
-// --- FONCTIONS BASE DE DONNÉES ---
+// --- FONCTIONS BASE DE DONNEES ---
 
 async function updatePlayerPoints(pseudo, points) {
-    // Requête sécurisée (si le joueur n'existe pas, on le crée)
     const query = `
         INSERT INTO players (dofus_pseudo, total_points) 
         VALUES ($1, $2) 
@@ -234,17 +223,17 @@ async function updateLeaderboard() {
         if (res.rows.length === 0) return;
 
         let description = "";
-        const medals = ['🥇', '🥈', '🥉'];
+        const medals = ['1.', '2.', '3.'];
         res.rows.forEach((row, index) => {
             const medal = index < 3 ? medals[index] : `**${index + 1}.**`;
-            description += `${medal} **${row.dofus_pseudo}** — \`${row.total_points} pts\`\n`;
+            description += `${medal} **${row.dofus_pseudo}** - \`${row.total_points} pts\`\n`;
         });
 
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle('🏆 CLASSEMENT ALLIANCE')
+            .setTitle('CLASSEMENT ALLIANCE')
             .setDescription(description)
-            .setFooter({ text: `Mis à jour le ${new Date().toLocaleString('fr-FR')}` })
+            .setFooter({ text: `Mis a jour le ${new Date().toLocaleString('fr-FR')}` })
             .setThumbnail('https://upload.wikimedia.org/wikipedia/fr/3/3a/Dofus_Logo.png');
 
         const channel = await client.channels.fetch(LEADERBOARD_CHANNEL_ID);
@@ -267,45 +256,82 @@ function parseScreenData(text) {
     const losers = [];
     let currentSection = 'winners';
     
-    // Détection basique si l'image commence direct par les perdants
-    if (text.substring(0, 100).toUpperCase().includes('PERDANTS')) currentSection = 'losers';
+    // Detection de la section initiale
+    const firstChunk = text.substring(0, 150).toUpperCase();
+    if (firstChunk.includes('PERDANT')) currentSection = 'losers';
 
     lines.forEach((line) => {
         const upperLine = line.toUpperCase().trim();
-        if (!upperLine) return;
+        if (!upperLine || upperLine.length < 3) return;
 
-        if (upperLine.includes('GAGNANT') || upperLine.includes('WINNER')) { currentSection = 'winners'; return; }
-        if (upperLine.includes('PERDANT') || upperLine.includes('LOSER')) { currentSection = 'losers'; return; }
-        if (line.length < 3) return;
+        // Changement de section
+        if (upperLine.includes('GAGNANT') || upperLine.includes('WINNER')) { 
+            currentSection = 'winners'; 
+            return; 
+        }
+        if (upperLine.includes('PERDANT') || upperLine.includes('LOSER')) { 
+            currentSection = 'losers'; 
+            return; 
+        }
 
-        const cleanLine = line.replace(/[\[\]\(\)\|\@\:\.\,\*\+\!]/g, ' '); 
-        const rawWords = cleanLine.split(/\s+/);
+        // Verifier si la ligne contient un mot banni (entete, etc.)
+        if (BANNED_WORDS.some(b => upperLine.includes(b.toUpperCase()))) {
+            return;
+        }
+
+        // === FILTRE PERCEPTEUR ===
+        // Pattern Ankama : "Prenom Do'Quelquechose" (ex: Johmy Do'Rorboreal, Enflam Do'Ert, Jerry Do'Bradiga)
+        if (/Do'/i.test(line)) {
+            console.log(`[SKIP PERCEPTEUR] ${line.trim()}`);
+            return;
+        }
+
+        // Nettoyer la ligne
+        const cleanLine = line.replace(/[\[\]\(\)\|\@\:\.\,\*\+\!\?\#\%\&]/g, ' '); 
+        const rawWords = cleanLine.split(/\s+/).filter(w => w.length > 0);
         
         let validNameParts = [];
 
         for (const w of rawWords) {
-            let word = w.replace(/[^a-zA-Z0-9-]/g, '');
-            word = word.replace(/^\d+/, ''); 
-
-            if (word.length < 3) continue;
+            let word = w.replace(/[^a-zA-Z0-9\-]/g, '');
+            
+            if (word.length < 2) continue;
+            
+            // Stop words = on arrete de parser cette ligne
             if (STOP_WORDS.includes(word.toLowerCase())) break;
-            if (BANNED_WORDS.includes(word.toLowerCase())) return;
-
-            if (word.length <= 4 && /\d/.test(word)) continue;
-            if (/^\d/.test(word)) continue;
+            
+            // Ignorer les nombres purs
+            if (/^\d+$/.test(word)) continue;
+            
+            // Ignorer si c'est juste des chiffres avec quelques lettres (niveaux mal lus)
+            if (/^\d+[a-zA-Z]{1,2}$/.test(word) || /^[a-zA-Z]{1,2}\d+$/.test(word)) continue;
 
             validNameParts.push(word);
         }
 
-        if (validNameParts.length === 1) {
-            const pseudo = validNameParts[0];
-            if (!/^\d+$/.test(pseudo)) {
-                console.log(`✅ Joueur trouvé : ${pseudo}`);
-                if (currentSection === 'winners') winners.push(pseudo);
-                else losers.push(pseudo);
-            }
+        // Pas de mots valides trouves
+        if (validNameParts.length === 0) return;
+
+        // EXTRACTION DU PSEUDO (premier mot valide)
+        const pseudo = validNameParts[0];
+        
+        // Validations finales
+        if (pseudo.length < 3) return;
+        if (/^\d+$/.test(pseudo)) return;
+        if (/^\d/.test(pseudo) && pseudo.length < 5) return;
+        
+        console.log(`[${currentSection.toUpperCase()}] Joueur : ${pseudo}`);
+        
+        if (currentSection === 'winners') {
+            if (!winners.includes(pseudo)) winners.push(pseudo);
+        } else {
+            if (!losers.includes(pseudo)) losers.push(pseudo);
         }
     });
+
+    console.log(`\n=== RESULTAT ===`);
+    console.log(`Gagnants (${winners.length}): ${winners.join(', ')}`);
+    console.log(`Perdants (${losers.length}): ${losers.join(', ')}`);
 
     return { winners, losers };
 }
