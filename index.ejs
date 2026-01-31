@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dofus Leaderboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="bg-glow"></div>
+
+    <header>
+        <div class="header-content">
+            <div class="logo-container">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                    </svg>
+                </div>
+                <div class="logo-ring"></div>
+            </div>
+            <h1>Leaderboard</h1>
+            <p class="subtitle">Alliance Rankings</p>
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </div>
+                <div class="stat-content">
+                    <span class="stat-value"><%= players.length %></span>
+                    <span class="stat-label">Joueurs</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon gold">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                </div>
+                <div class="stat-content">
+                    <span class="stat-value"><%= totalPoints.toLocaleString() %></span>
+                    <span class="stat-label">Points Totaux</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Podium -->
+        <section class="podium-section">
+            <div class="podium">
+                <% if (players[1]) { %>
+                <div class="podium-item silver">
+                    <div class="podium-rank">2</div>
+                    <div class="podium-avatar">
+                        <span><%= players[1].dofus_pseudo.charAt(0).toUpperCase() %></span>
+                    </div>
+                    <h3 class="podium-name"><%= players[1].dofus_pseudo %></h3>
+                    <div class="podium-score"><%= players[1].total_points.toLocaleString() %></div>
+                    <div class="podium-bar">
+                        <div class="bar-fill"></div>
+                    </div>
+                </div>
+                <% } %>
+
+                <% if (players[0]) { %>
+                <div class="podium-item gold">
+                    <div class="crown-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
+                            <path d="M19 19H5v2h14v-2z"/>
+                        </svg>
+                    </div>
+                    <div class="podium-rank">1</div>
+                    <div class="podium-avatar">
+                        <span><%= players[0].dofus_pseudo.charAt(0).toUpperCase() %></span>
+                    </div>
+                    <h3 class="podium-name"><%= players[0].dofus_pseudo %></h3>
+                    <div class="podium-score"><%= players[0].total_points.toLocaleString() %></div>
+                    <div class="podium-bar">
+                        <div class="bar-fill"></div>
+                    </div>
+                </div>
+                <% } %>
+
+                <% if (players[2]) { %>
+                <div class="podium-item bronze">
+                    <div class="podium-rank">3</div>
+                    <div class="podium-avatar">
+                        <span><%= players[2].dofus_pseudo.charAt(0).toUpperCase() %></span>
+                    </div>
+                    <h3 class="podium-name"><%= players[2].dofus_pseudo %></h3>
+                    <div class="podium-score"><%= players[2].total_points.toLocaleString() %></div>
+                    <div class="podium-bar">
+                        <div class="bar-fill"></div>
+                    </div>
+                </div>
+                <% } %>
+            </div>
+        </section>
+
+        <!-- Search -->
+        <div class="search-wrapper">
+            <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="M21 21l-4.35-4.35"/>
+                </svg>
+                <input type="text" id="search" placeholder="Rechercher un joueur..." onkeyup="filterTable()">
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+            <table id="leaderboardTable">
+                <thead>
+                    <tr>
+                        <th class="col-rank">Rang</th>
+                        <th class="col-player">Joueur</th>
+                        <th class="col-score">Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% players.forEach((player, index) => { %>
+                    <tr class="<%= index < 3 ? 'top-' + (index + 1) : '' %>">
+                        <td class="cell-rank">
+                            <span class="rank-number"><%= index + 1 %></span>
+                        </td>
+                        <td class="cell-player">
+                            <div class="player-avatar">
+                                <span><%= player.dofus_pseudo.charAt(0).toUpperCase() %></span>
+                            </div>
+                            <span class="player-name"><%= player.dofus_pseudo %></span>
+                            <% if(index === 0) { %>
+                            <span class="leader-badge">Leader</span>
+                            <% } %>
+                        </td>
+                        <td class="cell-score">
+                            <span class="score-value"><%= player.total_points.toLocaleString() %></span>
+                            <span class="score-label">pts</span>
+                        </td>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        function filterTable() {
+            const input = document.getElementById("search");
+            const filter = input.value.toLowerCase();
+            const rows = document.querySelectorAll("#leaderboardTable tbody tr");
+            
+            rows.forEach(row => {
+                const name = row.querySelector(".player-name").textContent.toLowerCase();
+                row.style.display = name.includes(filter) ? "" : "none";
+            });
+        }
+
+        // Animate elements on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            document.querySelectorAll('.podium-item, .table-wrapper tr').forEach(el => {
+                observer.observe(el);
+            });
+        });
+    </script>
+</body>
+</html>
