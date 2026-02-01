@@ -83,6 +83,7 @@ function getSeasons() {
 
 app.get('/', async (req, res) => {
     try {
+        // 1. Récupération du classement (ton code existant)
         const query = `
             SELECT 
                 COALESCE(MAX(discord_username), MAX(dofus_pseudo)) as display_name,
@@ -93,13 +94,35 @@ app.get('/', async (req, res) => {
             ORDER BY total_points DESC
         `;
         const result = await pool.query(query);
+        
         const players = result.rows.map(p => ({
             dofus_pseudo: p.display_name,
             total_points: parseInt(p.total_points)
         }));
+
+        // 2. Calcul des totaux (Points ET Combats)
         const totalPoints = players.reduce((sum, p) => sum + p.total_points, 0);
+
+        // --- NOUVEAU : On compte le nombre total de combats ---
+        // Si tu as une table 'matches', décommente les 2 lignes ci-dessous :
+        // const resultCombats = await pool.query('SELECT COUNT(*) as count FROM matches');
+        // const totalCombats = parseInt(resultCombats.rows[0].count);
+        
+        // SINON (si pas de table matches pour l'instant), on met 0 ou un nombre fixe :
+        const totalCombats = 0; 
+        // -----------------------------------------------------
+
         const { seasons, currentSeason } = getSeasons();
-        res.render('index', { players, totalPoints, seasons, currentSeason });
+
+        // 3. Envoi à la page (J'ai ajouté totalCombats ici)
+        res.render('index', { 
+            players, 
+            totalPoints, 
+            seasons, 
+            currentSeason,
+            totalCombats // <--- C'est ça qui manquait pour éviter le crash !
+        });
+
     } catch (error) {
         console.error('Erreur page leaderboard:', error);
         res.status(500).send('Erreur serveur');
