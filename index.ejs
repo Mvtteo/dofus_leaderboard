@@ -3,41 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ogre Leaderboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css">
+    <title>Ogre</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="icon" type="image/png" href="web/assets/logo_ogre.png">
 </head>
 <body>
-    <div class="bg-grid"></div>
-    <div class="bg-glow"></div>
-
-    <header>
-        <div class="header-content">
-            <div class="logo-container">
-                <div class="logo">
-                    <img src="web/assets/logo_ogre.png" alt="Logo">
-                </div>
-                <div class="logo-ring"></div>
-            </div>
-            <h1>Ogre Leaderboard</h1>
-            <p class="subtitle">Ranking PVP Ogre</p>
+    <!-- Animated Background - Dofus Theme -->
+    <div class="bg-container">
+        <div class="bg-gradient"></div>
+        <div class="bg-grid"></div>
+        
+        <!-- Runes flottantes -->
+        <div class="floating-runes">
+            <div class="rune rune-1">&#x2726;</div>
+            <div class="rune rune-2">&#x2727;</div>
+            <div class="rune rune-3">&#x2728;</div>
+            <div class="rune rune-4">&#x2726;</div>
+            <div class="rune rune-5">&#x2729;</div>
+            <div class="rune rune-6">&#x2727;</div>
         </div>
         
-        <div class="stats-row">
-            <div class="stat-card">
-                <div class="stat-icon gold">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                        <line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/>
-                        <line x1="3" y1="10" x2="21" y2="10"/>
-                    </svg>
+        <!-- Particules d'energie -->
+        <div class="energy-particles" id="particles"></div>
+        
+        <!-- Brume magique -->
+        <div class="magic-mist"></div>
+    </div>
+
+    <!-- Header Compact -->
+    <header class="header">
+        <div class="header-inner">
+            <!-- Logo + Title -->
+            <div class="header-brand">
+                <div class="logo">
+                    <img src="https://upload.wikimedia.org/wikipedia/fr/3/3a/Dofus_Logo.png" alt="Logo" />
                 </div>
-                <div class="stat-content">
-                    <select id="season-select" class="season-dropdown">
-                        <% seasons.slice().reverse().forEach(s => { %>
-                            <option value="<%= s.id %>" <%= s.isCurrent ? 'selected' : '' %>>
-                                <%= s.label %><%= s.isCurrent ? ' (en cours)' : '' %>
+                <div class="brand-text">
+                    <h1 class="brand-title">ALLIANCE</h1>
+                    <span class="brand-sub">PVP TRACKER</span>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="header-stats">
+                <div class="stat-item">
+                    <div class="stat-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="playerCount"><%= players.length %></span>
+                        <span class="stat-label">Combattants</span>
+                    </div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <div class="stat-icon gold">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/>
+                            <path d="M13 19l6-6"/>
+                            <path d="M16 16l4 4"/>
+                            <path d="M19 21l2-2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="totalCombats"><%= totalCombats || 0 %></span>
+                        <span class="stat-label">Combats</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search + Season -->
+            <div class="header-actions">
+                <div class="search-container" id="searchContainer">
+                    <button class="search-toggle" id="searchToggle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                    </button>
+                    <input type="text" id="searchInput" placeholder="Rechercher..." />
+                </div>
+                <div class="season-selector">
+                    <select class="season-dropdown" id="seasonSelect">
+                        <% seasons.forEach(function(season) { %>
+                            <option value="<%= season.id %>" <%= season.id === currentSeason ? 'selected' : '' %>>
+                                <%= season.label %>
                             </option>
                         <% }); %>
                     </select>
@@ -46,25 +104,30 @@
         </div>
     </header>
 
-    <main class="container">
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Podium Horizontal -->
         <section class="podium-section">
-            <div class="podium">
-                <% if (players[1]) { %>
-                <div class="podium-item silver">
+            <% if (players.length >= 3) { %>
+            <div class="podium-container">
+                <!-- 2nd Place - Left -->
+                <div class="podium-item silver" data-rank="2">
                     <div class="podium-rank">2</div>
                     <div class="podium-avatar">
                         <span><%= players[1].dofus_pseudo.charAt(0).toUpperCase() %></span>
                     </div>
-                    <h3 class="podium-name"><%= players[1].dofus_pseudo %></h3>
-                    <div class="podium-score"><%= players[1].total_points.toLocaleString() %></div>
-                    <div class="podium-bar">
-                        <div class="bar-fill"></div>
+                    <div class="podium-info">
+                        <div class="podium-name"><%= players[1].dofus_pseudo %></div>
+                        <div class="podium-score"><%= players[1].total_points.toLocaleString() %></div>
+                    </div>
+                    <div class="podium-pedestal">
+                        <div class="pedestal-front"></div>
+                        <div class="pedestal-top"></div>
                     </div>
                 </div>
-                <% } %>
 
-                <% if (players[0]) { %>
-                <div class="podium-item gold">
+                <!-- 1st Place - Center -->
+                <div class="podium-item gold" data-rank="1">
                     <div class="crown-icon">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
@@ -75,167 +138,224 @@
                     <div class="podium-avatar">
                         <span><%= players[0].dofus_pseudo.charAt(0).toUpperCase() %></span>
                     </div>
-                    <h3 class="podium-name"><%= players[0].dofus_pseudo %></h3>
-                    <div class="podium-score"><%= players[0].total_points.toLocaleString() %></div>
-                    <div class="podium-bar">
-                        <div class="bar-fill"></div>
+                    <div class="podium-info">
+                        <div class="podium-name"><%= players[0].dofus_pseudo %></div>
+                        <div class="podium-score"><%= players[0].total_points.toLocaleString() %></div>
+                        <div class="champion-tag">CHAMPION</div>
+                    </div>
+                    <div class="podium-pedestal">
+                        <div class="pedestal-front"></div>
+                        <div class="pedestal-top"></div>
                     </div>
                 </div>
-                <% } %>
 
-                <% if (players[2]) { %>
-                <div class="podium-item bronze">
+                <!-- 3rd Place - Right -->
+                <div class="podium-item bronze" data-rank="3">
                     <div class="podium-rank">3</div>
                     <div class="podium-avatar">
                         <span><%= players[2].dofus_pseudo.charAt(0).toUpperCase() %></span>
                     </div>
-                    <h3 class="podium-name"><%= players[2].dofus_pseudo %></h3>
-                    <div class="podium-score"><%= players[2].total_points.toLocaleString() %></div>
-                    <div class="podium-bar">
-                        <div class="bar-fill"></div>
+                    <div class="podium-info">
+                        <div class="podium-name"><%= players[2].dofus_pseudo %></div>
+                        <div class="podium-score"><%= players[2].total_points.toLocaleString() %></div>
+                    </div>
+                    <div class="podium-pedestal">
+                        <div class="pedestal-front"></div>
+                        <div class="pedestal-top"></div>
                     </div>
                 </div>
-                <% } %>
             </div>
+            <% } %>
         </section>
 
-        <div class="search-wrapper">
-            <div class="search-container">
-                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"/>
-                    <path d="M21 21l-4.35-4.35"/>
-                </svg>
-                <input type="text" id="search" placeholder="Rechercher un joueur..." onkeyup="filterTable()">
+        <!-- Leaderboard Full Width -->
+        <section class="leaderboard-section">
+            <div class="table-container">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">RANG</th>
+                            <th class="col-player">JOUEUR</th>
+                            <th class="col-score">SCORE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <% players.slice(0, 10).forEach(function(player, index) { %>
+                        <tr class="player-row <%= index < 3 ? 'top-' + (index + 1) : '' %>" style="--delay: <%= index * 0.05 %>s">
+                            <td class="cell-rank">
+                                <div class="rank-badge">
+                                    <% if (index < 3) { %>
+                                        <div class="rank-medal rank-<%= index + 1 %>">
+                                            <%= index + 1 %>
+                                        </div>
+                                    <% } else { %>
+                                        <span><%= index + 1 %></span>
+                                    <% } %>
+                                </div>
+                            </td>
+                            <td class="cell-player">
+                                <div class="player-info">
+                                    <div class="player-avatar">
+                                        <%= player.dofus_pseudo.charAt(0).toUpperCase() %>
+                                    </div>
+                                    <span class="player-name"><%= player.dofus_pseudo %></span>
+                                </div>
+                            </td>
+                            <td class="cell-score">
+                                <span class="score-value"><%= player.total_points.toLocaleString() %></span>
+                                <span class="score-label">pts</span>
+                            </td>
+                        </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
             </div>
-        </div>
-
-        <div class="table-wrapper">
-            <table id="leaderboardTable">
-                <thead>
-                    <tr>
-                        <th class="col-rank">Rang</th>
-                        <th class="col-player">Joueur / Compte</th>
-                        <th class="col-score">Score</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% players.forEach((player, index) => { %>
-                    <tr class="<%= index < 3 ? 'top-' + (index + 1) : '' %>">
-                        <td class="cell-rank">
-                            <span class="rank-number"><%= index + 1 %></span>
-                        </td>
-                        <td class="cell-player">
-                            <div class="player-avatar">
-                                <span><%= player.dofus_pseudo.charAt(0).toUpperCase() %></span>
-                            </div>
-                            <span class="player-name"><%= player.dofus_pseudo %></span>
-                            <% if(index === 0) { %>
-                            <span class="leader-badge">Leader</span>
-                            <% } %>
-                        </td>
-                        <td class="cell-score">
-                            <span class="score-value"><%= player.total_points.toLocaleString() %></span>
-                            <span class="score-label">pts</span>
-                        </td>
-                    </tr>
-                    <% }); %>
-                </tbody>
-            </table>
-        </div>
+        </section>
     </main>
 
+    <!-- Footer -->
+    <footer class="footer">
+        <span>ALLIANCE PVP TRACKER</span>
+        <span class="footer-dot"></span>
+        <span>Mise a jour: <%= new Date().toLocaleString('fr-FR') %></span>
+    </footer>
+
     <script>
-        // --- 1. FONCTION DE FILTRE (RECHERCHE) ---
-        function filterTable() {
-            const input = document.getElementById("search");
-            const filter = input.value.toLowerCase();
-            const rows = document.querySelectorAll("#leaderboardTable tbody tr");
-            
-            rows.forEach(row => {
-                const name = row.querySelector(".player-name").textContent.toLowerCase();
-                row.style.display = name.includes(filter) ? "" : "none";
-            });
+        // Energy Particles - Magic effect
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 25; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'energy-particle';
+                particle.style.cssText = `
+                    left: ${Math.random() * 100}%;
+                    --duration: ${5 + Math.random() * 5}s;
+                    --delay: ${Math.random() * 4}s;
+                    --size: ${3 + Math.random() * 4}px;
+                    --drift: ${-30 + Math.random() * 60}px;
+                `;
+                container.appendChild(particle);
+            }
         }
 
-        // --- 2. GESTION DU CHANGEMENT DE SAISON ---
-        const seasonSelect = document.getElementById('season-select');
-        if (seasonSelect) {
-            seasonSelect.addEventListener('change', async function() {
-                const seasonId = this.value;
-                try {
-                    const response = await fetch(`/api/leaderboard/${seasonId}`);
-                    const players = await response.json();
-                    updatePodium(players);
-                    updateTable(players);
-                } catch (error) {
-                    console.error('Erreur chargement saison:', error);
+        // Search toggle
+        const searchContainer = document.getElementById('searchContainer');
+        const searchToggle = document.getElementById('searchToggle');
+        const searchInput = document.getElementById('searchInput');
+
+        searchToggle.addEventListener('click', () => {
+            searchContainer.classList.toggle('expanded');
+            if (searchContainer.classList.contains('expanded')) {
+                searchInput.focus();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchContainer.contains(e.target) && searchContainer.classList.contains('expanded')) {
+                if (searchInput.value === '') {
+                    searchContainer.classList.remove('expanded');
                 }
-            });
-        }
+            }
+        });
 
-        function updatePodium(players) {
-            const podium = document.querySelector('.podium');
-            const positions = ['silver', 'gold', 'bronze'];
-            const indices = [1, 0, 2];
-            
-            indices.forEach((playerIdx, i) => {
-                const item = podium.querySelector(`.podium-item.${positions[i]}`);
-                // Attention: players[playerIdx] peut être undefined si < 3 joueurs
-                if (players[playerIdx]) {
-                    item.style.display = ''; // Rendre visible
-                    // Mise à jour Avatar (première lettre)
-                    const avatarSpan = item.querySelector('.podium-avatar span');
-                    if(avatarSpan) avatarSpan.textContent = players[playerIdx].dofus_pseudo.charAt(0).toUpperCase();
-                    
-                    // Mise à jour Nom
-                    const nameDiv = item.querySelector('.podium-name');
-                    if(nameDiv) nameDiv.textContent = players[playerIdx].dofus_pseudo;
-                    
-                    // Mise à jour Score
-                    const scoreDiv = item.querySelector('.podium-score');
-                    if(scoreDiv) scoreDiv.textContent = players[playerIdx].total_points.toLocaleString();
-                } else if (item) {
-                    item.style.display = 'none'; // Cacher si pas de joueur
-                }
-            });
-        }
-
-        function updateTable(players) {
-            const tbody = document.querySelector('#leaderboardTable tbody');
-            tbody.innerHTML = players.map((player, index) => `
-                <tr class="${index < 3 ? 'top-' + (index + 1) : ''}">
-                    <td class="cell-rank">
-                        <span class="rank-number">${index + 1}</span>
-                    </td>
-                    <td class="cell-player">
-                        <div class="player-avatar">
-                            <span>${player.dofus_pseudo.charAt(0).toUpperCase()}</span>
-                        </div>
-                        <span class="player-name">${player.dofus_pseudo}</span>
-                        ${index === 0 ? '<span class="leader-badge">Leader</span>' : ''}
-                    </td>
-                    <td class="cell-score">
-                        <span class="score-value">${player.total_points.toLocaleString()}</span>
-                        <span class="score-label">pts</span>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        // --- 3. ANIMATION AU CHARGEMENT ---
-        document.addEventListener('DOMContentLoaded', () => {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('visible');
-                    }
-                });
-            }, { threshold: 0.1 });
-
-            document.querySelectorAll('.podium-item, .table-wrapper tr').forEach(el => {
-                observer.observe(el);
+        // Search filter
+        searchInput.addEventListener('input', function(e) {
+            const search = e.target.value.toLowerCase();
+            document.querySelectorAll('.player-row').forEach(row => {
+                const name = row.querySelector('.player-name').textContent.toLowerCase();
+                row.style.display = name.includes(search) ? '' : 'none';
             });
         });
+
+        // Animations on load
+        document.addEventListener('DOMContentLoaded', () => {
+            createParticles();
+            
+            // Animate podium
+            document.querySelectorAll('.podium-item').forEach((item, i) => {
+                setTimeout(() => item.classList.add('visible'), 200 + (i * 150));
+            });
+            
+            // Animate rows
+            document.querySelectorAll('.player-row').forEach((row, i) => {
+                setTimeout(() => row.classList.add('visible'), 500 + (i * 50));
+            });
+            
+            // Animate counters
+            animateValue('playerCount', 0, <%= players.length %>, 800);
+            animateValue('totalCombats', 0, <%= totalCombats || 0 %>, 1200);
+        });
+
+        function animateValue(id, start, end, duration) {
+            const obj = document.getElementById(id);
+            const startTime = performance.now();
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                obj.textContent = Math.floor(start + (end - start) * eased).toLocaleString();
+                if (progress < 1) requestAnimationFrame(update);
+            }
+            requestAnimationFrame(update);
+        }
+
+        // Season selector
+        document.getElementById('seasonSelect').addEventListener('change', async function(e) {
+            const seasonId = e.target.value;
+            try {
+                const response = await fetch(`/api/leaderboard/${seasonId}`);
+                const data = await response.json();
+                updateLeaderboard(data);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+
+        function updateLeaderboard(players) {
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+            
+            players.slice(0, 10).forEach((player, index) => {
+                const row = document.createElement('tr');
+                row.className = `player-row ${index < 3 ? 'top-' + (index + 1) : ''} visible`;
+                row.innerHTML = `
+                    <td class="cell-rank">
+                        <div class="rank-badge">
+                            ${index < 3 ? `<div class="rank-medal rank-${index + 1}">${index + 1}</div>` : `<span>${index + 1}</span>`}
+                        </div>
+                    </td>
+                    <td class="cell-player">
+                        <div class="player-info">
+                            <div class="player-avatar">${player.dofus_pseudo.charAt(0).toUpperCase()}</div>
+                            <span class="player-name">${player.dofus_pseudo}</span>
+                        </div>
+                    </td>
+                    <td class="cell-score">
+                        <span class="score-value">${parseInt(player.total_points).toLocaleString()}</span>
+                        <span class="score-label">pts</span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // Update podium
+            if (players.length >= 3) {
+                const podiumItems = document.querySelectorAll('.podium-item');
+                const order = [1, 0, 2]; // silver, gold, bronze
+                podiumItems.forEach((item, i) => {
+                    const p = players[order[i]];
+                    if (p) {
+                        item.querySelector('.podium-name').textContent = p.dofus_pseudo;
+                        item.querySelector('.podium-score').textContent = parseInt(p.total_points).toLocaleString();
+                        item.querySelector('.podium-avatar span').textContent = p.dofus_pseudo.charAt(0).toUpperCase();
+                    }
+                });
+            }
+
+            document.getElementById('playerCount').textContent = players.length;
+            const total = players.reduce((sum, p) => sum + parseInt(p.total_points), 0);
+            document.getElementById('totalCombats').textContent = total.toLocaleString();
+        }
     </script>
 </body>
 </html>
