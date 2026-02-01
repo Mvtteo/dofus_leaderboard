@@ -108,11 +108,9 @@ app.get('/', async (req, res) => {
 
         // --- GESTION DU COMPTEUR DE COMBATS (Pour éviter le crash) ---
         // Si tu as une table 'matches', décommente les lignes ci-dessous :
-        // const resultCombats = await pool.query('SELECT COUNT(*) as count FROM matches');
-        // const totalCombats = parseInt(resultCombats.rows[0].count);
+        const resultCombats = await pool.query('SELECT COUNT(*) as count FROM matches');
+        const totalCombats = parseInt(resultCombats.rows[0].count);
         
-        // Sinon, on met 0 par défaut :
-        const totalCombats = 0; 
         // -------------------------------------------------------------
 
         const { seasons, currentSeason } = getSeasons();
@@ -491,6 +489,22 @@ client.on('interactionCreate', async interaction => {
         if (pointsToAdd < 0) pointsToAdd = 0;
 
         for (const pseudo of myTeam) await updatePlayerPoints(pseudo, pointsToAdd);
+
+        try {
+            // On convertit les tableaux de pseudos en texte (ex: "Joueur1,Joueur2")
+            const winnersStr = userSession.winners.join(',');
+            const losersStr = userSession.losers.join(',');
+            
+            // On insère le combat dans la BDD
+            await pool.query(
+                "INSERT INTO matches (winners, losers) VALUES ($1, $2)", 
+                [winnersStr, losersStr]
+            );
+            console.log("Combat sauvegardé dans l'historique.");
+        } catch (err) {
+            console.error("Erreur sauvegarde match:", err);
+        }
+
         await updateLeaderboard();
 
         activeSessions.delete(interaction.user.id);
