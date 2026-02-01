@@ -571,55 +571,91 @@ client.on('interactionCreate', async interaction => {
 
         // ETAPE 3 : CALCULE ET SAUVEGARDE
         else if (interaction.isButton() && (interaction.customId === 'result_win' || interaction.customId === 'result_lose')) {
-            await interaction.deferUpdate(); // Indique à Discord qu'on réfléchit (évite le timeout)
-            
-            const hasWon = interaction.customId === 'result_win';
-            const myTeam = hasWon ? userSession.winners : userSession.losers;
-            const enemyTeam = hasWon ? userSession.losers : userSession.winners;
-            
-            if (!myTeam || myTeam.length === 0) return interaction.editReply({ content: "Erreur: Impossible d'identifier votre équipe.", components: [] });
+        
+        // 🔒 SÉCURITÉ ANTI-DOUBLE CLIC
+        if (!activeSessions.has(interaction.user.id)) {
+            return interaction.reply({ content: "🚫 Action déjà traitée ou expirée.", ephemeral: true });
+        }
+        activeSessions.delete(interaction.user.id); // On verrouille immédiatement
 
-            const myCount = myTeam.length;
-            const enemyCount = enemyTeam.length;
-            const gap = myCount - enemyCount; 
+        await interaction.deferUpdate();
+        const hasWon = interaction.customId === 'result_win';
+        
+        const myTeam = hasWon ? userSession.winners : userSession.losers;
+        const enemyTeam = hasWon ? userSession.losers : userSession.winners;
+        
+        if (!myTeam || myTeam.length === 0) return interaction.editReply({ content: "Erreur: Impossible d'identifier votre équipe.", components: [] });
 
-            if (gap >= config.MAX_PLAYER_GAP_FOR_CANCEL) {
-                return interaction.editReply({ content: `🛑 **Combat non comptabilisé** (Écart trop grand: ${myCount} vs ${enemyCount}).`, components: [] });
-            }
+        // --- 📊 NOUVELLE LOGIQUE : MATRICE DE POINTS ---
+        
+        // On s'assure que les nombres sont entre 1 et 5 (limite du tableau)
+        // Si jamais il y a 6 joueurs, on compte comme 5 pour éviter un crash
+        const myCount = Math.min(Math.max(myTeam.length, 1), 5); 
+        const enemyCount = Math.min(Math.max(enemyTeam.length, 1), 5);
 
-            let basePoints = 0;
-            try { basePoints = config.BASE_SCORES[userSession.context]; } catch (e) { basePoints = 0; }
-            if (hasWon) basePoints += config.WIN_MODIFIER; else basePoints -= config.LOSE_MODIFIER;
+        // Transcription exacte de ton tableau Excel
+        const POINTS_MATRIX = {
+            WIN: [
+                // CXO (Ennemis) -> 1  2  3  4  5
+                /* Nous (1) */    [ 2, 4, 5, 5, 5 ],
+                /* Nous (2) */    [ 1, 4, 5, 5, 5 ],
+                /* Nous (3) */    [ 1, 2, 6, 6, 6 ],
+                /* Nous (4) */    [ 1, 2, 3, 8, 8 ],
+                /* Nous (5) */    [ 1, 2, 3, 5, 8 ]
+            ],
+            LOSE: [
+                // CXO (Ennemis) -> 1  2  3  4  5
+                /* Nous (1) */    [ 1, 2, 3, 3, 3 ],
+                /* Nous (2) */    [ 1, 2, 3, 3, 3 ],
+                /* Nous (3) */    [ 0, 2, 3, 3, 3 ],
+                /* Nous (4) */    [ 0, 0, 3, 4, 4 ],
+                /* Nous (5) */    [ 0, 0, 0, 4, 5 ]
+            ]
+        };
 
-            let heroBonus = (gap < 0) ? config.INFERIORITY_BONUS : 0;
-            let allianceBonus = 0;
-            if (userSession.allianceTier === 'pool_1') allianceBonus = config.BONUSES.pool_1;
-            if (userSession.allianceTier === 'pool_2') allianceBonus = config.BONUSES.pool_2;
+        // On récupère les points de base dans la matrice
+        // (On fait -1 car les tableaux informatiques commencent à 0)
+        let pointsToAdd = 0;
+        if (hasWon) {
+            pointsToAdd = POINTS_MATRIX.WIN[myCount - 1][enemyCount - 1];
+        } else {
+            pointsToAdd = POINTS_MATRIX.LOSE[myCount - 1][enemyCount - 1];
+        }
 
-            let pointsToAdd = Math.max(0, basePoints + heroBonus + allianceBonus);
+        // --- GESTION DES BONUS ALLIANCE (Pool 1 / Pool 2) ---
+        // Ce bonus s'ajoute EN PLUS du tableau si une grosse alliance est sélectionnée
+        let allianceBonus = 0;
+        if (userSession.allianceTier === 'pool_1') allianceBonus = config.BONUSES.pool_1; // +5
+        if (userSession.allianceTier === 'pool_2') allianceBonus = config.BONUSES.pool_2; // +3
 
-            for (const pseudo of myTeam) await updatePlayerPoints(pseudo, pointsToAdd);
+        const totalPoints = pointsToAdd + allianceBonus;
 
-            // Sauvegarde historique
+        // 💾 SAUVEGARDE EN BDD
+        for (const pseudo of myTeam) await updatePlayerPoints(pseudo, totalPoints);
+
+        try {
             const winnersStr = userSession.winners.join(',');
             const losersStr = userSession.losers.join(',');
-            await pool.query("INSERT INTO matches (winners, losers) VALUES ($1, $2)", [winnersStr, losersStr]);
+            await pool.query(
+                "INSERT INTO matches (winners, losers) VALUES ($1, $2)", 
+                [winnersStr, losersStr]
+            );
+        } catch (err) { console.error("Erreur save match:", err); }
 
-            await updateLeaderboard();
-            activeSessions.delete(interaction.user.id);
-            
-            const resultText = hasWon ? "VICTOIRE" : "DÉFAITE";
-            const heroText = heroBonus > 0 ? `+ Bonus Héroïque (${heroBonus})` : '';
-            const alliText = allianceBonus > 0 ? `+ Bonus Alli (${allianceBonus})` : '';
-            
-            await interaction.editReply({ 
-                content: `✅ **Enregistré !**\n` +
-                        `Résultat: ${resultText} | Mode: ${userSession.context} | Joueurs: ${myCount} vs ${enemyCount}\n` +
-                        `Calcul: Base ${hasWon ? '(Victoire)' : '(Défaite)'} ${heroText} ${alliText}\n` +
-                        `👉 **${pointsToAdd} pts** attribués à : ${myTeam.join(', ')}`, 
-                components: [] 
-            });
-        }
+        await updateLeaderboard();
+
+        // 📝 RÉPONSE FINALE
+        const resultText = hasWon ? "VICTOIRE" : "DÉFAITE";
+        const alliText = allianceBonus > 0 ? ` (+${allianceBonus} Bonus Alli)` : '';
+        
+        await interaction.editReply({ 
+            content: `✅ **Enregistré !**\n` +
+                     `Situation : **${myCount} vs ${enemyCount}** | Résultat : ${resultText}\n` +
+                     `Points Tableau : **${pointsToAdd}** pts${alliText}\n` +
+                     `👉 **Total : ${totalPoints} pts** attribués à : ${myTeam.join(', ')}`, 
+            components: [] 
+        });
+    }
     } catch (error) {
         // --- C'EST ICI QUE LE CRASH EST EVITÉ ---
         // Si Discord renvoie "Unknown interaction" (10062), on l'ignore juste.

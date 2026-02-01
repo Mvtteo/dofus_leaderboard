@@ -9,13 +9,16 @@ const pool = new Pool({
 async function resetDatabase() {
     const client = await pool.connect();
     try {
-        console.log("⚠️  ATTENTION : Suppression de toutes les données en cours...");
+        console.log("⚠️  ATTENTION : Nettoyage complet des données en cours...");
         
-        // Cette commande vide les tables et remet les compteurs d'ID à 1
-        await client.query(`TRUNCATE TABLE season_points, players RESTART IDENTITY CASCADE;`);
+        // TRUNCATE : Vide les données
+        // RESTART IDENTITY : Remet les IDs (1, 2, 3...) à zéro
+        // CASCADE : Force le nettoyage même si les tables sont liées entre elles
+        await client.query(`TRUNCATE TABLE players, season_points, matches RESTART IDENTITY CASCADE;`);
         
-        console.log("✅ Base de données entièrement vidée avec succès !");
-        console.log("🔄 Les IDs sont remis à 1.");
+        console.log("✅ Données effacées avec succès !");
+        console.log("📂 Les tables (players, season_points, matches) sont vides et prêtes.");
+        
     } catch (err) {
         console.error("❌ Erreur lors du reset :", err);
     } finally {
@@ -24,11 +27,11 @@ async function resetDatabase() {
     }
 }
 
-// Petit système de sécurité : demande d'argument
-// On oblige à lancer le script avec un argument pour éviter les clics accidentels
+// Sécurité : oblige à taper "node reset_db.js confirm"
 if (process.argv[2] === 'confirm') {
     resetDatabase();
 } else {
-    console.log("🛑 SECURITÉ : Pour confirmer la suppression, lancez la commande suivante :");
+    console.log("🛑 SÉCURITÉ : Vous allez VIDER tout le contenu de la base de données.");
+    console.log("Pour confirmer, lancez :");
     console.log("node reset_db.js confirm");
 }
