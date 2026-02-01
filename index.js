@@ -50,7 +50,7 @@ app.use(express.static(__dirname));
 app.use('/assets', express.static(path.join(__dirname, 'web/assets')));
 
 function getSeasons() {
-    const startDate = new Date('2026-01-01T00:00:00'); 
+    const startDate = new Date('2026-02-01T00:00:00'); 
     const now = new Date();
     const limitDate = new Date(now);
     const seasons = [];
@@ -83,7 +83,7 @@ function getSeasons() {
 
 app.get('/', async (req, res) => {
     try {
-        // 1. Récupération du classement (ton code existant)
+        // 1. Récupération du classement (Filtré > 0)
         const query = `
             SELECT 
                 COALESCE(MAX(discord_username), MAX(dofus_pseudo)) as display_name,
@@ -91,8 +91,11 @@ app.get('/', async (req, res) => {
                 MAX(dofus_pseudo) as main_char
             FROM players 
             GROUP BY COALESCE(discord_id, dofus_pseudo)
+            HAVING SUM(total_points) > 0
             ORDER BY total_points DESC
         `;
+        // ^^^ J'ai ajouté la ligne "HAVING..." juste au-dessus ^^^
+
         const result = await pool.query(query);
         
         const players = result.rows.map(p => ({
@@ -100,27 +103,26 @@ app.get('/', async (req, res) => {
             total_points: parseInt(p.total_points)
         }));
 
-        // 2. Calcul des totaux (Points ET Combats)
+        // 2. Calcul des totaux
         const totalPoints = players.reduce((sum, p) => sum + p.total_points, 0);
 
-        // --- NOUVEAU : On compte le nombre total de combats ---
-        // Si tu as une table 'matches', décommente les 2 lignes ci-dessous :
+        // --- GESTION DU COMPTEUR DE COMBATS (Pour éviter le crash) ---
+        // Si tu as une table 'matches', décommente les lignes ci-dessous :
         // const resultCombats = await pool.query('SELECT COUNT(*) as count FROM matches');
         // const totalCombats = parseInt(resultCombats.rows[0].count);
         
-        // SINON (si pas de table matches pour l'instant), on met 0 ou un nombre fixe :
+        // Sinon, on met 0 par défaut :
         const totalCombats = 0; 
-        // -----------------------------------------------------
+        // -------------------------------------------------------------
 
         const { seasons, currentSeason } = getSeasons();
 
-        // 3. Envoi à la page (J'ai ajouté totalCombats ici)
         res.render('index', { 
             players, 
             totalPoints, 
             seasons, 
             currentSeason,
-            totalCombats // <--- C'est ça qui manquait pour éviter le crash !
+            totalCombats // Indispensable pour que EJS ne plante pas
         });
 
     } catch (error) {
