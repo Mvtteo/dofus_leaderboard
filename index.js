@@ -666,79 +666,110 @@ async function updateLeaderboard() {
 }
 
 function parseScreenData(text) {
-    const lines = text.split('\n').filter(line => line.trim().length > 0);
-    const winners = [];
-    const losers = [];
-    let currentSection = null;
+    const lines = text.split('\n');
+    const winners = []; const losers = [];
+    let currentSection = 'winners';
 
-    const WIN_KEYS = ['GAGNANT', 'WINNER', 'VICTOIRE', 'WP']; 
-    const LOSE_KEYS = ['PERDANT', 'LOSER', 'DEFAITE'];
-
-    const IGNORE_LIST = [
-        'NIVEAU', 'NOM', 'PERSONNAGE', 'EXPERIENCE', 'GAGNEE', 'KAMAS', 'BUTIN', 
-        'OXP', 'XP', 'LVL', 'GUILDE', 'ALLIANCE', 'TOTAL'
-    ];
-
-    for (let line of lines) {
-        // Nettoyage standard
-        let cleanLine = line.replace(/[^a-zA-Z0-9\-\'\s]/g, ' ').trim();
-        let upperLine = cleanLine.toUpperCase();
-
-        // --- 1. FILTRES D'EN-TÊTE (Avant détection section) ---
-        if (upperLine.includes('NOM') && upperLine.includes('NIVEAU')) continue;
-        if (upperLine.includes('EXPERIENCE') && upperLine.includes('GAGNEE')) continue;
-
-        // --- 2. DÉTECTION SECTIONS ---
-        if (WIN_KEYS.some(k => upperLine.includes(k))) { 
-            currentSection = 'winners'; 
-            console.log(`   -> Section détectée : GAGNANTS`);
-            continue; 
-        }
-        if (LOSE_KEYS.some(k => upperLine.includes(k))) { 
-            currentSection = 'losers'; 
-            console.log(`   -> Section détectée : PERDANTS`);
-            continue; 
-        }
-
-        if (!currentSection) continue;
-
-        const tokens = cleanLine.split(/\s+/);
-        
-        // --- 3. CHECK ANTI-PERCEPTEUR (Le tueur de ligne) ---
-        // On vérifie si UN SEUL mot de la ligne commence par DO'
-        const containsPerco = tokens.some(token => token.toUpperCase().startsWith("DO'"));
-        
-        if (containsPerco) {
-            console.log(`   🚫 Percepteur détecté et ignoré sur la ligne : "${cleanLine}"`);
-            continue; // ON PASSE DIRECTEMENT À LA LIGNE SUIVANTE
-        }
-
-        // --- 4. LOGIQUE DU CHAMPION (Si ce n'est pas un perco) ---
-        let bestWord = "";
-
-        for (let word of tokens) {
-            let candidate = word.replace(/[^a-zA-Z0-9\-\']/g, ''); // On garde l'apostrophe
-
-            // Filtres de base
-            if (candidate.length < 3) continue;
-            if (/^\d/.test(candidate)) continue;
-            
-            const upperCand = candidate.toUpperCase();
-            if (IGNORE_LIST.includes(upperCand)) continue; 
-
-            // On garde le mot le plus long
-            if (candidate.length > bestWord.length) {
-                bestWord = candidate;
-            }
-        }
-
-        if (bestWord && bestWord.length >= 3) {
-            bestWord = bestWord.replace(/^'|'$/g, '');
-            if (currentSection === 'winners') winners.push(bestWord);
-            else losers.push(bestWord);
-        }
+    // Détection large de la section perdants
+    if (text.substring(0, 300).toUpperCase().includes('PERDANTS') || text.substring(0, 300).toUpperCase().includes('LOSERS')) {
+        // La gestion se fera ligne par ligne ci-dessous
     }
-    
+
+    lines.forEach((line) => {
+        const upperLine = line.toUpperCase().trim();
+        if (!upperLine) return;
+
+        // 1. Détection des sections
+        if (upperLine.includes('GAGNANT') || upperLine.includes('WINNER')) { currentSection = 'winners'; return; }
+        if (upperLine.includes('PERDANT') || upperLine.includes('LOSER')) { currentSection = 'losers'; return; }
+        
+        // 2. Ignorer les en-têtes (Niveau, XP, etc.)
+        if (upperLine.includes('NIVEAU') || upperLine.includes('EXPERIENCE') || upperLine.includes('BUTIN')) return;
+
+        // 3. Nettoyage de la ligne (on garde les lettres, chiffres et tirets, on vire le reste)
+        // On remplace les caractères spéciaux parasites par des espaces pour bien séparer les mots
+        const cleanLine = line.replace(/[\[\]\(\)\|\@\:\.\,\*\+\!\?\/\\_]/g, ' '); 
+        const rawWords = cleanLine.split(/\s+/); // Découpe par espace
+        
+        let candidates = []; // On va stocker tous les mots "possibles" de la ligne ici
+        let foundKnownPlayer = null; // Le Graal : si on trouve un joueur de la BDD
+
+        for (const w of rawWords) {
+            // Nettoyage individuel du mot
+            let word = w.replace(/[^a-zA-Z0-9-]/g, ''); // Garde uniquement lettres/chiffres/tiret
+            
+            // Si le mot commence par des chiffres (ex: "199Nasso"), on vire les chiffres du début
+            word = word.replace(/^\d+/, ''); 
+
+            let lowerWord = word.toLowerCase();
+
+            // --- FILTRES DE BASE (Anti-Bruit) ---
+            // Trop court (1 ou 2 lettres) -> Poubelle
+            if (word.length < 3) continue;
+            // Mot interdit (Stop words) -> Poubelle
+            if (config.STOP_WORDS.includes(lowerWord) || config.BANNED_WORDS.includes(lowerWord)) continue;
+            // Mot contenant des chiffres au milieu ou à la fin mais trop court (ex: "76", "100") -> Poubelle
+            // (On accepte les pseudos avec chiffres comme "Dark-Vador99" mais pas juste "150")
+            if (/^\d+$/.test(word)) continue; 
+            if (word.length <= 3 && /\d/.test(word)) continue; 
+
+            // --- RECHERCHE INTELLIGENTE (DB) ---
+            // On regarde si ce mot est un joueur connu (ou ressemble à un joueur connu)
+            if (typeof knownPlayerNames !== 'undefined' && knownPlayerNames.length > 0) {
+                
+                // Correspondance exacte
+                if (knownPlayerNames.includes(lowerWord)) {
+                    foundKnownPlayer = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); // Formattage
+                    break; // ON A TROUVÉ ! On arrête de chercher sur cette ligne.
+                }
+
+                // Correspondance approximative (Levenshtein)
+                // Utile si l'OCR lit "Nass0" au lieu de "Nasso"
+                let bestMatch = null;
+                let minDist = 3; 
+                for (const knownName of knownPlayerNames) {
+                    if (Math.abs(knownName.length - lowerWord.length) > 2) continue; // Optimisation
+                    const dist = levenshteinDistance(lowerWord, knownName);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        bestMatch = knownName;
+                    }
+                }
+
+                if (bestMatch) {
+                    console.log(`🔧 Correction auto (ligne complète) : ${word} -> ${bestMatch}`);
+                    foundKnownPlayer = bestMatch; // C'est le nom officiel de la BDD
+                    break; // ON A TROUVÉ !
+                }
+            }
+
+            // Si ce n'est pas un joueur connu, on l'ajoute quand même aux candidats potentiels
+            // (Au cas où c'est un nouveau joueur pas encore dans la BDD)
+            const formattedCandidate = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            candidates.push(formattedCandidate);
+        }
+
+        // --- DÉCISION FINALE POUR LA LIGNE ---
+        let finalName = null;
+
+        if (foundKnownPlayer) {
+            // Scénario Idéal : On a reconnu un joueur de la BDD
+            finalName = foundKnownPlayer;
+        } else if (candidates.length > 0) {
+            // Scénario Nouveau Joueur : On n'a reconnu personne, on prend le PREMIER candidat valide
+            // C'est ici que "bruit Nasso" devient "Nasso" si "bruit" a été filtré par < 3 lettres
+            // Si le bruit est long ("Guerrier Nasso"), le bot prendra "Guerrier".
+            // SOLUTION : Utiliser !addplayer Nasso pour que la prochaine fois, il passe dans le "foundKnownPlayer"
+            finalName = candidates[0];
+        }
+
+        // Ajout aux listes
+        if (finalName) {
+            if (currentSection === 'winners') winners.push(finalName); 
+            else losers.push(finalName);
+        }
+    });
+
     return { winners, losers };
 }
 
