@@ -231,6 +231,7 @@ client.on('messageCreate', async message => {
     }
 
     // --- 3. GESTION DES PEPITES (Scan) ---
+    // --- 3. GESTION DES PEPITES (Scan) ---
     if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
@@ -240,28 +241,44 @@ client.on('messageCreate', async message => {
         try {
             const attachment = attachments.first();
             const image = await Jimp.read(attachment.url);
+            
+            // Pré-traitement image
             image.greyscale().invert().contrast(0.25).scale(1.5);
             const processedBuffer = await image.getBufferAsync("image/png");
             
             const result = await Tesseract.recognize(processedBuffer, 'eng');
-            const text = result.data.text.toLowerCase();
+            
+            // Nettoyage du texte : tout en minuscule + remplacement des accents
+            const text = result.data.text.toLowerCase().replace(/é/g, 'e');
 
-            let allianceAmount = 0;
+            console.log("--- OCR TEXTE LU ---");
+            console.log(text);
+            console.log("--------------------");
+
+            let extractedAmount = 0;
             const lines = text.split('\n');
             
             for (const line of lines) {
-                if (line.includes('alliance')) {
-                    const numbers = line.match(/\d+/g);
-                    if (numbers) {
-                        const maxNum = Math.max(...numbers.map(n => parseInt(n, 10)));
-                        allianceAmount = maxNum;
-                        break;
-                    }
+                // REGEX STRICTE : [pepite] et 123
+                // \[      -> Crochet ouvrant
+                // \s* -> Espaces possibles
+                // p.pite  -> Mot clé (le . accepte 'a' ou 'e' si mal lu)
+                // \s* -> Espaces possibles
+                // \]      -> Crochet fermant
+                // \s*et   -> Mot "et" avec espaces avant
+                // \s* -> Espaces après
+                // (\d+)   -> Le montant (Chiffres)
+                const regex = /\[\s*p.pite\s*\]\s*et\s*(\d+)/;
+                
+                const match = line.match(regex);
+                if (match) {
+                    extractedAmount = parseInt(match[1], 10);
+                    break;
                 }
             }
 
-            if (allianceAmount > 0) {
-                const amountToAdd = Math.floor(allianceAmount / 2);
+            if (extractedAmount > 0) {
+                const amountToAdd = Math.floor(extractedAmount / 2);
                 const discordId = message.author.id;
                 
                 let targetPseudo = message.author.username;
@@ -284,7 +301,8 @@ client.on('messageCreate', async message => {
                 const res = await pool.query(query, [targetPseudo, discordId, message.author.username, amountToAdd]);
                 const newTotal = res.rows[0].bank_nuggets;
 
-                await msgRef.edit(`✅ **Pépites enregistrées !**\nAlliance a reçu : ${allianceAmount}\nVotre part (50%) : **${amountToAdd}**\n\n💰 **Banque totale : ${newTotal}**`);
+                // Message propre avec mention et sans emoji validé
+                await msgRef.edit(`<@${message.author.id}> **Pépites enregistrées !**\nMontant lu : ${extractedAmount}\nVotre part (50%) : **${amountToAdd}**\n\n💰 **Banque totale : ${newTotal}**`);
 
                 try {
                     await message.delete();
@@ -293,7 +311,7 @@ client.on('messageCreate', async message => {
                 }
 
             } else {
-                await msgRef.edit("⚠️ Je n'ai pas réussi à lire le montant pour l'alliance. Assurez-vous que le screen est clair.");
+                await msgRef.edit("⚠️ Je n'ai pas trouvé le format exact `[Pépite] et ...`. Vérifiez le screen.");
             }
 
         } catch (error) {
