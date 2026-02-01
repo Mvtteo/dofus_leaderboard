@@ -683,52 +683,54 @@ function parseScreenData(text) {
         if (upperLine.includes('GAGNANT') || upperLine.includes('WINNER')) { currentSection = 'winners'; return; }
         if (upperLine.includes('PERDANT') || upperLine.includes('LOSER')) { currentSection = 'losers'; return; }
         
-        // 2. Ignorer les en-têtes (Niveau, XP, etc.)
+        // 2. Ignorer les en-têtes
         if (upperLine.includes('NIVEAU') || upperLine.includes('EXPERIENCE') || upperLine.includes('BUTIN')) return;
 
-        // 3. Nettoyage de la ligne (on garde les lettres, chiffres et tirets, on vire le reste)
-        // On remplace les caractères spéciaux parasites par des espaces pour bien séparer les mots
+        // --- 🛡️ BOUCLIER ANTI-MOB (Perco / Prisme) ---
+        // Règle 1 : Si ça contient "PRISME", on jette.
+        // Règle 2 : Si ça contient "DO'" (le nom des percepteurs contient toujours Do'), on jette.
+        // Règle 3 : Les pseudos de joueurs n'ont jamais d'apostrophe. Si on voit une apostrophe, c'est un mob.
+        if (upperLine.includes('PRISME') || upperLine.includes("DO'") || line.includes("'")) {
+            console.log(`🚫 Entité ignorée (Mob/Perco/Prisme) : ${line}`);
+            return; 
+        }
+        // ----------------------------------------------
+
+        // 3. Nettoyage de la ligne
+        // On enlève les caractères spéciaux MAIS on garde les tirets (-) car les joueurs en ont.
         const cleanLine = line.replace(/[\[\]\(\)\|\@\:\.\,\*\+\!\?\/\\_]/g, ' '); 
-        const rawWords = cleanLine.split(/\s+/); // Découpe par espace
+        const rawWords = cleanLine.split(/\s+/); 
         
-        let candidates = []; // On va stocker tous les mots "possibles" de la ligne ici
-        let foundKnownPlayer = null; // Le Graal : si on trouve un joueur de la BDD
+        let candidates = []; 
+        let foundKnownPlayer = null; 
 
         for (const w of rawWords) {
-            // Nettoyage individuel du mot
-            let word = w.replace(/[^a-zA-Z0-9-]/g, ''); // Garde uniquement lettres/chiffres/tiret
-            
-            // Si le mot commence par des chiffres (ex: "199Nasso"), on vire les chiffres du début
-            word = word.replace(/^\d+/, ''); 
-
+            // Nettoyage individuel
+            let word = w.replace(/[^a-zA-Z0-9-]/g, ''); 
+            word = word.replace(/^\d+/, ''); // Vire les chiffres au début (ex: 199Pseudo)
             let lowerWord = word.toLowerCase();
 
-            // --- FILTRES DE BASE (Anti-Bruit) ---
-            // Trop court (1 ou 2 lettres) -> Poubelle
+            // Filtres de base
             if (word.length < 3) continue;
-            // Mot interdit (Stop words) -> Poubelle
             if (config.STOP_WORDS.includes(lowerWord) || config.BANNED_WORDS.includes(lowerWord)) continue;
-            // Mot contenant des chiffres au milieu ou à la fin mais trop court (ex: "76", "100") -> Poubelle
-            // (On accepte les pseudos avec chiffres comme "Dark-Vador99" mais pas juste "150")
+            
+            // On vire les nombres isolés (ex: "200")
             if (/^\d+$/.test(word)) continue; 
             if (word.length <= 3 && /\d/.test(word)) continue; 
 
             // --- RECHERCHE INTELLIGENTE (DB) ---
-            // On regarde si ce mot est un joueur connu (ou ressemble à un joueur connu)
             if (typeof knownPlayerNames !== 'undefined' && knownPlayerNames.length > 0) {
-                
-                // Correspondance exacte
+                // Exact match
                 if (knownPlayerNames.includes(lowerWord)) {
-                    foundKnownPlayer = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); // Formattage
-                    break; // ON A TROUVÉ ! On arrête de chercher sur cette ligne.
+                    foundKnownPlayer = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+                    break; 
                 }
 
-                // Correspondance approximative (Levenshtein)
-                // Utile si l'OCR lit "Nass0" au lieu de "Nasso"
+                // Match approximatif (Levenshtein)
                 let bestMatch = null;
                 let minDist = 3; 
                 for (const knownName of knownPlayerNames) {
-                    if (Math.abs(knownName.length - lowerWord.length) > 2) continue; // Optimisation
+                    if (Math.abs(knownName.length - lowerWord.length) > 2) continue; 
                     const dist = levenshteinDistance(lowerWord, knownName);
                     if (dist < minDist) {
                         minDist = dist;
@@ -737,33 +739,27 @@ function parseScreenData(text) {
                 }
 
                 if (bestMatch) {
-                    console.log(`🔧 Correction auto (ligne complète) : ${word} -> ${bestMatch}`);
-                    foundKnownPlayer = bestMatch; // C'est le nom officiel de la BDD
-                    break; // ON A TROUVÉ !
+                    console.log(`🔧 Correction auto : ${word} -> ${bestMatch}`);
+                    foundKnownPlayer = bestMatch; 
+                    break; 
                 }
             }
-
-            // Si ce n'est pas un joueur connu, on l'ajoute quand même aux candidats potentiels
-            // (Au cas où c'est un nouveau joueur pas encore dans la BDD)
+            
+            // Si pas connu, on l'ajoute aux candidats
             const formattedCandidate = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             candidates.push(formattedCandidate);
         }
 
-        // --- DÉCISION FINALE POUR LA LIGNE ---
+        // --- DÉCISION FINALE ---
         let finalName = null;
 
         if (foundKnownPlayer) {
-            // Scénario Idéal : On a reconnu un joueur de la BDD
             finalName = foundKnownPlayer;
         } else if (candidates.length > 0) {
-            // Scénario Nouveau Joueur : On n'a reconnu personne, on prend le PREMIER candidat valide
-            // C'est ici que "bruit Nasso" devient "Nasso" si "bruit" a été filtré par < 3 lettres
-            // Si le bruit est long ("Guerrier Nasso"), le bot prendra "Guerrier".
-            // SOLUTION : Utiliser !addplayer Nasso pour que la prochaine fois, il passe dans le "foundKnownPlayer"
+            // Si on ne connait personne, on prend le premier candidat valide
             finalName = candidates[0];
         }
 
-        // Ajout aux listes
         if (finalName) {
             if (currentSection === 'winners') winners.push(finalName); 
             else losers.push(finalName);
