@@ -9,6 +9,52 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css">
     <link rel="icon" type="image/png" href="web/assets/logo_ogre.png">
+    <style>
+        /* Winrate Styles */
+        .col-winrate {
+            width: 180px;
+            text-align: center;
+        }
+        .cell-winrate {
+            padding: 0.5rem;
+        }
+        .winrate-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .winrate-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .winrate-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e76f51, #e9c46a, #2a9d8f);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .winrate-value {
+            font-weight: 600;
+            font-size: 0.875rem;
+            min-width: 40px;
+            text-align: right;
+        }
+        .winrate-value.positive {
+            color: #2a9d8f;
+        }
+        .winrate-value.negative {
+            color: #e76f51;
+        }
+        .winrate-detail {
+            display: block;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 2px;
+        }
+    </style>
 </head>
 <body>
     <!-- Animated Background - Dofus Theme -->
@@ -173,6 +219,7 @@
                         <tr>
                             <th class="col-rank">RANG</th>
                             <th class="col-player">JOUEUR</th>
+                            <th class="col-winrate">WINRATE</th>
                             <th class="col-score">SCORE</th>
                         </tr>
                     </thead>
@@ -197,6 +244,15 @@
                                     </div>
                                     <span class="player-name"><%= player.dofus_pseudo %></span>
                                 </div>
+                            </td>
+                            <td class="cell-winrate">
+                                <div class="winrate-container">
+                                    <div class="winrate-bar">
+                                        <div class="winrate-fill" style="width: <%= player.winrate || 0 %>%"></div>
+                                    </div>
+                                    <span class="winrate-value <%= (player.winrate || 0) >= 50 ? 'positive' : 'negative' %>"><%= player.winrate || 0 %>%</span>
+                                </div>
+                                <span class="winrate-detail"><%= player.wins || 0 %>V / <%= player.losses || 0 %>D</span>
                             </td>
                             <td class="cell-score">
                                 <span class="score-value"><%= player.total_points.toLocaleString() %></span>
@@ -315,6 +371,9 @@
             players.slice(0, 10).forEach((player, index) => {
                 const row = document.createElement('tr');
                 row.className = `player-row ${index < 3 ? 'top-' + (index + 1) : ''} visible`;
+                const winrate = player.winrate || 0;
+                const wins = player.wins || 0;
+                const losses = player.losses || 0;
                 row.innerHTML = `
                     <td class="cell-rank">
                         <div class="rank-badge">
@@ -326,6 +385,15 @@
                             <div class="player-avatar">${player.dofus_pseudo.charAt(0).toUpperCase()}</div>
                             <span class="player-name">${player.dofus_pseudo}</span>
                         </div>
+                    </td>
+                    <td class="cell-winrate">
+                        <div class="winrate-container">
+                            <div class="winrate-bar">
+                                <div class="winrate-fill" style="width: ${winrate}%"></div>
+                            </div>
+                            <span class="winrate-value ${winrate >= 50 ? 'positive' : 'negative'}">${winrate}%</span>
+                        </div>
+                        <span class="winrate-detail">${wins}V / ${losses}D</span>
                     </td>
                     <td class="cell-score">
                         <span class="score-value">${parseInt(player.total_points).toLocaleString()}</span>

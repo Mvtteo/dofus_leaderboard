@@ -94,24 +94,47 @@ app.get('/', async (req, res) => {
             HAVING SUM(total_points) > 0
             ORDER BY total_points DESC
         `;
-        // ^^^ J'ai ajouté la ligne "HAVING..." juste au-dessus ^^^
 
         const result = await pool.query(query);
         
-        const players = result.rows.map(p => ({
-            dofus_pseudo: p.display_name,
-            total_points: parseInt(p.total_points)
-        }));
-
-        // 2. Calcul des totaux
-        const totalPoints = players.reduce((sum, p) => sum + p.total_points, 0);
-
-        // --- GESTION DU COMPTEUR DE COMBATS (Pour éviter le crash) ---
-        // Si tu as une table 'matches', décommente les lignes ci-dessous :
-        const resultCombats = await pool.query('SELECT COUNT(*) as count FROM matches');
-        const totalCombats = parseInt(resultCombats.rows[0].count);
+        // 2. Récupérer tous les matches pour calculer le winrate
+        const matchesResult = await pool.query('SELECT winners, losers FROM matches');
         
-        // -------------------------------------------------------------
+        // 3. Calculer wins/losses pour chaque pseudo
+        const playerStats = {};
+        for (const match of matchesResult.rows) {
+            const winners = match.winners ? match.winners.split(',').map(p => p.trim().toLowerCase()) : [];
+            const losers = match.losers ? match.losers.split(',').map(p => p.trim().toLowerCase()) : [];
+            
+            for (const pseudo of winners) {
+                if (!playerStats[pseudo]) playerStats[pseudo] = { wins: 0, losses: 0 };
+                playerStats[pseudo].wins++;
+            }
+            for (const pseudo of losers) {
+                if (!playerStats[pseudo]) playerStats[pseudo] = { wins: 0, losses: 0 };
+                playerStats[pseudo].losses++;
+            }
+        }
+        
+        // 4. Construire la liste des joueurs avec winrate
+        const players = result.rows.map(p => {
+            const pseudoLower = (p.main_char || p.display_name).toLowerCase();
+            const stats = playerStats[pseudoLower] || { wins: 0, losses: 0 };
+            const totalGames = stats.wins + stats.losses;
+            const winrate = totalGames > 0 ? Math.round((stats.wins / totalGames) * 100) : 0;
+            
+            return {
+                dofus_pseudo: p.display_name,
+                total_points: parseInt(p.total_points),
+                wins: stats.wins,
+                losses: stats.losses,
+                winrate: winrate
+            };
+        });
+
+        // 5. Calcul des totaux
+        const totalPoints = players.reduce((sum, p) => sum + p.total_points, 0);
+        const totalCombats = matchesResult.rows.length;
 
         const { seasons, currentSeason } = getSeasons();
 
@@ -120,7 +143,7 @@ app.get('/', async (req, res) => {
             totalPoints, 
             seasons, 
             currentSeason,
-            totalCombats // Indispensable pour que EJS ne plante pas
+            totalCombats
         });
 
     } catch (error) {
@@ -139,7 +162,8 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
         const query = `
             SELECT 
                 COALESCE(MAX(p.discord_username), MAX(sp.dofus_pseudo)) as dofus_pseudo,
-                SUM(sp.points) as total_points
+                SUM(sp.points) as total_points,
+                MAX(sp.dofus_pseudo) as main_char
             FROM season_points sp
             LEFT JOIN players p ON sp.dofus_pseudo = p.dofus_pseudo
             WHERE sp.season_id = $1
@@ -147,7 +171,38 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
             ORDER BY total_points DESC
         `;
         const result = await pool.query(query, [seasonId]);
-        res.json(result.rows);
+        
+        // Calculer le winrate (global, pas par saison)
+        const matchesResult = await pool.query('SELECT winners, losers FROM matches');
+        const playerStats = {};
+        for (const match of matchesResult.rows) {
+            const winners = match.winners ? match.winners.split(',').map(p => p.trim().toLowerCase()) : [];
+            const losers = match.losers ? match.losers.split(',').map(p => p.trim().toLowerCase()) : [];
+            for (const pseudo of winners) {
+                if (!playerStats[pseudo]) playerStats[pseudo] = { wins: 0, losses: 0 };
+                playerStats[pseudo].wins++;
+            }
+            for (const pseudo of losers) {
+                if (!playerStats[pseudo]) playerStats[pseudo] = { wins: 0, losses: 0 };
+                playerStats[pseudo].losses++;
+            }
+        }
+        
+        const players = result.rows.map(p => {
+            const pseudoLower = (p.main_char || p.dofus_pseudo).toLowerCase();
+            const stats = playerStats[pseudoLower] || { wins: 0, losses: 0 };
+            const totalGames = stats.wins + stats.losses;
+            const winrate = totalGames > 0 ? Math.round((stats.wins / totalGames) * 100) : 0;
+            return {
+                dofus_pseudo: p.dofus_pseudo,
+                total_points: p.total_points,
+                wins: stats.wins,
+                losses: stats.losses,
+                winrate: winrate
+            };
+        });
+        
+        res.json(players);
     } catch (error) {
         res.status(500).json({ error: 'Erreur serveur' });
     }
@@ -241,44 +296,52 @@ client.on('messageCreate', async message => {
         try {
             const attachment = attachments.first();
             const image = await Jimp.read(attachment.url);
+
+            image.scale(3);
+            image.greyscale();
+            image.invert();
+            image.threshold({ max: 180 });
             
-            // Pré-traitement image
-            image.greyscale().invert().contrast(0.25).scale(1.5);
             const processedBuffer = await image.getBufferAsync("image/png");
             
             const result = await Tesseract.recognize(processedBuffer, 'eng');
             
-            // Nettoyage du texte : tout en minuscule + remplacement des accents
+            // Nettoyage : tout sur une seule ligne pour gérer les sauts de ligne
             const text = result.data.text.toLowerCase().replace(/é/g, 'e');
+            const fullText = text.replace(/[\n\r]+/g, ' ');
 
-            console.log("--- OCR TEXTE LU ---");
-            console.log(text);
-            console.log("--------------------");
-
-            let extractedAmount = 0;
-            const lines = text.split('\n');
-            
-            for (const line of lines) {
-                // REGEX STRICTE : [pepite] et 123
-                // \[      -> Crochet ouvrant
-                // \s* -> Espaces possibles
-                // p.pite  -> Mot clé (le . accepte 'a' ou 'e' si mal lu)
-                // \s* -> Espaces possibles
-                // \]      -> Crochet fermant
-                // \s*et   -> Mot "et" avec espaces avant
-                // \s* -> Espaces après
-                // (\d+)   -> Le montant (Chiffres)
-                const regex = /\[\s*p.pite\s*\]\s*et\s*(\d+)/;
-                
-                const match = line.match(regex);
-                if (match) {
-                    extractedAmount = parseInt(match[1], 10);
-                    break;
+            // 1. DÉTECTION TYPE "ALLIANCE" (ex: "L'alliance a généré 2000 pépites")
+            let allianceAmount = 0;
+            if (fullText.includes('alliance')) {
+                const numbers = fullText.match(/\d+/g);
+                if (numbers) {
+                    // On prend le plus grand nombre trouvé
+                    allianceAmount = Math.max(...numbers.map(n => parseInt(n, 10)));
                 }
             }
 
+            // 2. DÉTECTION TYPE "PERSONNEL" (ex: "[pepite] et 500")
+            // On utilise fullText pour que ça marche même si "et 500" est à la ligne
+            let extractedAmount = 0;
+            // Regex améliorée : cherche "[pepite]" suivi éventuellement de texte, puis un nombre
+            const regex = /\[\s*p.pite\s*\]\s*.*?(\d+)/;
+            const match = fullText.match(regex);
+            
+            if (match) {
+                extractedAmount = parseInt(match[1], 10);
+            }
+
+            // 3. CHOIX DU MONTANT FINAL
+            // On priorise le montant précis ([pepite]), sinon on prend le montant Alliance
+            let finalBaseAmount = 0;
             if (extractedAmount > 0) {
-                const amountToAdd = Math.floor(extractedAmount / 2);
+                finalBaseAmount = extractedAmount;
+            } else if (allianceAmount > 0) {
+                finalBaseAmount = allianceAmount;
+            }
+
+            if (finalBaseAmount > 0) {
+                const amountToAdd = Math.floor(finalBaseAmount / 2);
                 const discordId = message.author.id;
                 
                 let targetPseudo = message.author.username;
@@ -301,8 +364,8 @@ client.on('messageCreate', async message => {
                 const res = await pool.query(query, [targetPseudo, discordId, message.author.username, amountToAdd]);
                 const newTotal = res.rows[0].bank_nuggets;
 
-                // Message propre avec mention et sans emoji validé
-                await msgRef.edit(`<@${message.author.id}> **Pépites enregistrées !**\nMontant lu : ${extractedAmount}\nVotre part (50%) : **${amountToAdd}**\n\n💰 **Banque totale : ${newTotal}**`);
+                // Message propre
+                await msgRef.edit(`<@${message.author.id}> **Pépites enregistrées !**\nMontant lu : ${finalBaseAmount}\nVotre part (50%) : **${amountToAdd}**\n\n💰 **Banque totale : ${newTotal}**`);
 
                 try {
                     await message.delete();
@@ -311,7 +374,7 @@ client.on('messageCreate', async message => {
                 }
 
             } else {
-                await msgRef.edit("⚠️ Je n'ai pas trouvé le format exact `[Pépite] et ...`. Vérifiez le screen.");
+                await msgRef.edit("⚠️ Je n'ai pas réussi à lire le montant (Alliance ou Personnel). Assurez-vous que le screen est clair.");
             }
 
         } catch (error) {
@@ -332,10 +395,52 @@ client.on('messageCreate', async message => {
     try {
         for (const [id, attachment] of attachments) {
             const image = await Jimp.read(attachment.url);
-            image.greyscale().invert().contrast(0.25).scale(1.5);
+
+            // --- TRAITEMENT OPTIMISÉ (Douceur + Résolution) ---
+            // 1. Zoom x4 : Crucial pour que "Bella" soit assez gros
+            image.scale(4); 
+            
+            // 2. Noir et Blanc
+            image.greyscale();
+            
+            // 3. Inversion (Texte noir sur fond blanc)
+            image.invert();
+            
+            // 4. Contraste MOYEN (0.5 au lieu de 1). 
+            // 1 détruisait les lettres fines ('l', 'i', 'T'). 0.5 nettoie le gris sans casser les lettres.
+            image.contrast(0.5); 
+            
+            // 5. On enlève un peu de luminosité pour que le texte noir soit bien noir
+            image.brightness(-0.1);
+
             const processedBuffer = await image.getBufferAsync("image/png");
-            const result = await Tesseract.recognize(processedBuffer, 'eng');
+
+            // --- TESSERACT ---
+            const result = await Tesseract.recognize(processedBuffer, 'eng', {
+                logger: m => {},
+                // On garde la whitelist pour forcer la propreté
+                tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
+                // PSM 11 est toujours le meilleur pour les listes éparpillées
+                tessedit_pageseg_mode: '11' 
+            });
+
+            console.log("========================================");
+            console.log("📸 TEXTE LU (Zoom x4 / Soft Contrast) :");
+            console.log(result.data.text);
+            console.log("========================================");
+
+            // ... (Après le Tesseract.recognize et le console.log du texte brut) ...
+
             const parsedPart = parseScreenData(result.data.text);
+
+            // --- AJOUT : AFFICHAGE DEBUG DES JOUEURS RECONNUS ---
+            console.log("----------------------------------------");
+            console.log("✅ RÉSULTAT DU PARSING :");
+            console.log("🏆 GAGNANTS :", parsedPart.winners.join(', '));
+            console.log("☠️ PERDANTS :", parsedPart.losers.join(', '));
+            console.log("----------------------------------------");
+            // ----------------------------------------------------
+
             if (parsedPart.winners.length > 0) userSession.winners = [...new Set([...userSession.winners, ...parsedPart.winners])];
             if (parsedPart.losers.length > 0) userSession.losers = [...new Set([...userSession.losers, ...parsedPart.losers])];
         }
@@ -355,27 +460,28 @@ client.on('messageCreate', async message => {
 });
 
 client.on('interactionCreate', async interaction => {
-    // --- GESTION PROFIL ---
-    if (interaction.isButton() && ['btn_link_char', 'btn_unlink_char'].includes(interaction.customId)) {
-        if (interaction.customId === 'btn_link_char') {
-            const modal = new ModalBuilder().setCustomId('modal_link').setTitle('Lier un personnage');
-            modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
-            await interaction.showModal(modal); return;
+    // --- BLOC DE SÉCURITÉ GLOBAL (Empêche le crash) ---
+    try {
+        // --- GESTION PROFIL ---
+        if (interaction.isButton() && ['btn_link_char', 'btn_unlink_char'].includes(interaction.customId)) {
+            if (interaction.customId === 'btn_link_char') {
+                const modal = new ModalBuilder().setCustomId('modal_link').setTitle('Lier un personnage');
+                modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
+                await interaction.showModal(modal); return;
+            }
+            if (interaction.customId === 'btn_unlink_char') {
+                const modal = new ModalBuilder().setCustomId('modal_unlink').setTitle('Délier un personnage');
+                modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
+                await interaction.showModal(modal); return;
+            }
         }
-        if (interaction.customId === 'btn_unlink_char') {
-            const modal = new ModalBuilder().setCustomId('modal_unlink').setTitle('Délier un personnage');
-            modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
-            await interaction.showModal(modal); return;
-        }
-    }
 
-    if (interaction.isModalSubmit()) {
-        const pseudo = interaction.fields.getTextInputValue('pseudoInput').trim();
-        const discordId = interaction.user.id;
-        const discordName = interaction.user.username;
+        if (interaction.isModalSubmit()) {
+            const pseudo = interaction.fields.getTextInputValue('pseudoInput').trim();
+            const discordId = interaction.user.id;
+            const discordName = interaction.user.username;
 
-        if (interaction.customId === 'modal_link') {
-            try {
+            if (interaction.customId === 'modal_link') {
                 const check = await pool.query('SELECT * FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [pseudo]);
                 if (check.rows.length === 0) {
                     await pool.query('INSERT INTO players (dofus_pseudo, discord_id, discord_username) VALUES ($1, $2, $3)', [pseudo, discordId, discordName]);
@@ -386,158 +492,146 @@ client.on('interactionCreate', async interaction => {
                 }
                 await interaction.reply({ content: `✅ **${pseudo}** lié !`, ephemeral: true });
                 updateLeaderboard();
-            } catch (err) { console.error(err); interaction.reply({content: "Erreur.", ephemeral: true}); }
-        }
-        if (interaction.customId === 'modal_unlink') {
-            try {
+            }
+            if (interaction.customId === 'modal_unlink') {
                 const res = await pool.query('UPDATE players SET discord_id = NULL, discord_username = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
                 await interaction.reply({ content: res.rowCount > 0 ? `✅ **${pseudo}** délié.` : `❌ Erreur ou ce n'est pas votre perso.`, ephemeral: true });
                 updateLeaderboard();
-            } catch (err) { console.error(err); interaction.reply({content: "Erreur.", ephemeral: true}); }
+            }
+            return;
         }
-        return;
-    }
 
-    // --- LOGIQUE COMBAT ---
-    const userSession = activeSessions.get(interaction.user.id);
-    if ((!userSession && interaction.isButton() && interaction.customId === 'reset') || 
-        (interaction.isStringSelectMenu() && !userSession)) {
-        return interaction.reply({ content: "Session expirée.", ephemeral: true });
-    }
-    if (!userSession) return;
+        // --- LOGIQUE COMBAT ---
+        const userSession = activeSessions.get(interaction.user.id);
 
-    if (interaction.isButton() && interaction.customId === 'reset') {
-        activeSessions.delete(interaction.user.id);
-        return interaction.update({ content: "Session effacee.", components: [] });
-    }
-
-    // ETAPE 1 : CHOIX ATTAQUE / DEFENSE -> AFFICHE MENU SELECTEUR
-    if (interaction.isButton() && (interaction.customId === 'attack' || interaction.customId === 'defense')) {
-        userSession.context = interaction.customId; 
+        const combatButtons = ['attack', 'defense', 'reset', 'result_win', 'result_lose'];
         
-        // On crée le menu déroulant
-        const selectMenu = new StringSelectMenuBuilder()
-            .setCustomId('select_alliance_bonus')
-            .setPlaceholder('Choisissez l\'Alliance adverse')
-            .addOptions(
-                new StringSelectMenuOptionBuilder()
-                    .setLabel('Standard / Autre')
-                    .setDescription('Combat classique (Aucun bonus)')
-                    .setValue('standard'),
-                new StringSelectMenuOptionBuilder()
-                    .setLabel(`Pool 1 (+${config.BONUSES.pool_1} pts)`)
-                    .setDescription(config.POOL_NAMES.pool_1.substring(0, 100))
-                    .setValue('pool_1'),
-                new StringSelectMenuOptionBuilder()
-                    .setLabel(`Pool 2 (+${config.BONUSES.pool_2} pts)`)
-                    .setDescription(config.POOL_NAMES.pool_2.substring(0, 100))
-                    .setValue('pool_2'),
+        // Gestion des sessions expirées ou inexistantes
+        if (!userSession && (
+            (interaction.isButton() && combatButtons.includes(interaction.customId)) ||
+            interaction.isStringSelectMenu()
+        )) {
+            // On répond proprement pour que Discord n'affiche pas "Echec"
+            return interaction.reply({ 
+                content: "**Session expirée.**\nLe bot a redémarré ou l'attente a été trop longue.\n👉 **Renvoyez vos screens.**", 
+                ephemeral: true 
+            });
+        }
+        
+        if (!userSession) return; // Sécurité finale
+
+        if (interaction.isButton() && interaction.customId === 'reset') {
+            activeSessions.delete(interaction.user.id);
+            return interaction.update({ content: "Session effacee.", components: [] });
+        }
+
+        // ETAPE 1 : CHOIX ATTAQUE / DEFENSE
+        if (interaction.isButton() && (interaction.customId === 'attack' || interaction.customId === 'defense')) {
+            userSession.context = interaction.customId; 
+            
+            const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId('select_alliance_bonus')
+                .setPlaceholder('Choisissez l\'Alliance adverse')
+                .addOptions(
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('Standard / Autre')
+                        .setDescription('Combat classique')
+                        .setValue('standard'),
+                    
+                    // MODIFICATION ICI : On affiche directement le nom de l'alliance (sans le barème)
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(config.POOL_NAMES.pool_1.substring(0, 100)) // .substring évite le crash si nom > 100 caractères
+                        .setValue('pool_1'), // On garde l'ID technique pour le code
+
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(config.POOL_NAMES.pool_2.substring(0, 100))
+                        .setValue('pool_2'),
+                );
+
+            const row = new ActionRowBuilder().addComponents(selectMenu);
+            await interaction.update({ content: `Mode : **${interaction.customId === 'attack' ? 'Attaque' : 'Défense'}**.\nContre quel type d'alliance ?`, components: [row] });
+        }
+
+        // ETAPE 2 : CHOIX ALLIANCE
+        else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
+            userSession.allianceTier = interaction.values[0]; 
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('result_win').setLabel('🏆 VICTOIRE').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('result_lose').setLabel('☠️ DÉFAITE').setStyle(ButtonStyle.Danger)
             );
 
-        const row = new ActionRowBuilder().addComponents(selectMenu);
-        await interaction.update({ content: `Mode : **${interaction.customId === 'attack' ? 'Attaque' : 'Défense'}**.\nContre quel type d'alliance ?`, components: [row] });
-    }
+            let allianceLabel = "Standard";
+            // On récupère le nom propre directement de la config
+            if (userSession.allianceTier === 'pool_1') allianceLabel = config.POOL_NAMES.pool_1;
+            if (userSession.allianceTier === 'pool_2') allianceLabel = config.POOL_NAMES.pool_2;
 
-    // ETAPE 2 : CHOIX ALLIANCE (SELECTEUR) -> AFFICHE BOUTONS RESULTAT
-    else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
-        userSession.allianceTier = interaction.values[0]; 
+            await interaction.update({ content: `Config : **${userSession.context}** vs **${allianceLabel}**.\nRésultat du combat ?`, components: [row] });
+        }
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('result_win').setLabel('🏆 VICTOIRE').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('result_lose').setLabel('☠️ DÉFAITE').setStyle(ButtonStyle.Danger)
-        );
+        // ETAPE 3 : CALCULE ET SAUVEGARDE
+        else if (interaction.isButton() && (interaction.customId === 'result_win' || interaction.customId === 'result_lose')) {
+            await interaction.deferUpdate(); // Indique à Discord qu'on réfléchit (évite le timeout)
+            
+            const hasWon = interaction.customId === 'result_win';
+            const myTeam = hasWon ? userSession.winners : userSession.losers;
+            const enemyTeam = hasWon ? userSession.losers : userSession.winners;
+            
+            if (!myTeam || myTeam.length === 0) return interaction.editReply({ content: "Erreur: Impossible d'identifier votre équipe.", components: [] });
 
-        let allianceLabel = "Standard";
-        if (userSession.allianceTier === 'pool_1') allianceLabel = "Pool 1";
-        if (userSession.allianceTier === 'pool_2') allianceLabel = "Pool 2";
+            const myCount = myTeam.length;
+            const enemyCount = enemyTeam.length;
+            const gap = myCount - enemyCount; 
 
-        await interaction.update({ content: `Config : **${userSession.context}** vs **${allianceLabel}**.\nRésultat du combat ?`, components: [row] });
-    }
+            if (gap >= config.MAX_PLAYER_GAP_FOR_CANCEL) {
+                return interaction.editReply({ content: `🛑 **Combat non comptabilisé** (Écart trop grand: ${myCount} vs ${enemyCount}).`, components: [] });
+            }
 
-    // ETAPE 3 : CALCULE ET SAUVEGARDE
-    else if (interaction.isButton() && (interaction.customId === 'result_win' || interaction.customId === 'result_lose')) {
-        await interaction.deferUpdate();
-        const hasWon = interaction.customId === 'result_win';
-        
-        const myTeam = hasWon ? userSession.winners : userSession.losers;
-        const enemyTeam = hasWon ? userSession.losers : userSession.winners;
-        
-        if (!myTeam || myTeam.length === 0) return interaction.editReply({ content: "Erreur: Impossible d'identifier votre équipe.", components: [] });
+            let basePoints = 0;
+            try { basePoints = config.BASE_SCORES[userSession.context]; } catch (e) { basePoints = 0; }
+            if (hasWon) basePoints += config.WIN_MODIFIER; else basePoints -= config.LOSE_MODIFIER;
 
-        const myCount = myTeam.length;
-        const enemyCount = enemyTeam.length;
-        const gap = myCount - enemyCount; 
+            let heroBonus = (gap < 0) ? config.INFERIORITY_BONUS : 0;
+            let allianceBonus = 0;
+            if (userSession.allianceTier === 'pool_1') allianceBonus = config.BONUSES.pool_1;
+            if (userSession.allianceTier === 'pool_2') allianceBonus = config.BONUSES.pool_2;
 
-        // 1. REGLE ANTI-FARMING (Annulation)
-        if (gap >= config.MAX_PLAYER_GAP_FOR_CANCEL) {
-             return interaction.editReply({ 
-                content: `🛑 **Combat non comptabilisé**.\nÉcart de joueurs trop important (${myCount} vs ${enemyCount}). Combat considéré comme déséquilibré.`, 
+            let pointsToAdd = Math.max(0, basePoints + heroBonus + allianceBonus);
+
+            for (const pseudo of myTeam) await updatePlayerPoints(pseudo, pointsToAdd);
+
+            // Sauvegarde historique
+            const winnersStr = userSession.winners.join(',');
+            const losersStr = userSession.losers.join(',');
+            await pool.query("INSERT INTO matches (winners, losers) VALUES ($1, $2)", [winnersStr, losersStr]);
+
+            await updateLeaderboard();
+            activeSessions.delete(interaction.user.id);
+            
+            const resultText = hasWon ? "VICTOIRE" : "DÉFAITE";
+            const heroText = heroBonus > 0 ? `+ Bonus Héroïque (${heroBonus})` : '';
+            const alliText = allianceBonus > 0 ? `+ Bonus Alli (${allianceBonus})` : '';
+            
+            await interaction.editReply({ 
+                content: `✅ **Enregistré !**\n` +
+                        `Résultat: ${resultText} | Mode: ${userSession.context} | Joueurs: ${myCount} vs ${enemyCount}\n` +
+                        `Calcul: Base ${hasWon ? '(Victoire)' : '(Défaite)'} ${heroText} ${alliText}\n` +
+                        `👉 **${pointsToAdd} pts** attribués à : ${myTeam.join(', ')}`, 
                 components: [] 
             });
         }
-
-        let pointsToAdd = 0;
-        let basePoints = 0;
-
-        // 2. Score de BASE (Fixe selon config.js)
-        try {
-            basePoints = config.BASE_SCORES[userSession.context]; // 4 ou 6
-        } catch (e) { basePoints = 0; }
-
-        // 3. Modificateur Victoire/Défaite
-        if (hasWon) {
-            basePoints += config.WIN_MODIFIER;
+    } catch (error) {
+        // --- C'EST ICI QUE LE CRASH EST EVITÉ ---
+        // Si Discord renvoie "Unknown interaction" (10062), on l'ignore juste.
+        if (error.code === 10062) {
+            console.warn(`⚠️ Interaction expirée ou inconnue (User: ${interaction.user.username}). Pas grave.`);
         } else {
-            basePoints -= config.LOSE_MODIFIER;
+            console.error("❌ Erreur critique dans interactionCreate :", error);
+            // On essaie de prévenir l'utilisateur si possible
+            try {
+                if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: "Une erreur est survenue.", ephemeral: true });
+            } catch (e) {}
         }
-
-        // 4. Bonus d'Infériorité numérique
-        let heroBonus = 0;
-        if (gap < 0) {
-            heroBonus = config.INFERIORITY_BONUS;
-        }
-
-        // 5. Bonus Alliance
-        let allianceBonus = 0;
-        if (userSession.allianceTier === 'pool_1') allianceBonus = config.BONUSES.pool_1;
-        if (userSession.allianceTier === 'pool_2') allianceBonus = config.BONUSES.pool_2;
-
-        pointsToAdd = basePoints + heroBonus + allianceBonus;
-
-        if (pointsToAdd < 0) pointsToAdd = 0;
-
-        for (const pseudo of myTeam) await updatePlayerPoints(pseudo, pointsToAdd);
-
-        try {
-            // On convertit les tableaux de pseudos en texte (ex: "Joueur1,Joueur2")
-            const winnersStr = userSession.winners.join(',');
-            const losersStr = userSession.losers.join(',');
-            
-            // On insère le combat dans la BDD
-            await pool.query(
-                "INSERT INTO matches (winners, losers) VALUES ($1, $2)", 
-                [winnersStr, losersStr]
-            );
-            console.log("Combat sauvegardé dans l'historique.");
-        } catch (err) {
-            console.error("Erreur sauvegarde match:", err);
-        }
-
-        await updateLeaderboard();
-
-        activeSessions.delete(interaction.user.id);
-        
-        const resultText = hasWon ? "VICTOIRE" : "DÉFAITE";
-        const heroText = heroBonus > 0 ? `+ Bonus Héroïque (${heroBonus})` : '';
-        const alliText = allianceBonus > 0 ? `+ Bonus Alli (${allianceBonus})` : '';
-        
-        await interaction.editReply({ 
-            content: `✅ **Enregistré !**\n` +
-                     `Résultat: ${resultText} | Mode: ${userSession.context} | Joueurs: ${myCount} vs ${enemyCount}\n` +
-                     `Calcul: Base ${hasWon ? '(Victoire)' : '(Défaite)'} ${heroText} ${alliText}\n` +
-                     `👉 **${pointsToAdd} pts** attribués à : ${myTeam.join(', ')}`, 
-            components: [] 
-        });
     }
 });
 
@@ -572,29 +666,79 @@ async function updateLeaderboard() {
 }
 
 function parseScreenData(text) {
-    const lines = text.split('\n');
-    const winners = []; const losers = [];
-    let currentSection = 'winners';
-    if (text.substring(0, 100).toUpperCase().includes('PERDANTS')) currentSection = 'losers';
-    lines.forEach((line) => {
-        const upperLine = line.toUpperCase().trim();
-        if (!upperLine) return;
-        if (upperLine.includes('GAGNANT') || upperLine.includes('WINNER')) { currentSection = 'winners'; return; }
-        if (upperLine.includes('PERDANT') || upperLine.includes('LOSER')) { currentSection = 'losers'; return; }
-        if (line.length < 3) return;
-        const cleanLine = line.replace(/[\[\]\(\)\|\@\:\.\,\*\+\!]/g, ' '); 
-        const rawWords = cleanLine.split(/\s+/);
-        let validNameParts = [];
-        for (const w of rawWords) {
-            let word = w.replace(/[^a-zA-Z0-9-]/g, '').replace(/^\d+/, '');
-            if (word.length < 3 || config.STOP_WORDS.includes(word.toLowerCase()) || config.BANNED_WORDS.includes(word.toLowerCase())) continue;
-            if (word.length <= 4 && /\d/.test(word)) continue;
-            validNameParts.push(word);
+    const lines = text.split('\n').filter(line => line.trim().length > 0);
+    const winners = [];
+    const losers = [];
+    let currentSection = null;
+
+    const WIN_KEYS = ['GAGNANT', 'WINNER', 'VICTOIRE', 'WP']; 
+    const LOSE_KEYS = ['PERDANT', 'LOSER', 'DEFAITE'];
+
+    const IGNORE_LIST = [
+        'NIVEAU', 'NOM', 'PERSONNAGE', 'EXPERIENCE', 'GAGNEE', 'KAMAS', 'BUTIN', 
+        'OXP', 'XP', 'LVL', 'GUILDE', 'ALLIANCE', 'TOTAL'
+    ];
+
+    for (let line of lines) {
+        // Nettoyage standard
+        let cleanLine = line.replace(/[^a-zA-Z0-9\-\'\s]/g, ' ').trim();
+        let upperLine = cleanLine.toUpperCase();
+
+        // --- 1. FILTRES D'EN-TÊTE (Avant détection section) ---
+        if (upperLine.includes('NOM') && upperLine.includes('NIVEAU')) continue;
+        if (upperLine.includes('EXPERIENCE') && upperLine.includes('GAGNEE')) continue;
+
+        // --- 2. DÉTECTION SECTIONS ---
+        if (WIN_KEYS.some(k => upperLine.includes(k))) { 
+            currentSection = 'winners'; 
+            console.log(`   -> Section détectée : GAGNANTS`);
+            continue; 
         }
-        if (validNameParts.length === 1 && !/^\d+$/.test(validNameParts[0])) {
-            if (currentSection === 'winners') winners.push(validNameParts[0]); else losers.push(validNameParts[0]);
+        if (LOSE_KEYS.some(k => upperLine.includes(k))) { 
+            currentSection = 'losers'; 
+            console.log(`   -> Section détectée : PERDANTS`);
+            continue; 
         }
-    });
+
+        if (!currentSection) continue;
+
+        const tokens = cleanLine.split(/\s+/);
+        
+        // --- 3. CHECK ANTI-PERCEPTEUR (Le tueur de ligne) ---
+        // On vérifie si UN SEUL mot de la ligne commence par DO'
+        const containsPerco = tokens.some(token => token.toUpperCase().startsWith("DO'"));
+        
+        if (containsPerco) {
+            console.log(`   🚫 Percepteur détecté et ignoré sur la ligne : "${cleanLine}"`);
+            continue; // ON PASSE DIRECTEMENT À LA LIGNE SUIVANTE
+        }
+
+        // --- 4. LOGIQUE DU CHAMPION (Si ce n'est pas un perco) ---
+        let bestWord = "";
+
+        for (let word of tokens) {
+            let candidate = word.replace(/[^a-zA-Z0-9\-\']/g, ''); // On garde l'apostrophe
+
+            // Filtres de base
+            if (candidate.length < 3) continue;
+            if (/^\d/.test(candidate)) continue;
+            
+            const upperCand = candidate.toUpperCase();
+            if (IGNORE_LIST.includes(upperCand)) continue; 
+
+            // On garde le mot le plus long
+            if (candidate.length > bestWord.length) {
+                bestWord = candidate;
+            }
+        }
+
+        if (bestWord && bestWord.length >= 3) {
+            bestWord = bestWord.replace(/^'|'$/g, '');
+            if (currentSection === 'winners') winners.push(bestWord);
+            else losers.push(bestWord);
+        }
+    }
+    
     return { winners, losers };
 }
 
