@@ -473,14 +473,53 @@ client.on('interactionCreate', async interaction => {
             if (userSession.allianceTier === 'pool_2') allianceBonus = config.BONUSES.pool_2;
             const totalPoints = pointsToAdd + allianceBonus;
 
-            // GAGNANTS
+            // GAGNANTS - Detection doublons discord_id
+            const winnersData = await pool.query(
+                `SELECT dofus_pseudo, discord_id FROM players WHERE dofus_pseudo = ANY($1)`,
+                [userSession.winners]
+            );
+            
+            const discordIdsRewarded = new Set();
+            const pseudosRewarded = [];
+            const pseudosSkipped = [];
+            
             for (const pseudo of userSession.winners) {
+                const playerRow = winnersData.rows.find(r => r.dofus_pseudo.toLowerCase() === pseudo.toLowerCase());
+                const discordId = playerRow?.discord_id;
+                
+                // Si le joueur a un discord_id et qu'on l'a deja recompense, skip
+                if (discordId && discordIdsRewarded.has(discordId)) {
+                    pseudosSkipped.push(pseudo);
+                    // On compte quand meme la win pour les stats du perso
+                    await pool.query(`INSERT INTO players (dofus_pseudo, wins) VALUES ($1, 1) ON CONFLICT (dofus_pseudo) DO UPDATE SET wins = players.wins + 1`, [pseudo]);
+                    continue;
+                }
+                
+                if (discordId) discordIdsRewarded.add(discordId);
+                pseudosRewarded.push(pseudo);
+                
                 await updatePlayerPoints(pseudo, totalPoints);
-                await pool.query(`UPDATE players SET wins = wins + 1 WHERE dofus_pseudo = $1`, [pseudo]);
+                await pool.query(`INSERT INTO players (dofus_pseudo, wins) VALUES ($1, 1) ON CONFLICT (dofus_pseudo) DO UPDATE SET wins = players.wins + 1`, [pseudo]);
             }
 
-            // PERDANTS
+            // PERDANTS - Meme logique pour les stats (pas de points)
+            const losersData = await pool.query(
+                `SELECT dofus_pseudo, discord_id FROM players WHERE dofus_pseudo = ANY($1)`,
+                [userSession.losers]
+            );
+            
+            const discordIdsLoss = new Set();
+            
             for (const pseudo of userSession.losers) {
+                const playerRow = losersData.rows.find(r => r.dofus_pseudo.toLowerCase() === pseudo.toLowerCase());
+                const discordId = playerRow?.discord_id;
+                
+                // Si deja compte une loss pour ce discord_id, skip la stat
+                if (discordId && discordIdsLoss.has(discordId)) {
+                    continue;
+                }
+                
+                if (discordId) discordIdsLoss.add(discordId);
                 await pool.query(`INSERT INTO players (dofus_pseudo, losses) VALUES ($1, 1) ON CONFLICT (dofus_pseudo) DO UPDATE SET losses = players.losses + 1`, [pseudo]);
             }
 
@@ -489,8 +528,12 @@ client.on('interactionCreate', async interaction => {
             } catch (err) { console.error("Erreur save match:", err); }
 
             // REPONSE FINALE
+            let finalMsg = `**Enregistre !** ${totalPoints} pts attribues a ${pseudosRewarded.join(', ')}`;
+            if (pseudosSkipped.length > 0) {
+                finalMsg += `\n(${pseudosSkipped.join(', ')} : meme compte, points non cumules)`;
+            }
             await interaction.editReply({ 
-                content: `**Enregistre !** ${totalPoints} pts attribues a ${userSession.winners.join(', ')}`, 
+                content: finalMsg, 
                 components: [] 
             });
         }
