@@ -483,12 +483,9 @@ client.on('interactionCreate', async interaction => {
             const resultText = hasWon ? "VICTOIRE" : "DÉFAITE";
             const alliText = allianceBonus > 0 ? ` (+${allianceBonus} Bonus)` : '';
             await interaction.editReply({ 
-                content: `✅ **Enregistré !**\n` +
-                         `Situation : **${myCount} vs ${enemyCount}** | Résultat : ${resultText}\n` +
-                         `Points : **${pointsToAdd}** pts${alliText} = **${totalPoints}** pts\n` +
-                         `Attribués à : ${userSession.winners.join(', ')}`, 
-                components: [] 
-            });
+            content: `**Enregistré !** ${totalPoints} pts attribués à ${userSession.winners.join(', ')}`, 
+            components: [] 
+        });
         }
     } catch (err) {
         console.error("Erreur interaction:", err);
