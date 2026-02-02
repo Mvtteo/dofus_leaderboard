@@ -475,7 +475,7 @@ client.on('interactionCreate', async interaction => {
 
             // GAGNANTS - Detection doublons discord_id
             const winnersData = await pool.query(
-                `SELECT dofus_pseudo, discord_id FROM players WHERE dofus_pseudo = ANY($1)`,
+                `SELECT dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`,
                 [userSession.winners]
             );
             
@@ -528,7 +528,7 @@ client.on('interactionCreate', async interaction => {
             } catch (err) { console.error("Erreur save match:", err); }
 
             // REPONSE FINALE
-            let finalMsg = `**Enregistre !** ${totalPoints} pts attribues a ${pseudosRewarded.join(', ')}`;
+            let finalMsg = `**Enregistré !** ${totalPoints} points attribués a ${pseudosRewarded.join(', ')}`;
             if (pseudosSkipped.length > 0) {
                 finalMsg += `\n(${pseudosSkipped.join(', ')} : meme compte, points non cumules)`;
             }
