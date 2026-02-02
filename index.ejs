@@ -239,19 +239,22 @@
     </footer>
 
     <script>
-        // 1. INJECTION DES DONNÉES (Backend -> Frontend)
-        // Correction ici : 'const' au lieu de 'et'
-        const allPlayers = <%- JSON.stringify(players) %>;
+        // 1. INJECTION INITIALE (Données au chargement de la page)
+        // Correction du typo 'et' -> 'const'
+        let allPlayers = <%- JSON.stringify(players) %>;
         
         // Configuration
         let currentPage = 1;
         const rowsPerPage = 10;
         let filteredPlayers = [...allPlayers]; 
+        
+        // AUTO-UPDATE : Intervalle en millisecondes (ici 15 secondes)
+        const UPDATE_INTERVAL = 15000; 
 
         const tableBody = document.getElementById('leaderboardBody');
         const paginationDiv = document.getElementById('paginationControls');
 
-        // 2. FONCTION : AFFICHER LE TABLEAU
+        // --- FONCTION : AFFICHER LE TABLEAU ---
         function displayTable() {
             tableBody.innerHTML = "";
             const startIndex = (currentPage - 1) * rowsPerPage;
@@ -265,41 +268,28 @@
             }
 
             pageData.forEach((player) => {
-                // Calcul du vrai rang (basé sur la liste filtrée)
+                // Calculs
                 const realRank = filteredPlayers.indexOf(player) + 1;
                 const winrate = player.winrate || 0;
                 const wins = player.wins || 0;
                 const losses = player.losses || 0;
                 
-                // Style conditionnel
+                // Styles CSS dynamiques
                 const rowClass = realRank <= 3 ? `top-${realRank}` : '';
                 
-                // Correction couleur (Vert si >= 50, Rouge sinon)
-                // Note: Tes classes CSS sont .text-high, .text-mid, .text-low ou .positive/.negative ?
-                // Vu ton fichier style.css, tu n'as pas défini .positive/.negative pour le texte, 
-                // mais tu as .text-high (vert), .text-mid (jaune), .text-low (rouge). Utilisons ça :
                 let winrateColorClass = 'text-low';
                 let winrateFillClass = 'fill-low';
+                if (winrate >= 60) { winrateColorClass = 'text-high'; winrateFillClass = 'fill-high'; }
+                else if (winrate >= 45) { winrateColorClass = 'text-mid'; winrateFillClass = 'fill-mid'; }
 
-                if (winrate >= 60) {
-                    winrateColorClass = 'text-high';
-                    winrateFillClass = 'fill-high';
-                } else if (winrate >= 45) {
-                    winrateColorClass = 'text-mid';
-                    winrateFillClass = 'fill-mid';
-                }
-
-                // HTML de la médaille
+                // HTML Médaille
                 let rankHTML = `<span>${realRank}</span>`;
-                if (realRank <= 3) {
-                    rankHTML = `<div class="rank-medal rank-${realRank}">${realRank}</div>`;
-                }
+                if (realRank <= 3) rankHTML = `<div class="rank-medal rank-${realRank}">${realRank}</div>`;
 
+                // Construction de la ligne
                 const row = `
                     <tr class="player-row ${rowClass} visible">
-                        <td class="cell-rank">
-                            <div class="rank-badge">${rankHTML}</div>
-                        </td>
+                        <td class="cell-rank"><div class="rank-badge">${rankHTML}</div></td>
                         <td class="cell-player">
                             <div class="player-info">
                                 <div class="player-avatar">${player.dofus_pseudo.charAt(0).toUpperCase()}</div>
@@ -327,7 +317,7 @@
             displayPagination();
         }
 
-        // 3. FONCTION : PAGINATION
+        // --- FONCTION : PAGINATION ---
         function displayPagination() {
             paginationDiv.innerHTML = "";
             const pageCount = Math.ceil(filteredPlayers.length / rowsPerPage);
@@ -341,28 +331,22 @@
             prevBtn.onclick = () => { currentPage--; displayTable(); };
             paginationDiv.appendChild(prevBtn);
 
-            // Logique intelligente (1 ... 4 5 6 ... 10)
+            // Boutons numérotés intelligents
             let startPage = Math.max(1, currentPage - 2);
             let endPage = Math.min(pageCount, currentPage + 2);
 
             if (startPage > 1) {
-                const b = document.createElement('button'); b.innerText = "1"; b.className = "page-btn";
-                b.onclick = () => { currentPage = 1; displayTable(); }; paginationDiv.appendChild(b);
+                createPageBtn(1);
                 if(startPage > 2) paginationDiv.appendChild(document.createTextNode("..."));
             }
 
             for (let i = startPage; i <= endPage; i++) {
-                const btn = document.createElement('button');
-                btn.innerText = i;
-                btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
-                btn.onclick = () => { currentPage = i; displayTable(); };
-                paginationDiv.appendChild(btn);
+                createPageBtn(i);
             }
 
             if (endPage < pageCount) {
                 if(endPage < pageCount - 1) paginationDiv.appendChild(document.createTextNode("..."));
-                const b = document.createElement('button'); b.innerText = pageCount; b.className = "page-btn";
-                b.onclick = () => { currentPage = pageCount; displayTable(); }; paginationDiv.appendChild(b);
+                createPageBtn(pageCount);
             }
 
             // Bouton Suivant
@@ -372,21 +356,68 @@
             nextBtn.disabled = currentPage === pageCount;
             nextBtn.onclick = () => { currentPage++; displayTable(); };
             paginationDiv.appendChild(nextBtn);
+
+            function createPageBtn(i) {
+                const btn = document.createElement('button');
+                btn.innerText = i;
+                btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                btn.onclick = () => { currentPage = i; displayTable(); };
+                paginationDiv.appendChild(btn);
+            }
         }
 
-        // 4. FONCTION : RECHERCHE
-        function filterData() {
+        // --- FONCTION : FILTRER LES DONNÉES (Recherche) ---
+        function filterData(resetPage = true) {
             const input = document.getElementById('searchInput').value.toLowerCase();
+            // On filtre sur la liste globale 'allPlayers'
             filteredPlayers = allPlayers.filter(p => p.dofus_pseudo.toLowerCase().includes(input));
-            currentPage = 1; 
+            
+            if (resetPage) currentPage = 1; // On revient page 1 si on tape une recherche
             displayTable();
         }
 
-        // INIT & EVENTS
+        // --- 🚀 FONCTION : FETCH DATA (Auto Update) ---
+        async function fetchLeaderboardData() {
+            try {
+                // 1. Quel saison est sélectionnée ?
+                const seasonSelect = document.getElementById('seasonSelect');
+                const seasonId = seasonSelect ? seasonSelect.value : 1;
+
+                // 2. Appel API
+                const response = await fetch(`/api/leaderboard/${seasonId}`);
+                if (!response.ok) throw new Error("Erreur réseau");
+
+                const data = await response.json();
+                
+                // 3. Mise à jour des variables
+                allPlayers = data;
+                
+                // 4. On réapplique le filtre de recherche actuel (sans reset la page si possible)
+                // Comme ça si tu es page 2, tu restes page 2
+                filterData(false);
+
+                // 5. Mise à jour des stats du Header
+                if (document.getElementById('playerCount')) {
+                    document.getElementById('playerCount').textContent = data.length;
+                }
+                if (document.getElementById('totalCombats')) {
+                    // On recalcule le total des points (ou combats) basé sur les nouvelles données
+                    const total = data.reduce((sum, p) => sum + parseInt(p.total_points), 0);
+                    document.getElementById('totalCombats').textContent = total.toLocaleString();
+                }
+
+                // console.log(`🔄 Mise à jour auto effectuée (${new Date().toLocaleTimeString()})`);
+
+            } catch (error) {
+                console.error("Erreur Auto-Update:", error);
+            }
+        }
+
+        // --- INITIALISATION ---
         document.addEventListener('DOMContentLoaded', () => {
             displayTable(); 
             
-            // Particules
+            // Animation Particules
             const container = document.getElementById('particles');
             if(container) {
                 for (let i = 0; i < 25; i++) {
@@ -401,15 +432,17 @@
             document.querySelectorAll('.podium-item').forEach((item, i) => {
                 setTimeout(() => item.classList.add('visible'), 200 + (i * 150));
             });
+
+            // ⏱️ Lancer l'Auto-Update
+            setInterval(fetchLeaderboardData, UPDATE_INTERVAL);
         });
 
-        // Event Listeners
+        // Events Listeners UI
         const searchInput = document.getElementById('searchInput');
-        if(searchInput) searchInput.addEventListener('keyup', filterData);
+        if(searchInput) searchInput.addEventListener('keyup', () => filterData(true));
         
-        const searchContainer = document.getElementById('searchContainer');
         const searchToggle = document.getElementById('searchToggle');
-        
+        const searchContainer = document.getElementById('searchContainer');
         if(searchToggle && searchContainer) {
             searchToggle.addEventListener('click', () => {
                 searchContainer.classList.toggle('expanded');
@@ -417,25 +450,10 @@
             });
         }
 
-        // Mise à jour via Selecteur de Saison
+        // Changement manuel de saison (Déclenche un fetch immédiat)
         const seasonSelect = document.getElementById('seasonSelect');
         if(seasonSelect) {
-            seasonSelect.addEventListener('change', async function(e) {
-                try {
-                    const response = await fetch(`/api/leaderboard/${e.target.value}`);
-                    const data = await response.json();
-                    allPlayers = data; 
-                    filterData(); 
-                    
-                    // Stats header
-                    const playerCountEl = document.getElementById('playerCount');
-                    if(playerCountEl) playerCountEl.textContent = data.length;
-                    
-                    const total = data.reduce((sum, p) => sum + parseInt(p.total_points), 0);
-                    const totalCombatsEl = document.getElementById('totalCombats');
-                    if(totalCombatsEl) totalCombatsEl.textContent = total.toLocaleString();
-                } catch (error) { console.error(error); }
-            });
+            seasonSelect.addEventListener('change', fetchLeaderboardData);
         }
     </script>
 </body>
