@@ -890,3 +890,36 @@ body {
     .player-name { font-size: 0.8125rem; }
     .score-value { font-size: 0.9375rem; }
 }
+
+/* --- AJOUT PAGINATION --- */
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 25px;
+            gap: 8px;
+            margin-top: 20px;
+        }
+        .page-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.5);
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .page-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-color: rgba(255,255,255,0.2);
+        }
+        .page-btn.active {
+            background: #e9c46a;
+            color: #000;
+            border-color: #e9c46a;
+        }
+        .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
