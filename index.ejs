@@ -223,46 +223,11 @@
                             <th class="col-score">SCORE</th>
                         </tr>
                     </thead>
-                    <tbody id="leaderboardBody">
-                        <% players.slice(0, 10).forEach(function(player, index) { %>
-                        <tr class="player-row <%= index < 3 ? 'top-' + (index + 1) : '' %>" style="--delay: <%= index * 0.05 %>s">
-                            <td class="cell-rank">
-                                <div class="rank-badge">
-                                    <% if (index < 3) { %>
-                                        <div class="rank-medal rank-<%= index + 1 %>">
-                                            <%= index + 1 %>
-                                        </div>
-                                    <% } else { %>
-                                        <span><%= index + 1 %></span>
-                                    <% } %>
-                                </div>
-                            </td>
-                            <td class="cell-player">
-                                <div class="player-info">
-                                    <div class="player-avatar">
-                                        <%= player.dofus_pseudo.charAt(0).toUpperCase() %>
-                                    </div>
-                                    <span class="player-name"><%= player.dofus_pseudo %></span>
-                                </div>
-                            </td>
-                            <td class="cell-winrate">
-                                <div class="winrate-container">
-                                    <div class="winrate-bar">
-                                        <div class="winrate-fill" style="width: <%= player.winrate || 0 %>%"></div>
-                                    </div>
-                                    <span class="winrate-value <%= (player.winrate || 0) >= 50 ? 'positive' : 'negative' %>"><%= player.winrate || 0 %>%</span>
-                                </div>
-                                <span class="winrate-detail"><%= player.wins || 0 %>V / <%= player.losses || 0 %>D</span>
-                            </td>
-                            <td class="cell-score">
-                                <span class="score-value"><%= player.total_points.toLocaleString() %></span>
-                                <span class="score-label">pts</span>
-                            </td>
-                        </tr>
-                        <% }); %>
-                    </tbody>
+                    <tbody id="leaderboardBody"></tbody>
                 </table>
             </div>
+
+            <div id="paginationControls" class="pagination-container"></div>
         </section>
     </main>
 
@@ -274,152 +239,203 @@
     </footer>
 
     <script>
-        // Energy Particles - Magic effect
-        function createParticles() {
-            const container = document.getElementById('particles');
-            for (let i = 0; i < 25; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'energy-particle';
-                particle.style.cssText = `
-                    left: ${Math.random() * 100}%;
-                    --duration: ${5 + Math.random() * 5}s;
-                    --delay: ${Math.random() * 4}s;
-                    --size: ${3 + Math.random() * 4}px;
-                    --drift: ${-30 + Math.random() * 60}px;
-                `;
-                container.appendChild(particle);
+        // 1. INJECTION DES DONNÉES (Backend -> Frontend)
+        // Correction ici : 'const' au lieu de 'et'
+        const allPlayers = <%- JSON.stringify(players) %>;
+        
+        // Configuration
+        let currentPage = 1;
+        const rowsPerPage = 10;
+        let filteredPlayers = [...allPlayers]; 
+
+        const tableBody = document.getElementById('leaderboardBody');
+        const paginationDiv = document.getElementById('paginationControls');
+
+        // 2. FONCTION : AFFICHER LE TABLEAU
+        function displayTable() {
+            tableBody.innerHTML = "";
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = startIndex + rowsPerPage;
+            const pageData = filteredPlayers.slice(startIndex, endIndex);
+
+            if (pageData.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:rgba(255,255,255,0.3);">Aucun joueur trouvé.</td></tr>`;
+                paginationDiv.innerHTML = "";
+                return;
             }
-        }
 
-        // Search toggle
-        const searchContainer = document.getElementById('searchContainer');
-        const searchToggle = document.getElementById('searchToggle');
-        const searchInput = document.getElementById('searchInput');
-
-        searchToggle.addEventListener('click', () => {
-            searchContainer.classList.toggle('expanded');
-            if (searchContainer.classList.contains('expanded')) {
-                searchInput.focus();
-            }
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!searchContainer.contains(e.target) && searchContainer.classList.contains('expanded')) {
-                if (searchInput.value === '') {
-                    searchContainer.classList.remove('expanded');
-                }
-            }
-        });
-
-        // Search filter
-        searchInput.addEventListener('input', function(e) {
-            const search = e.target.value.toLowerCase();
-            document.querySelectorAll('.player-row').forEach(row => {
-                const name = row.querySelector('.player-name').textContent.toLowerCase();
-                row.style.display = name.includes(search) ? '' : 'none';
-            });
-        });
-
-        // Animations on load
-        document.addEventListener('DOMContentLoaded', () => {
-            createParticles();
-            
-            // Animate podium
-            document.querySelectorAll('.podium-item').forEach((item, i) => {
-                setTimeout(() => item.classList.add('visible'), 200 + (i * 150));
-            });
-            
-            // Animate rows
-            document.querySelectorAll('.player-row').forEach((row, i) => {
-                setTimeout(() => row.classList.add('visible'), 500 + (i * 50));
-            });
-            
-            // Animate counters
-            animateValue('playerCount', 0, <%= players.length %>, 800);
-            animateValue('totalCombats', 0, <%= totalCombats || 0 %>, 1200);
-        });
-
-        function animateValue(id, start, end, duration) {
-            const obj = document.getElementById(id);
-            const startTime = performance.now();
-            function update(currentTime) {
-                const elapsed = currentTime - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const eased = 1 - Math.pow(1 - progress, 3);
-                obj.textContent = Math.floor(start + (end - start) * eased).toLocaleString();
-                if (progress < 1) requestAnimationFrame(update);
-            }
-            requestAnimationFrame(update);
-        }
-
-        // Season selector
-        document.getElementById('seasonSelect').addEventListener('change', async function(e) {
-            const seasonId = e.target.value;
-            try {
-                const response = await fetch(`/api/leaderboard/${seasonId}`);
-                const data = await response.json();
-                updateLeaderboard(data);
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        });
-
-        function updateLeaderboard(players) {
-            const tbody = document.getElementById('leaderboardBody');
-            tbody.innerHTML = '';
-            
-            players.slice(0, 10).forEach((player, index) => {
-                const row = document.createElement('tr');
-                row.className = `player-row ${index < 3 ? 'top-' + (index + 1) : ''} visible`;
+            pageData.forEach((player) => {
+                // Calcul du vrai rang (basé sur la liste filtrée)
+                const realRank = filteredPlayers.indexOf(player) + 1;
                 const winrate = player.winrate || 0;
                 const wins = player.wins || 0;
                 const losses = player.losses || 0;
-                row.innerHTML = `
-                    <td class="cell-rank">
-                        <div class="rank-badge">
-                            ${index < 3 ? `<div class="rank-medal rank-${index + 1}">${index + 1}</div>` : `<span>${index + 1}</span>`}
-                        </div>
-                    </td>
-                    <td class="cell-player">
-                        <div class="player-info">
-                            <div class="player-avatar">${player.dofus_pseudo.charAt(0).toUpperCase()}</div>
-                            <span class="player-name">${player.dofus_pseudo}</span>
-                        </div>
-                    </td>
-                    <td class="cell-winrate">
-                        <div class="winrate-container">
-                            <div class="winrate-bar">
-                                <div class="winrate-fill" style="width: ${winrate}%"></div>
+                
+                // Style conditionnel
+                const rowClass = realRank <= 3 ? `top-${realRank}` : '';
+                
+                // Correction couleur (Vert si >= 50, Rouge sinon)
+                // Note: Tes classes CSS sont .text-high, .text-mid, .text-low ou .positive/.negative ?
+                // Vu ton fichier style.css, tu n'as pas défini .positive/.negative pour le texte, 
+                // mais tu as .text-high (vert), .text-mid (jaune), .text-low (rouge). Utilisons ça :
+                let winrateColorClass = 'text-low';
+                let winrateFillClass = 'fill-low';
+
+                if (winrate >= 60) {
+                    winrateColorClass = 'text-high';
+                    winrateFillClass = 'fill-high';
+                } else if (winrate >= 45) {
+                    winrateColorClass = 'text-mid';
+                    winrateFillClass = 'fill-mid';
+                }
+
+                // HTML de la médaille
+                let rankHTML = `<span>${realRank}</span>`;
+                if (realRank <= 3) {
+                    rankHTML = `<div class="rank-medal rank-${realRank}">${realRank}</div>`;
+                }
+
+                const row = `
+                    <tr class="player-row ${rowClass} visible">
+                        <td class="cell-rank">
+                            <div class="rank-badge">${rankHTML}</div>
+                        </td>
+                        <td class="cell-player">
+                            <div class="player-info">
+                                <div class="player-avatar">${player.dofus_pseudo.charAt(0).toUpperCase()}</div>
+                                <span class="player-name">${player.dofus_pseudo}</span>
                             </div>
-                            <span class="winrate-value ${winrate >= 50 ? 'positive' : 'negative'}">${winrate}%</span>
-                        </div>
-                        <span class="winrate-detail">${wins}V / ${losses}D</span>
-                    </td>
-                    <td class="cell-score">
-                        <span class="score-value">${parseInt(player.total_points).toLocaleString()}</span>
-                        <span class="score-label">pts</span>
-                    </td>
+                        </td>
+                        <td class="cell-winrate">
+                            <div class="winrate-container">
+                                <div class="winrate-bar">
+                                    <div class="winrate-fill ${winrateFillClass}" style="width: ${winrate}%"></div>
+                                </div>
+                                <span class="winrate-value ${winrateColorClass}">${winrate}%</span>
+                            </div>
+                            <span class="winrate-detail">${wins}V / ${losses}D</span>
+                        </td>
+                        <td class="cell-score">
+                            <span class="score-value">${parseInt(player.total_points).toLocaleString()}</span>
+                            <span class="score-label">pts</span>
+                        </td>
+                    </tr>
                 `;
-                tbody.appendChild(row);
+                tableBody.innerHTML += row;
             });
 
-            // Update podium
-            if (players.length >= 3) {
-                const podiumItems = document.querySelectorAll('.podium-item');
-                const order = [1, 0, 2]; // silver, gold, bronze
-                podiumItems.forEach((item, i) => {
-                    const p = players[order[i]];
-                    if (p) {
-                        item.querySelector('.podium-name').textContent = p.dofus_pseudo;
-                        item.querySelector('.podium-score').textContent = parseInt(p.total_points).toLocaleString();
-                        item.querySelector('.podium-avatar span').textContent = p.dofus_pseudo.charAt(0).toUpperCase();
-                    }
-                });
+            displayPagination();
+        }
+
+        // 3. FONCTION : PAGINATION
+        function displayPagination() {
+            paginationDiv.innerHTML = "";
+            const pageCount = Math.ceil(filteredPlayers.length / rowsPerPage);
+            if (pageCount <= 1) return;
+
+            // Bouton Précédent
+            const prevBtn = document.createElement('button');
+            prevBtn.innerHTML = "&lsaquo;";
+            prevBtn.className = "page-btn";
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.onclick = () => { currentPage--; displayTable(); };
+            paginationDiv.appendChild(prevBtn);
+
+            // Logique intelligente (1 ... 4 5 6 ... 10)
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(pageCount, currentPage + 2);
+
+            if (startPage > 1) {
+                const b = document.createElement('button'); b.innerText = "1"; b.className = "page-btn";
+                b.onclick = () => { currentPage = 1; displayTable(); }; paginationDiv.appendChild(b);
+                if(startPage > 2) paginationDiv.appendChild(document.createTextNode("..."));
             }
 
-            document.getElementById('playerCount').textContent = players.length;
-            const total = players.reduce((sum, p) => sum + parseInt(p.total_points), 0);
-            document.getElementById('totalCombats').textContent = total.toLocaleString();
+            for (let i = startPage; i <= endPage; i++) {
+                const btn = document.createElement('button');
+                btn.innerText = i;
+                btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                btn.onclick = () => { currentPage = i; displayTable(); };
+                paginationDiv.appendChild(btn);
+            }
+
+            if (endPage < pageCount) {
+                if(endPage < pageCount - 1) paginationDiv.appendChild(document.createTextNode("..."));
+                const b = document.createElement('button'); b.innerText = pageCount; b.className = "page-btn";
+                b.onclick = () => { currentPage = pageCount; displayTable(); }; paginationDiv.appendChild(b);
+            }
+
+            // Bouton Suivant
+            const nextBtn = document.createElement('button');
+            nextBtn.innerHTML = "&rsaquo;";
+            nextBtn.className = "page-btn";
+            nextBtn.disabled = currentPage === pageCount;
+            nextBtn.onclick = () => { currentPage++; displayTable(); };
+            paginationDiv.appendChild(nextBtn);
+        }
+
+        // 4. FONCTION : RECHERCHE
+        function filterData() {
+            const input = document.getElementById('searchInput').value.toLowerCase();
+            filteredPlayers = allPlayers.filter(p => p.dofus_pseudo.toLowerCase().includes(input));
+            currentPage = 1; 
+            displayTable();
+        }
+
+        // INIT & EVENTS
+        document.addEventListener('DOMContentLoaded', () => {
+            displayTable(); 
+            
+            // Particules
+            const container = document.getElementById('particles');
+            if(container) {
+                for (let i = 0; i < 25; i++) {
+                    const p = document.createElement('div');
+                    p.className = 'energy-particle';
+                    p.style.cssText = `left:${Math.random()*100}%; --duration:${5+Math.random()*5}s; --delay:${Math.random()*4}s; --size:${3+Math.random()*4}px;`;
+                    container.appendChild(p);
+                }
+            }
+
+            // Animation Podium
+            document.querySelectorAll('.podium-item').forEach((item, i) => {
+                setTimeout(() => item.classList.add('visible'), 200 + (i * 150));
+            });
+        });
+
+        // Event Listeners
+        const searchInput = document.getElementById('searchInput');
+        if(searchInput) searchInput.addEventListener('keyup', filterData);
+        
+        const searchContainer = document.getElementById('searchContainer');
+        const searchToggle = document.getElementById('searchToggle');
+        
+        if(searchToggle && searchContainer) {
+            searchToggle.addEventListener('click', () => {
+                searchContainer.classList.toggle('expanded');
+                if(searchContainer.classList.contains('expanded')) document.getElementById('searchInput').focus();
+            });
+        }
+
+        // Mise à jour via Selecteur de Saison
+        const seasonSelect = document.getElementById('seasonSelect');
+        if(seasonSelect) {
+            seasonSelect.addEventListener('change', async function(e) {
+                try {
+                    const response = await fetch(`/api/leaderboard/${e.target.value}`);
+                    const data = await response.json();
+                    allPlayers = data; 
+                    filterData(); 
+                    
+                    // Stats header
+                    const playerCountEl = document.getElementById('playerCount');
+                    if(playerCountEl) playerCountEl.textContent = data.length;
+                    
+                    const total = data.reduce((sum, p) => sum + parseInt(p.total_points), 0);
+                    const totalCombatsEl = document.getElementById('totalCombats');
+                    if(totalCombatsEl) totalCombatsEl.textContent = total.toLocaleString();
+                } catch (error) { console.error(error); }
+            });
         }
     </script>
 </body>

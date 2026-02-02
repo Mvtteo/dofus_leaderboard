@@ -50,34 +50,60 @@ app.use(express.static(__dirname));
 app.use('/assets', express.static(path.join(__dirname, 'web/assets')));
 
 function getSeasons() {
-    const startDate = new Date('2026-02-01T00:00:00'); 
+    // ⚙️ DATE DE LANCEMENT (Saison 1)
+    const INITIAL_DATE = new Date('2026-02-01T00:00:00'); 
+    const DAYS_PER_SEASON = 14; // 2 semaines
+
     const now = new Date();
-    const limitDate = new Date(now);
     const seasons = [];
-    let loopDate = new Date(startDate);
+    
+    let loopDate = new Date(INITIAL_DATE);
     let id = 1;
     let currentSeasonId = 1;
 
     while (true) {
-        const year = loopDate.getFullYear();
-        const month = loopDate.getMonth(); 
-        const startA = new Date(year, month, 1, 0, 0, 0);
-        const endA = new Date(year, month, 15, 23, 59, 59);
+        const start = new Date(loopDate);
 
-        if (startA > limitDate) break;
-        if (now >= startA && now <= endA) currentSeasonId = id;
-        seasons.push({ id: id++, label: `Saison ${id-1} (01/${month+1} - 15/${month+1})`, start: startA, end: endA, isCurrent: (now >= startA && now <= endA) });
+        // 🛑 STOP STRICT : Si la saison commence dans le futur, on ne l'affiche PAS.
+        // C'est cette ligne qui empêche la "Saison 2" d'apparaître tant qu'on n'est pas le 15 février.
+        if (start > now) break;
 
-        const startB = new Date(year, month, 16, 0, 0, 0);
-        const endB = new Date(year, month + 1, 0, 23, 59, 59);
+        // Calcul de la fin (Début + 14 jours - 1ms)
+        const end = new Date(start);
+        end.setDate(end.getDate() + DAYS_PER_SEASON);
+        end.setMilliseconds(-1); 
 
-        if (startB > limitDate) break;
-        if (now >= startB && now <= endB) currentSeasonId = id;
-        seasons.push({ id: id++, label: `Saison ${id-1} (16/${month+1} - ${endB.getDate()}/${month+1})`, start: startB, end: endB, isCurrent: (now >= startB && now <= endB) });
+        const isCurrent = (now >= start && now <= end);
+        if (isCurrent) currentSeasonId = id;
 
-        loopDate.setMonth(loopDate.getMonth() + 1);
-        if (id > 240) break;
+        const startStr = start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+        const endStr = end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+
+        seasons.push({ 
+            id: id, 
+            label: `Saison ${id} (${startStr} - ${endStr})`, 
+            start: start, 
+            end: end, 
+            isCurrent: isCurrent 
+        });
+
+        // On avance de 14 jours pour le prochain tour de boucle
+        loopDate.setDate(loopDate.getDate() + DAYS_PER_SEASON);
+        id++;
+        
+        // Sécurité anti-crash
+        if (id > 1000) break;
     }
+
+    // Cas particulier : Si on est AVANT le lancement du serveur (date < INITIAL_DATE),
+    // la liste "seasons" est vide. On force l'affichage de la Saison 1 (futur) pour ne pas buguer.
+    if (seasons.length === 0) {
+        const end = new Date(INITIAL_DATE);
+        end.setDate(end.getDate() + DAYS_PER_SEASON);
+        seasons.push({ id: 1, label: `Saison 1 (Bientôt)`, start: INITIAL_DATE, end: end, isCurrent: true });
+        currentSeasonId = 1;
+    }
+
     return { seasons, currentSeason: currentSeasonId };
 }
 
@@ -213,7 +239,6 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
 // ============================================
 client.once('ready', () => { 
     console.log(`Bot Connecte : ${client.user.tag}`);
-    updateLeaderboard(); 
 });
 
 client.on('messageCreate', async message => {
@@ -396,32 +421,31 @@ client.on('messageCreate', async message => {
         for (const [id, attachment] of attachments) {
             const image = await Jimp.read(attachment.url);
 
-            // --- TRAITEMENT OPTIMISÉ (Douceur + Résolution) ---
-            // 1. Zoom x4 : Crucial pour que "Bella" soit assez gros
-            image.scale(4); 
+            // --- TRAITEMENT OPTIMISÉ V2 ---
+            // 1. Zoom x5 (augmenté de x4) - meilleure resolution pour les petits caracteres
+            image.scale(5); 
             
             // 2. Noir et Blanc
             image.greyscale();
             
-            // 3. Inversion (Texte noir sur fond blanc)
+            // 3. Augmenter le contraste AVANT inversion
+            image.contrast(0.6);
+            
+            // 4. Inversion (Texte noir sur fond blanc)
             image.invert();
             
-            // 4. Contraste MOYEN (0.5 au lieu de 1). 
-            // 1 détruisait les lettres fines ('l', 'i', 'T'). 0.5 nettoie le gris sans casser les lettres.
-            image.contrast(0.5); 
-            
-            // 5. On enlève un peu de luminosité pour que le texte noir soit bien noir
-            image.brightness(-0.1);
+            // 5. Seuillage - force le noir/blanc (Jimp threshold)
+            image.threshold({ max: 150 });
 
             const processedBuffer = await image.getBufferAsync("image/png");
 
             // --- TESSERACT ---
             const result = await Tesseract.recognize(processedBuffer, 'eng', {
                 logger: m => {},
-                // On garde la whitelist pour forcer la propreté
-                tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
-                // PSM 11 est toujours le meilleur pour les listes éparpillées
-                tessedit_pageseg_mode: '11' 
+                // Whitelist avec apostrophe et tiret pour les pseudos Dofus
+                tessedit_char_whitelist: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'",
+                // PSM 6 = bloc de texte uniforme (meilleur pour les tableaux)
+                tessedit_pageseg_mode: '6'
             });
 
             console.log("========================================");
@@ -448,8 +472,9 @@ client.on('messageCreate', async message => {
 
         if (userSession.winners.length > 0 && userSession.losers.length > 0) {
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('attack').setLabel('⚔️ Attaque').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('defense').setLabel('🛡️ Défense').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
             await msgRef.edit({ content: `**Complet !**\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
@@ -477,6 +502,38 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (interaction.isModalSubmit()) {
+            // --- MODAL CORRECTION PSEUDOS ---
+            if (interaction.customId === 'modal_correct') {
+                const winnersRaw = interaction.fields.getTextInputValue('winnersInput');
+                const losersRaw = interaction.fields.getTextInputValue('losersInput');
+                
+                const newWinners = winnersRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
+                const newLosers = losersRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
+                
+                const userSession = activeSessions.get(interaction.user.id);
+                if (!userSession) {
+                    return interaction.reply({ content: "Session expirée. Renvoyez vos screens.", ephemeral: true });
+                }
+                
+                userSession.winners = newWinners;
+                userSession.losers = newLosers;
+                activeSessions.set(interaction.user.id, userSession);
+                
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
+                );
+                
+                await interaction.reply({ 
+                    content: `**Corrige !**\nGagnants: ${newWinners.join(', ')}\nPerdants: ${newLosers.join(', ')}`, 
+                    components: [row] 
+                });
+                return;
+            }
+            
+            // --- MODALS PROFIL (link/unlink) ---
             const pseudo = interaction.fields.getTextInputValue('pseudoInput').trim();
             const discordId = interaction.user.id;
             const discordName = interaction.user.username;
@@ -491,12 +548,10 @@ client.on('interactionCreate', async interaction => {
                     await pool.query('UPDATE players SET discord_id = $1, discord_username = $2 WHERE LOWER(dofus_pseudo) = LOWER($3)', [discordId, discordName, pseudo]);
                 }
                 await interaction.reply({ content: `✅ **${pseudo}** lié !`, ephemeral: true });
-                updateLeaderboard();
             }
             if (interaction.customId === 'modal_unlink') {
                 const res = await pool.query('UPDATE players SET discord_id = NULL, discord_username = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
                 await interaction.reply({ content: res.rowCount > 0 ? `✅ **${pseudo}** délié.` : `❌ Erreur ou ce n'est pas votre perso.`, ephemeral: true });
-                updateLeaderboard();
             }
             return;
         }
@@ -504,7 +559,7 @@ client.on('interactionCreate', async interaction => {
         // --- LOGIQUE COMBAT ---
         const userSession = activeSessions.get(interaction.user.id);
 
-        const combatButtons = ['attack', 'defense', 'reset', 'result_win', 'result_lose'];
+        const combatButtons = ['attack', 'defense', 'reset', 'correct', 'result_win', 'result_lose'];
         
         // Gestion des sessions expirées ou inexistantes
         if (!userSession && (
@@ -523,6 +578,35 @@ client.on('interactionCreate', async interaction => {
         if (interaction.isButton() && interaction.customId === 'reset') {
             activeSessions.delete(interaction.user.id);
             return interaction.update({ content: "Session effacee.", components: [] });
+        }
+
+        // BOUTON CORRIGER - Ouvre un modal pour editer les pseudos
+        if (interaction.isButton() && interaction.customId === 'correct') {
+            const modal = new ModalBuilder()
+                .setCustomId('modal_correct')
+                .setTitle('Corriger les pseudos');
+            
+            const winnersInput = new TextInputBuilder()
+                .setCustomId('winnersInput')
+                .setLabel('Gagnants (separes par des virgules)')
+                .setStyle(TextInputStyle.Short)
+                .setValue(userSession.winners.join(', '))
+                .setRequired(true);
+            
+            const losersInput = new TextInputBuilder()
+                .setCustomId('losersInput')
+                .setLabel('Perdants (separes par des virgules)')
+                .setStyle(TextInputStyle.Short)
+                .setValue(userSession.losers.join(', '))
+                .setRequired(true);
+            
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(winnersInput),
+                new ActionRowBuilder().addComponents(losersInput)
+            );
+            
+            await interaction.showModal(modal);
+            return;
         }
 
         // ETAPE 1 : CHOIX ATTAQUE / DEFENSE
@@ -642,8 +726,6 @@ client.on('interactionCreate', async interaction => {
             );
         } catch (err) { console.error("Erreur save match:", err); }
 
-        await updateLeaderboard();
-
         // 📝 RÉPONSE FINALE
         const resultText = hasWon ? "VICTOIRE" : "DÉFAITE";
         const alliText = allianceBonus > 0 ? ` (+${allianceBonus} Bonus Alli)` : '';
@@ -680,35 +762,14 @@ async function updatePlayerPoints(pseudo, points) {
     await pool.query(querySeason, [pseudo, currentSeason, points]);
 }
 
-async function updateLeaderboard() {
-    try {
-        const query = `SELECT COALESCE(MAX(discord_username), MAX(dofus_pseudo)) as display_name, SUM(total_points) as total_points FROM players GROUP BY COALESCE(discord_id, dofus_pseudo) ORDER BY total_points DESC LIMIT 10`;
-        const res = await pool.query(query);
-        if (res.rows.length === 0) return;
-        let description = "";
-        const medals = ['1.', '2.', '3.'];
-        res.rows.forEach((row, index) => {
-            const medal = index < 3 ? medals[index] : `**${index + 1}.**`;
-            description += `${medal} **${row.display_name}** - \`${row.total_points} pts\`\n`;
-        });
-        const embed = new EmbedBuilder().setColor(0x0099FF).setTitle('CLASSEMENT ALLIANCE (Joueurs)').setDescription(description).setFooter({ text: `Update: ${new Date().toLocaleString('fr-FR')}` }).setThumbnail('https://upload.wikimedia.org/wikipedia/fr/3/3a/Dofus_Logo.png');
-        const channel = await client.channels.fetch(config.LEADERBOARD_CHANNEL_ID);
-        if (!channel) return;
-        const messages = await channel.messages.fetch({ limit: 10 });
-        const lastBotMessage = messages.find(msg => msg.author.id === client.user.id && !msg.system && msg.embeds.length > 0);
-        if (lastBotMessage) await lastBotMessage.edit({ embeds: [embed] });
-        else await channel.send({ embeds: [embed] });
-    } catch (error) { console.error("Erreur Leaderboard:", error); }
-}
-
 function parseScreenData(text) {
     const lines = text.split('\n');
     const winners = []; const losers = [];
     let currentSection = 'winners';
 
-    // Détection large de la section perdants
+    // Détection section perdants
     if (text.substring(0, 300).toUpperCase().includes('PERDANTS') || text.substring(0, 300).toUpperCase().includes('LOSERS')) {
-        // La gestion se fera ligne par ligne ci-dessous
+        // La gestion se fait ligne par ligne ci-dessous
     }
 
     lines.forEach((line) => {
@@ -719,21 +780,15 @@ function parseScreenData(text) {
         if (upperLine.includes('GAGNANT') || upperLine.includes('WINNER')) { currentSection = 'winners'; return; }
         if (upperLine.includes('PERDANT') || upperLine.includes('LOSER')) { currentSection = 'losers'; return; }
         
-        // 2. Ignorer les en-têtes
+        // 2. Ignorer les en-têtes et le bruit
         if (upperLine.includes('NIVEAU') || upperLine.includes('EXPERIENCE') || upperLine.includes('BUTIN')) return;
+        if (upperLine.includes('PERSONNAGE') || upperLine.includes('NOM DE')) return;
+        if (upperLine.includes('PRISME') || upperLine.includes("DO'")) return; // Anti-Mob
 
-        // --- 🛡️ BOUCLIER ANTI-MOB (Perco / Prisme) ---
-        // Règle 1 : Si ça contient "PRISME", on jette.
-        // Règle 2 : Si ça contient "DO'" (le nom des percepteurs contient toujours Do'), on jette.
-        // Règle 3 : Les pseudos de joueurs n'ont jamais d'apostrophe. Si on voit une apostrophe, c'est un mob.
-        if (upperLine.includes('PRISME') || upperLine.includes("DO'") || line.includes("'")) {
-            console.log(`🚫 Entité ignorée (Mob/Perco/Prisme) : ${line}`);
-            return; 
-        }
-        // ----------------------------------------------
+        // Sécurité : Une ligne de joueur DOIT avoir des stats (XP/KP/RP/PD)
+        if (!upperLine.includes('XP') && !upperLine.includes('KP') && !upperLine.includes('RP') && !upperLine.includes('PD')) return;
 
         // 3. Nettoyage de la ligne
-        // On enlève les caractères spéciaux MAIS on garde les tirets (-) car les joueurs en ont.
         const cleanLine = line.replace(/[\[\]\(\)\|\@\:\.\,\*\+\!\?\/\\_]/g, ' '); 
         const rawWords = cleanLine.split(/\s+/); 
         
@@ -741,19 +796,34 @@ function parseScreenData(text) {
         let foundKnownPlayer = null; 
 
         for (const w of rawWords) {
-            // Nettoyage individuel
-            let word = w.replace(/[^a-zA-Z0-9-]/g, ''); 
-            word = word.replace(/^\d+/, ''); // Vire les chiffres au début (ex: 199Pseudo)
+            let word = w.replace(/[^a-zA-Z0-9-]/g, ''); // Garde lettres, chiffres, tirets
+            
+            // --- 🧹 NETTOYAGE UNIVERSEL ---
+            
+            // 1. Fix générique pour les pseudos commençant par "I" massacrés (I1, l1, 1z...)
+            // Si ça commence par (I, l ou 1) suivi d'un (1) puis d'une lettre...
+            // Exemple : "I1zo" -> "Izo", "l1zo" -> "Izo"
+            if (/^[Il1]1[a-zA-Z]/.test(word)) {
+                word = word.replace(/^[Il1]1/, 'I');
+            }
+            // Si ça commence par un "1" tout seul suivi d'une lettre (ex: "1zo") -> "Izo"
+            else if (/^1[a-zA-Z]{3,}/.test(word)) { 
+                // On vérifie qu'il y a au moins 3 lettres derrière pour pas casser les niveaux
+                word = 'I' + word.substring(1);
+            }
+
+            // 2. Suppression des niveaux collés (ex: "199Nasso" -> "Nasso")
+            // (On le fait APRÈS le fix du I pour ne pas transformer "1zo" en "zo")
+            word = word.replace(/^\d+/, ''); 
+            
+            // -----------------------------
+
             let lowerWord = word.toLowerCase();
 
             // Filtres de base
             if (word.length < 3) continue;
             if (config.STOP_WORDS.includes(lowerWord) || config.BANNED_WORDS.includes(lowerWord)) continue;
             
-            // On vire les nombres isolés (ex: "200")
-            if (/^\d+$/.test(word)) continue; 
-            if (word.length <= 3 && /\d/.test(word)) continue; 
-
             // --- RECHERCHE INTELLIGENTE (DB) ---
             if (typeof knownPlayerNames !== 'undefined' && knownPlayerNames.length > 0) {
                 // Exact match
@@ -763,8 +833,11 @@ function parseScreenData(text) {
                 }
 
                 // Match approximatif (Levenshtein)
+                // Utile si le nettoyage n'a pas suffit (ex: "Izo" lu "Ize")
                 let bestMatch = null;
-                let minDist = 3; 
+                let maxErrors = word.length < 5 ? 1 : 2; 
+                let minDist = maxErrors + 1; 
+
                 for (const knownName of knownPlayerNames) {
                     if (Math.abs(knownName.length - lowerWord.length) > 2) continue; 
                     const dist = levenshteinDistance(lowerWord, knownName);
@@ -774,26 +847,25 @@ function parseScreenData(text) {
                     }
                 }
 
-                if (bestMatch) {
+                if (bestMatch && minDist <= maxErrors) {
                     console.log(`🔧 Correction auto : ${word} -> ${bestMatch}`);
-                    foundKnownPlayer = bestMatch; 
+                    foundKnownPlayer = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1).toLowerCase();
                     break; 
                 }
             }
             
-            // Si pas connu, on l'ajoute aux candidats
+            // Si inconnu, on l'ajoute aux candidats
             const formattedCandidate = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             candidates.push(formattedCandidate);
         }
 
         // --- DÉCISION FINALE ---
         let finalName = null;
-
         if (foundKnownPlayer) {
             finalName = foundKnownPlayer;
         } else if (candidates.length > 0) {
-            // Si on ne connait personne, on prend le premier candidat valide
-            finalName = candidates[0];
+            // On prend le plus long
+            finalName = candidates.reduce((a, b) => a.length >= b.length ? a : b);
         }
 
         if (finalName) {
