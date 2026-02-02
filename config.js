@@ -6,11 +6,6 @@ module.exports = {
     PROFILE_CHANNEL_ID: process.env.PROFILE_CHANNEL_ID || process.env.CHANNEL_ID,
     
     NUGGETS_CHANNEL_ID: process.env.NUGGETS_CHANNEL_ID, 
-    
-    WIN_MODIFIER: 2,  
-    LOSE_MODIFIER: 1, 
-    INFERIORITY_BONUS: 3, 
-    MAX_PLAYER_GAP_FOR_CANCEL: 3, 
 
     POOL_NAMES: {
         pool_1: "CXO",

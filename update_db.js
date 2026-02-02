@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: process.argv[2] || '.env' });
 const { Pool } = require('pg');
 
 const pool = new Pool({
@@ -9,30 +9,61 @@ const pool = new Pool({
 async function updateSchema() {
     try {
         console.log("⚙️ Mise à jour de la base de données...");
+        // Sécurité pour ne pas afficher le mot de passe dans la console
+        if (process.env.DATABASE_URL) {
+            console.log("📡 Connexion à:", process.env.DATABASE_URL.split('@')[1]); 
+        }
 
-        // 1. Ajouter la colonne discord_id (déjà fait, mais on laisse pour sécurité)
-        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS discord_id VARCHAR(50);`);
-        
-        // 2. Ajouter la colonne discord_username
-        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS discord_username VARCHAR(100);`);
-        
-        // 3. Ajouter un index
-        await pool.query(`CREATE INDEX IF NOT EXISTS idx_players_discord ON players(discord_id);`);
+        // 1. CRÉATION TABLE PLAYERS
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS players (
+                dofus_pseudo VARCHAR(100) PRIMARY KEY,
+                discord_id VARCHAR(50),
+                discord_username VARCHAR(100),
+                total_points INTEGER DEFAULT 0,
+                bank_nuggets INTEGER DEFAULT 0
+            );
+        `);
+        console.log("✅ Table 'players' OK");
 
-        // ============================================================
-        // 4. CRÉATION DE LA TABLE MATCHES (C'est ça qu'il manquait !)
-        // ============================================================
+        // --- 🆕 NOUVELLE COLONNE : SURNOM DISCORD ---
+        // Cette commande ajoute la colonne si elle manque, sans effacer les données
+        await pool.query(`
+            ALTER TABLE players 
+            ADD COLUMN IF NOT EXISTS discord_nickname TEXT;
+        `);
+        console.log("✅ Colonne 'discord_nickname' ajoutée/vérifiée.");
+        // ---------------------------------------------
+
+        // 2. CRÉATION TABLE MATCHES
         await pool.query(`
             CREATE TABLE IF NOT EXISTS matches (
                 id SERIAL PRIMARY KEY,
                 winners TEXT,
                 losers TEXT,
-                date_match TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        console.log("✅ Table 'matches' vérifiée/créée.");
+        console.log("✅ Table 'matches' OK");
 
-        console.log("✅ TOUT EST BON : Base de données à jour !");
+        // 3. CRÉATION TABLE SEASON_POINTS
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS season_points (
+                dofus_pseudo VARCHAR(100),
+                season_id INTEGER,
+                points INTEGER DEFAULT 0,
+                PRIMARY KEY (dofus_pseudo, season_id)
+            );
+        `);
+        console.log("✅ Table 'season_points' OK");
+
+        // 4. INDEX pour optimisation
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_players_discord ON players(discord_id);`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_season_points_season ON season_points(season_id);`);
+        console.log("✅ Index OK");
+
+        console.log("\n🎉 Base de données à jour !");
+        
     } catch (error) {
         console.error("❌ Erreur :", error);
     } finally {

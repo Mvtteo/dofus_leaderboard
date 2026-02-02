@@ -112,7 +112,7 @@ app.get('/', async (req, res) => {
         // 1. Récupération du classement (Filtré > 0)
         const query = `
             SELECT 
-                COALESCE(MAX(discord_username), MAX(dofus_pseudo)) as display_name,
+                COALESCE(MAX(discord_nickname), MAX(discord_username), MAX(dofus_pseudo)) as display_name,
                 SUM(total_points) as total_points,
                 MAX(dofus_pseudo) as main_char
             FROM players 
@@ -259,7 +259,7 @@ client.on('messageCreate', async message => {
             .setColor(0x00FF00);
 
         await profileChannel.send({ embeds: [embed], components: [row] });
-        if (message.channel.id !== config.PROFILE_CHANNEL_ID) message.reply(`✅ Panneau envoyé.`);
+        if (message.channel.id !== config.PROFILE_CHANNEL_ID) message.reply(`Panneau envoyé.`);
         return;
     }
 
@@ -281,7 +281,7 @@ client.on('messageCreate', async message => {
             // Construction de la liste (Top 20 pour éviter la limite de caractères Discord)
             let description = `**Total cumulé (Part Joueurs) :** ${total.toLocaleString()} 💎\n`;
             description += `*(Cela signifie que l'Alliance a également reçu ~${total.toLocaleString()} pépites)*\n\n`;
-            description += `**🏆 Top Contributeurs :**\n`;
+            description += `**Top Contributeurs :**\n`;
 
             if (res.rows.length === 0) {
                 description += "_Aucune pépite enregistrée pour le moment._";
@@ -297,7 +297,7 @@ client.on('messageCreate', async message => {
             }
 
             const embed = new EmbedBuilder()
-                .setTitle('🏦 Banque des Pépites (Alliance)')
+                .setTitle('Banque des Pépites (Alliance)')
                 .setColor(0xFFA500) // Orange
                 .setDescription(description)
                 .setTimestamp();
@@ -306,7 +306,7 @@ client.on('messageCreate', async message => {
 
         } catch (error) {
             console.error(error);
-            return message.reply("❌ Erreur lors de la récupération de la banque.");
+            return message.reply("Erreur lors de la récupération de la banque.");
         }
     }
 
@@ -316,7 +316,7 @@ client.on('messageCreate', async message => {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
 
-        const msgRef = await message.reply("💎 Analyse des pépites en cours...");
+        const msgRef = await message.reply("Analyse des pépites en cours...");
         
         try {
             const attachment = attachments.first();
@@ -390,7 +390,7 @@ client.on('messageCreate', async message => {
                 const newTotal = res.rows[0].bank_nuggets;
 
                 // Message propre
-                await msgRef.edit(`<@${message.author.id}> **Pépites enregistrées !**\nMontant lu : ${finalBaseAmount}\nVotre part (50%) : **${amountToAdd}**\n\n💰 **Banque totale : ${newTotal}**`);
+                await msgRef.edit(`<@${message.author.id}> **Pépites enregistrées !**\nMontant lu : ${finalBaseAmount}\nVotre part (50%) : **${amountToAdd}**\n\n **Banque totale : ${newTotal}**`);
 
                 try {
                     await message.delete();
@@ -399,12 +399,12 @@ client.on('messageCreate', async message => {
                 }
 
             } else {
-                await msgRef.edit("⚠️ Je n'ai pas réussi à lire le montant (Alliance ou Personnel). Assurez-vous que le screen est clair.");
+                await msgRef.edit("Je n'ai pas réussi à lire le montant (Alliance ou Personnel). Assurez-vous que le screen est clair.");
             }
 
         } catch (error) {
             console.error(error);
-            await msgRef.edit("❌ Erreur lors de l'analyse.");
+            await msgRef.edit("Erreur lors de l'analyse.");
         }
         return;
     }
@@ -539,19 +539,32 @@ client.on('interactionCreate', async interaction => {
             const discordName = interaction.user.username;
 
             if (interaction.customId === 'modal_link') {
+                // On récupère le Surnom (Display Name) au lieu du Username
+                const discordNickname = interaction.member.displayName; // <--- C'est ici que la magie opère (Sino)
+                
                 const check = await pool.query('SELECT * FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [pseudo]);
+                
                 if (check.rows.length === 0) {
-                    await pool.query('INSERT INTO players (dofus_pseudo, discord_id, discord_username) VALUES ($1, $2, $3)', [pseudo, discordId, discordName]);
+                    // Création
+                    await pool.query(
+                        'INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4)', 
+                        [pseudo, discordId, discordName, discordNickname]
+                    );
                 } else {
+                    // Mise à jour
                     const existing = check.rows[0];
-                    if (existing.discord_id && existing.discord_id !== discordId) return interaction.reply({ content: `❌ Personnage déjà lié à un autre compte.`, ephemeral: true });
-                    await pool.query('UPDATE players SET discord_id = $1, discord_username = $2 WHERE LOWER(dofus_pseudo) = LOWER($3)', [discordId, discordName, pseudo]);
+                    if (existing.discord_id && existing.discord_id !== discordId) return interaction.reply({ content: `Personnage déjà lié à un autre compte.`, ephemeral: true });
+                    
+                    await pool.query(
+                        'UPDATE players SET discord_id = $1, discord_username = $2, discord_nickname = $3 WHERE LOWER(dofus_pseudo) = LOWER($4)', 
+                        [discordId, discordName, discordNickname, pseudo]
+                    );
                 }
-                await interaction.reply({ content: `✅ **${pseudo}** lié !`, ephemeral: true });
+                await interaction.reply({ content: `**${pseudo}** lié à **${discordNickname}** !`, ephemeral: true });
             }
             if (interaction.customId === 'modal_unlink') {
                 const res = await pool.query('UPDATE players SET discord_id = NULL, discord_username = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
-                await interaction.reply({ content: res.rowCount > 0 ? `✅ **${pseudo}** délié.` : `❌ Erreur ou ce n'est pas votre perso.`, ephemeral: true });
+                await interaction.reply({ content: res.rowCount > 0 ? `**${pseudo}** délié.` : `Erreur ou ce n'est pas votre perso.`, ephemeral: true });
             }
             return;
         }
