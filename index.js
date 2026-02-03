@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
 const { 
     Client, 
     GatewayIntentBits, 
@@ -28,11 +29,6 @@ if (!config.CHANNEL_ID) {
     process.exit(1);
 }
 
-if (!process.env.GEMINI_API_KEY) {
-    console.error("ERREUR : GEMINI_API_KEY manquant dans le .env");
-    process.exit(1);
-}
-
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
@@ -40,24 +36,17 @@ const client = new Client({
 const activeSessions = new Map();
 
 // ============================================
-// GEMINI VISION - PARSING SCREENSHOTS
+// 1. IA : LECTURE DES SCREENS PVP
 // ============================================
 async function parseScreenWithAI(imageUrl) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        
-        // Telecharger l'image
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
         
         const result = await model.generateContent([
-            {
-                inlineData: {
-                    data: base64,
-                    mimeType: "image/png"
-                }
-            },
+            { inlineData: { data: base64, mimeType: "image/png" } },
             `Analyse ce screenshot de fin de combat Dofus.
              Extrait UNIQUEMENT les pseudos des joueurs.
              
@@ -66,26 +55,45 @@ async function parseScreenWithAI(imageUrl) {
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
              - EXCLURE : Percepteur, Prisme, tout ce qui contient "Do'" ou "Dofus"
              - IGNORER : niveaux, XP, kamas, butin, classes
-             - Les pseudos peuvent contenir des tirets
              
              Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
         ]);
         
         const text = result.response.text();
-        console.log("Gemini raw response:", text);
-        
-        // Nettoyer le JSON si entoure de backticks
         const clean = text.replace(/```json\n?|```\n?/g, '').trim();
         return JSON.parse(clean);
-        
     } catch (error) {
-        console.error("Erreur Gemini:", error.message);
+        console.error("Erreur Gemini PvP:", error.message);
         return null;
     }
 }
 
 // ============================================
-// SERVEUR WEB
+// 2. IA : LECTURE DES PÉPITES
+// ============================================
+async function parseNuggetsWithAI(imageUrl) {
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const response = await fetch(imageUrl);
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+
+        const result = await model.generateContent([
+            { inlineData: { data: base64, mimeType: "image/png" } },
+            `Analyse ce screenshot de chat Dofus (recyclage).
+             Le message est du type : "Vous avez obtenu X [Pépite] et Y ont été ajoutées à la cagnotte".
+             Récupère uniquement Y (le montant alliance, le deuxième nombre).
+             Reponds UNIQUEMENT en JSON valide : {"alliance_amount": <nombre entier>}`
+        ]);
+
+        const text = result.response.text();
+        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
+        return JSON.parse(clean);
+    } catch (error) { return null; }
+}
+
+// ============================================
+// 3. SERVEUR WEB (SITE)
 // ============================================
 const app = express();
 app.set('view engine', 'ejs');
@@ -96,10 +104,8 @@ app.use('/assets', express.static(path.join(__dirname, 'web/assets')));
 function getSeasons() {
     const INITIAL_DATE = new Date('2026-02-01T00:00:00'); 
     const DAYS_PER_SEASON = 14;
-
     const now = new Date();
     const seasons = [];
-    
     let loopDate = new Date(INITIAL_DATE);
     let id = 1;
     let currentSeasonId = 1;
@@ -107,7 +113,6 @@ function getSeasons() {
     while (true) {
         const start = new Date(loopDate);
         if (start > now) break;
-
         const end = new Date(start);
         end.setDate(end.getDate() + DAYS_PER_SEASON);
         end.setMilliseconds(-1); 
@@ -117,28 +122,17 @@ function getSeasons() {
 
         const startStr = start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         const endStr = end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-
-        seasons.push({ 
-            id: id, 
-            label: `Saison ${id} (${startStr} - ${endStr})`, 
-            start: start, 
-            end: end, 
-            isCurrent: isCurrent 
-        });
-
+        seasons.push({ id, label: `Saison ${id} (${startStr} - ${endStr})`, start, end, isCurrent });
+        
         loopDate.setDate(loopDate.getDate() + DAYS_PER_SEASON);
         id++;
-        
         if (id > 1000) break;
     }
-
     if (seasons.length === 0) {
         const end = new Date(INITIAL_DATE);
         end.setDate(end.getDate() + DAYS_PER_SEASON);
-        seasons.push({ id: 1, label: `Saison 1 (Bientot)`, start: INITIAL_DATE, end: end, isCurrent: true });
-        currentSeasonId = 1;
+        seasons.push({ id: 1, label: `Saison 1 (Bientot)`, start: INITIAL_DATE, end, isCurrent: true });
     }
-
     return { seasons, currentSeason: currentSeasonId };
 }
 
@@ -147,51 +141,37 @@ app.get('/', async (req, res) => {
         const query = `
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
-                SUM(ss.points)  as total_points,
-                SUM(ss.wins)    as wins,
-                SUM(ss.losses)  as losses
+                SUM(ss.points) as total_points,
+                SUM(ss.wins) as wins,
+                SUM(ss.losses) as losses
             FROM players p
             JOIN season_stats ss ON ss.player_id = p.id
             GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
             HAVING SUM(ss.points) > 0
             ORDER BY total_points DESC
         `;
-
         const result = await pool.query(query);
-        
         const players = result.rows.map(p => {
             const wins = Number(p.wins) || 0;
             const losses = Number(p.losses) || 0;
             const totalGames = wins + losses;
-            const winrate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
-            
             return {
                 dofus_pseudo: p.display_name,
                 total_points: parseInt(p.total_points),
-                wins: wins,
-                losses: losses,
-                winrate: winrate
+                wins, losses,
+                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0
             };
         });
 
         const totalPoints = players.reduce((sum, p) => sum + p.total_points, 0);
         const countRes = await pool.query('SELECT COUNT(*) as c FROM matches');
-        const totalCombats = parseInt(countRes.rows[0].c);
-
         const { seasons, currentSeason } = getSeasons();
 
         res.render('index', { 
-            players, 
-            totalPoints, 
-            seasons, 
-            currentSeason,
-            totalCombats
+            players, totalPoints, seasons, currentSeason, 
+            totalCombats: parseInt(countRes.rows[0].c) 
         });
-
-    } catch (error) {
-        console.error('Erreur page leaderboard:', error);
-        res.status(500).send('Erreur serveur');
-    }
+    } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
 });
 
 app.get('/api/leaderboard/:seasonId', async (req, res) => {
@@ -200,9 +180,9 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
         const query = `
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
-                SUM(ss.points)  as total_points,
-                SUM(ss.wins)    as wins,
-                SUM(ss.losses)  as losses
+                SUM(ss.points) as total_points,
+                SUM(ss.wins) as wins,
+                SUM(ss.losses) as losses
             FROM players p
             JOIN season_stats ss ON ss.player_id = p.id
             WHERE ss.season_id = $1
@@ -211,109 +191,113 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
             ORDER BY total_points DESC
         `;
         const result = await pool.query(query, [seasonId]);
-        
         const players = result.rows.map(p => {
             const wins = Number(p.wins) || 0;
             const losses = Number(p.losses) || 0;
             const totalGames = wins + losses;
-            const winrate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
             return {
                 dofus_pseudo: p.dofus_pseudo,
                 total_points: p.total_points,
-                wins: wins,
-                losses: losses,
-                winrate: winrate
+                wins, losses,
+                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0
             };
         });
-        
         res.json(players);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Erreur serveur' });
-    }
+    } catch (error) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
-app.listen(config.WEB_PORT, () => {
-    console.log(`Web server running on port ${config.WEB_PORT}`);
-});
+app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${config.WEB_PORT}`); });
 
 // ============================================
-// BOT DISCORD
+// 4. BOT DISCORD
 // ============================================
-client.once('ready', () => { 
+client.once('ready', async () => { 
     console.log(`Bot Connecte : ${client.user.tag}`);
+    // Vérification tables
+    try {
+        await pool.query(`CREATE TABLE IF NOT EXISTS nuggets (id SERIAL PRIMARY KEY, discord_id TEXT, amount INT, image_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
+        console.log('[Startup] DB verifiee.');
+    } catch (e) { console.error(e); }
 });
 
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    // --- MISE A JOUR SILENCIEUSE DU SURNOM ---
+    // Mise à jour surnom auto
     if (message.channel.id === config.CHANNEL_ID) {
         try {
             const nickname = message.member ? message.member.displayName : message.author.username;
-            await pool.query(
-                'UPDATE players SET discord_nickname = $1 WHERE discord_id = $2', 
-                [nickname, message.author.id]
-            );
+            await pool.query('UPDATE players SET discord_nickname = $1 WHERE discord_id = $2', [nickname, message.author.id]);
         } catch (e) {}
     }
 
-    // --- 1. AJOUT MANUEL JOUEUR ---
+    // --- COMMANDES ADMIN ---
     if (message.content.startsWith('!addplayer') && message.member.permissions.has('Administrator')) {
         const args = message.content.split(' ');
         if (args.length < 2) return message.reply("Usage : `!addplayer <PseudoExact>`");
-        const pseudo = args[1]; 
         try {
-            await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [pseudo]);
-            return message.reply(`**${pseudo}** ajoute !`);
+            await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [args[1]]);
+            return message.reply(`**${args[1]}** ajoute !`);
         } catch (err) { return message.reply("Erreur ajout."); }
     }
 
-    // --- 2. GESTION PROFIL (Admin) ---
     if (message.content === '!setup_profile' && message.member.permissions.has('Administrator')) {
-        const profileChannel = await client.channels.fetch(config.PROFILE_CHANNEL_ID);
-        if (!profileChannel) return message.reply(`Erreur ID Channel Profil.`);
-
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('btn_link_char').setLabel('Lier un Personnage').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('btn_unlink_char').setLabel('Delier un Personnage').setStyle(ButtonStyle.Danger)
         );
-        const embed = new EmbedBuilder()
-            .setTitle('Gestion de vos Personnages')
-            .setDescription("Liez vos personnages Dofus a votre compte Discord pour cumuler vos points !\n\n1. Cliquez sur **Lier**.\n2. Entrez le pseudo exact.\n3. Vos points seront fusionnes.")
-            .setColor(0x00FF00);
+        const embed = new EmbedBuilder().setTitle('Gestion de vos Personnages').setDescription("Liez vos personnages Dofus a votre compte Discord !").setColor(0x00FF00);
+        const ch = await client.channels.fetch(config.PROFILE_CHANNEL_ID);
+        if(ch) ch.send({ embeds: [embed], components: [row] });
+    }
 
-        await profileChannel.send({ embeds: [embed], components: [row] });
-        if (message.channel.id !== config.PROFILE_CHANNEL_ID) message.reply(`Panneau envoye.`);
+    // --- LOGIQUE PÉPITES ---
+    if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
+        const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
+        if (attachments.size === 0) return;
+        const msgRef = await message.reply('Analyse pepites...');
+        
+        try {
+            for (const [id, attachment] of attachments) {
+                const imgResponse = await fetch(attachment.url);
+                const imgBuffer = await imgResponse.arrayBuffer();
+                const imageHash = crypto.createHash('sha256').update(Buffer.from(imgBuffer)).digest('hex');
+                
+                const dup = await pool.query('SELECT id FROM nuggets WHERE image_hash = $1', [imageHash]);
+                if (dup.rows.length > 0) { await msgRef.edit('Deja traite.'); return; }
+
+                const parsed = await parseNuggetsWithAI(attachment.url);
+                if (!parsed || !parsed.alliance_amount) { await msgRef.edit('Montant introuvable.'); return; }
+
+                const playerShare = Math.floor(parsed.alliance_amount * 0.5);
+                const member = message.member || message.author;
+                
+                await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [member.id, parsed.alliance_amount, imageHash]);
+                await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, member.id]);
+
+                await msgRef.edit(`**${parsed.alliance_amount}** pepites alliance.\n**${playerShare}** ajoutees a la banque de ${member.displayName} !`);
+            }
+        } catch (e) { await msgRef.edit('Erreur technique.'); }
         return;
     }
 
-    // --- 3. SCAN LEADERBOARD (PvP) ---
+    // --- LOGIQUE PVP ---
     if (message.channel.id !== config.CHANNEL_ID) return;
     const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
     if (attachments.size === 0) return;
 
     let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null };
-    const msgRef = await message.reply(`Analyse en cours...`);
+    const msgRef = await message.reply(`Analyse PvP...`);
 
     try {
         for (const [id, attachment] of attachments) {
             const parsed = await parseScreenWithAI(attachment.url);
-            
             if (parsed) {
-                console.log("Parsed result:", parsed);
-                if (parsed.winners && parsed.winners.length > 0) {
-                    userSession.winners = [...new Set([...userSession.winners, ...parsed.winners])];
-                }
-                if (parsed.losers && parsed.losers.length > 0) {
-                    userSession.losers = [...new Set([...userSession.losers, ...parsed.losers])];
-                }
-            } else {
-                await msgRef.edit("Erreur lors de l'analyse de l'image.");
-                return;
+                if (parsed.winners) userSession.winners = [...new Set([...userSession.winners, ...parsed.winners])];
+                if (parsed.losers) userSession.losers = [...new Set([...userSession.losers, ...parsed.losers])];
             }
         }
-        
         activeSessions.set(message.author.id, userSession);
 
         if (userSession.winners.length > 0 && userSession.losers.length > 0) {
@@ -324,61 +308,47 @@ client.on('messageCreate', async message => {
                 new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
             await msgRef.edit({ content: `**Complet !**\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
-        } else if (userSession.winners.length > 0 || userSession.losers.length > 0) {
-            await msgRef.edit(`**Resultat partiel** - Envoyez l'autre screenshot\nGagnants: ${userSession.winners.length} | Perdants: ${userSession.losers.length}`);
         } else {
-            await msgRef.edit("Aucun joueur detecte. Verifiez que c'est bien un ecran de fin de combat.");
+            await msgRef.edit(`**Partiel** : Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
         }
-    } catch (error) { 
-        console.error(error); 
-        msgRef.edit("Erreur technique."); 
-    }
+    } catch (error) { msgRef.edit("Erreur analyse."); }
 });
 
+// ============================================
+// 5. INTERACTIONS (BOUTONS & MODALS)
+// ============================================
 client.on('interactionCreate', async interaction => {
     try {
-        // --- GESTION PROFIL ---
-        if (interaction.isButton() && ['btn_link_char', 'btn_unlink_char'].includes(interaction.customId)) {
-            if (interaction.customId === 'btn_link_char') {
-                const modal = new ModalBuilder().setCustomId('modal_link').setTitle('Lier un personnage');
-                modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
-                await interaction.showModal(modal); return;
-            }
-            if (interaction.customId === 'btn_unlink_char') {
-                const modal = new ModalBuilder().setCustomId('modal_unlink').setTitle('Delier un personnage');
-                modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
-                await interaction.showModal(modal); return;
-            }
+        // LIENS PERSONNAGES
+        if (interaction.isButton() && (interaction.customId === 'btn_link_char' || interaction.customId === 'btn_unlink_char')) {
+            const isLink = interaction.customId === 'btn_link_char';
+            const modal = new ModalBuilder().setCustomId(isLink ? 'modal_link' : 'modal_unlink').setTitle(isLink ? 'Lier Personnage' : 'Delier Personnage');
+            modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
+            await interaction.showModal(modal); return;
         }
 
+        // RETOUR MODALS
         if (interaction.isModalSubmit()) {
             if (interaction.customId === 'modal_correct') {
-                const winnersRaw = interaction.fields.getTextInputValue('winnersInput');
-                const losersRaw = interaction.fields.getTextInputValue('losersInput');
-                const newWinners = winnersRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
-                const newLosers = losersRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
-                
-                const userSession = activeSessions.get(interaction.user.id);
-                if (userSession) {
-                    userSession.winners = newWinners;
-                    userSession.losers = newLosers;
-                    activeSessions.set(interaction.user.id, userSession);
-                    
+                const w = interaction.fields.getTextInputValue('winnersInput').split(',').map(s=>s.trim()).filter(s=>s);
+                const l = interaction.fields.getTextInputValue('losersInput').split(',').map(s=>s.trim()).filter(s=>s);
+                const session = activeSessions.get(interaction.user.id);
+                if(session) {
+                    session.winners = w; session.losers = l;
+                    activeSessions.set(interaction.user.id, session);
                     const row = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
                         new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
                         new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                         new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
                     );
-                    await interaction.reply({ content: `**Corrige !**\nGagnants: ${newWinners.join(', ')}\nPerdants: ${newLosers.join(', ')}`, components: [row] });
+                    await interaction.reply({ content: `**Corrige !**\nGagnants: ${w.join(', ')}\nPerdants: ${l.join(', ')}`, components: [row] });
                 }
                 return;
             }
-            
-            // --- MODALS PROFIL ---
+
             const pseudo = interaction.fields.getTextInputValue('pseudoInput').trim();
-            const discordId = interaction.user.id;
-            const discordName = interaction.user.username;
+            const { id: discordId, username: discordName } = interaction.user;
             const discordNickname = interaction.member.displayName;
 
             if (interaction.customId === 'modal_link') {
@@ -386,201 +356,140 @@ client.on('interactionCreate', async interaction => {
                 if (check.rows.length === 0) {
                     await pool.query('INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4)', [pseudo, discordId, discordName, discordNickname]);
                 } else {
-                    const existing = check.rows[0];
-                    if (existing.discord_id && existing.discord_id !== discordId) return interaction.reply({ content: `Personnage deja lie a un autre compte.`, ephemeral: true });
+                    const ex = check.rows[0];
+                    if (ex.discord_id && ex.discord_id !== discordId) return interaction.reply({ content: 'Deja lie a un autre compte.', ephemeral: true });
                     await pool.query('UPDATE players SET discord_id = $1, discord_username = $2, discord_nickname = $3 WHERE LOWER(dofus_pseudo) = LOWER($4)', [discordId, discordName, discordNickname, pseudo]);
                 }
-                await interaction.reply({ content: `**${pseudo}** lie a **${discordNickname}** !`, ephemeral: true });
+                await interaction.reply({ content: `**${pseudo}** lie !`, ephemeral: true });
             }
             if (interaction.customId === 'modal_unlink') {
-                const res = await pool.query('UPDATE players SET discord_id = NULL, discord_username = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
-                await interaction.reply({ content: res.rowCount > 0 ? `**${pseudo}** delie.` : `Erreur ou ce n'est pas votre perso.`, ephemeral: true });
+                await pool.query('UPDATE players SET discord_id = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
+                await interaction.reply({ content: `**${pseudo}** delie.`, ephemeral: true });
             }
             return;
         }
 
-        // --- LOGIQUE COMBAT ---
-        const userSession = activeSessions.get(interaction.user.id);
-        if (!userSession) {
-            if (interaction.isButton() && ['attack', 'defense', 'result_win', 'result_lose'].includes(interaction.customId)) {
-                return interaction.reply({ content: "Session expiree. Renvoyez les screens.", ephemeral: true });
-            }
-            return;
-        }
+        // LOGIQUE COMBAT (SUITE)
+        const session = activeSessions.get(interaction.user.id);
+        if (!session && ['attack','defense','result_win','result_lose'].includes(interaction.customId)) return interaction.reply({ content: "Session expiree.", ephemeral: true });
 
-        if (interaction.isButton() && interaction.customId === 'reset') {
-            activeSessions.delete(interaction.user.id);
-            return interaction.update({ content: "Session effacee.", components: [] });
-        }
-
-        if (interaction.isButton() && interaction.customId === 'correct') {
-            const modal = new ModalBuilder().setCustomId('modal_correct').setTitle('Corriger pseudos');
+        if (interaction.customId === 'reset') { activeSessions.delete(interaction.user.id); return interaction.update({ content: "Annule.", components: [] }); }
+        
+        if (interaction.customId === 'correct') {
+            const modal = new ModalBuilder().setCustomId('modal_correct').setTitle('Correction');
             modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('winnersInput').setLabel('Gagnants').setStyle(TextInputStyle.Short).setValue(userSession.winners.join(', '))),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('losersInput').setLabel('Perdants').setStyle(TextInputStyle.Short).setValue(userSession.losers.join(', ')))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('winnersInput').setLabel('Gagnants').setStyle(TextInputStyle.Short).setValue(session.winners.join(', '))),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('losersInput').setLabel('Perdants').setStyle(TextInputStyle.Short).setValue(session.losers.join(', ')))
             );
-            await interaction.showModal(modal);
-            return;
+            await interaction.showModal(modal); return;
         }
 
-        if (interaction.isButton() && (interaction.customId === 'attack' || interaction.customId === 'defense')) {
-            userSession.context = interaction.customId; 
-            const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId('select_alliance_bonus')
-                .setPlaceholder('Choisissez l\'Alliance adverse')
-                .addOptions(
-                    new StringSelectMenuOptionBuilder().setLabel('Standard / Autre').setValue('standard'),
-                    new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_1.substring(0, 100)).setValue('pool_1'),
-                    new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_2.substring(0, 100)).setValue('pool_2'),
-                );
-            const row = new ActionRowBuilder().addComponents(selectMenu);
-            await interaction.update({ content: `Mode : **${interaction.customId === 'attack' ? 'Attaque' : 'Defense'}**.\nContre quel type d'alliance ?`, components: [row] });
+        if (interaction.customId === 'attack' || interaction.customId === 'defense') {
+            session.context = interaction.customId;
+            const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(
+                new StringSelectMenuOptionBuilder().setLabel('Standard').setValue('standard'),
+                new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_1).setValue('pool_1'),
+                new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_2).setValue('pool_2')
+            ));
+            await interaction.update({ content: `Mode: **${interaction.customId}**. Adversaire ?`, components: [row] });
         }
 
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
-            userSession.allianceTier = interaction.values[0]; 
+            session.allianceTier = interaction.values[0];
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('result_lose').setLabel('DEFAITE').setStyle(ButtonStyle.Danger)
             );
-            let allianceLabel = "Standard";
-            if (userSession.allianceTier === 'pool_1') allianceLabel = config.POOL_NAMES.pool_1;
-            if (userSession.allianceTier === 'pool_2') allianceLabel = config.POOL_NAMES.pool_2;
-            await interaction.update({ content: `Config : **${userSession.context}** vs **${allianceLabel}**.\nResultat du combat ?`, components: [row] });
+            await interaction.update({ content: `Adversaire: **${session.allianceTier}**. Resultat ?`, components: [row] });
         }
 
-        else if (interaction.isButton() && (interaction.customId === 'result_win' || interaction.customId === 'result_lose')) {
-            if (!activeSessions.has(interaction.user.id)) return interaction.reply({ content: "Deja traite.", ephemeral: true });
+        else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
             activeSessions.delete(interaction.user.id);
             await interaction.deferUpdate();
-            
+
             const hasWon = interaction.customId === 'result_win';
-            const myTeam = hasWon ? userSession.winners : userSession.losers;
-            const enemyTeam = hasWon ? userSession.losers : userSession.winners;
+            const myTeam = hasWon ? session.winners : session.losers;
+            const enTeam = hasWon ? session.losers : session.winners;
             
-            if (!myTeam || myTeam.length === 0) return interaction.editReply({ content: "Erreur equipe.", components: [] });
-
-            const myCount = Math.min(Math.max(myTeam.length, 1), 5); 
-            const enemyCount = Math.min(Math.max(enemyTeam.length, 1), 5);
-
-            const POINTS_MATRIX = {
-                WIN:  [[ 2, 4, 5, 5, 5 ], [ 1, 4, 5, 5, 5 ], [ 1, 2, 6, 6, 6 ], [ 1, 2, 3, 8, 8 ], [ 1, 2, 3, 5, 8 ]],
-                LOSE: [[ 1, 2, 3, 3, 3 ], [ 1, 2, 3, 3, 3 ], [ 0, 2, 3, 3, 3 ], [ 0, 0, 3, 4, 4 ], [ 0, 0, 0, 4, 5 ]]
+            const myC = Math.min(Math.max(myTeam.length, 1), 5); 
+            const enC = Math.min(Math.max(enTeam.length, 1), 5);
+            
+            // Matrice de points
+            const PTS = {
+                WIN: [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
+                LOSE: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
             };
+            let pts = hasWon ? PTS.WIN[myC-1][enC-1] : PTS.LOSE[myC-1][enC-1];
+            if (session.allianceTier === 'pool_1') pts += config.BONUSES.pool_1;
+            if (session.allianceTier === 'pool_2') pts += config.BONUSES.pool_2;
 
-            let pointsToAdd = hasWon ? POINTS_MATRIX.WIN[myCount - 1][enemyCount - 1] : POINTS_MATRIX.LOSE[myCount - 1][enemyCount - 1];
-            let allianceBonus = 0;
-            if (userSession.allianceTier === 'pool_1') allianceBonus = config.BONUSES.pool_1;
-            if (userSession.allianceTier === 'pool_2') allianceBonus = config.BONUSES.pool_2;
-            const totalPoints = pointsToAdd + allianceBonus;
+            // SAUVEGARDE DB
+            const seasonId = await ensureCurrentSeason();
+            await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3)", [seasonId, session.allianceTier, pts]);
+            
+            // Traitement Gagnants (Points + Win)
+            // On gère l'anti-cumul via Set
+            const rewardedDiscordIds = new Set();
+            const paid = [], skipped = [];
 
-            // --- Ensure tous les joueurs existent, fetch en bulk ---
-            const allPseudos = [...userSession.winners, ...userSession.losers];
-            for (const pseudo of allPseudos) {
-                await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [pseudo]);
-            }
-            const allPlayersRes = await pool.query(
-                `SELECT id, dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`,
-                [allPseudos.map(p => p.toLowerCase())]
-            );
-            const playerMap = new Map(allPlayersRes.rows.map(r => [r.dofus_pseudo.toLowerCase(), r]));
+            // Pour traiter l'anti-cumul, il faut d'abord récupérer les discord_id de TOUTE l'équipe gagnante
+            // On s'assure d'abord qu'ils existent tous
+            for (const p of session.winners) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
+            
+            const winRows = await pool.query(`SELECT id, dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`, [session.winners.map(x=>x.toLowerCase())]);
+            
+            for (const pName of session.winners) {
+                const pData = winRows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
+                if (!pData) continue;
 
-            // --- Ensure la saison courante existe en BDD ---
-            const currentSeasonId = await ensureCurrentSeason();
-
-            // --- Créer le match ---
-            const matchRes = await pool.query(
-                'INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id',
-                [currentSeasonId, userSession.allianceTier || null, totalPoints]
-            );
-            const matchId = matchRes.rows[0].id;
-
-            // --- GAGNANTS ---
-            const discordIdsRewarded = new Set();
-            const pseudosRewarded = [];
-            const pseudosSkipped = [];
-
-            for (const pseudo of userSession.winners) {
-                const player = playerMap.get(pseudo.toLowerCase());
-                if (!player) continue;
-
-                // Historique complet dans match_participants (même si multicompte)
-                await pool.query(
-                    'INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, TRUE) ON CONFLICT DO NOTHING',
-                    [matchId, player.id]
-                );
-
-                // Anti-multicompte : skip points + win si discord_id déjà récompensé
-                if (player.discord_id && discordIdsRewarded.has(player.discord_id)) {
-                    pseudosSkipped.push(pseudo);
-                    continue;
+                let givePoints = true;
+                if (pData.discord_id) {
+                    if (rewardedDiscordIds.has(pData.discord_id)) givePoints = false;
+                    else rewardedDiscordIds.add(pData.discord_id);
                 }
 
-                if (player.discord_id) discordIdsRewarded.add(player.discord_id);
-                pseudosRewarded.push(pseudo);
-
-                await updateSeasonStats(player.id, currentSeasonId, { points: totalPoints, wins: 1 });
+                if (givePoints) {
+                    paid.push(pName);
+                    await updateSeasonStats(pData.id, seasonId, { points: pts, wins: 1 });
+                } else {
+                    skipped.push(pName);
+                    await updateSeasonStats(pData.id, seasonId, { wins: 1 }); // Win comptée mais pas les points
+                }
             }
 
-            // --- PERDANTS ---
-            const discordIdsLoss = new Set();
-
-            for (const pseudo of userSession.losers) {
-                const player = playerMap.get(pseudo.toLowerCase());
-                if (!player) continue;
-
-                await pool.query(
-                    'INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, FALSE) ON CONFLICT DO NOTHING',
-                    [matchId, player.id]
-                );
-
-                if (player.discord_id && discordIdsLoss.has(player.discord_id)) continue;
-                if (player.discord_id) discordIdsLoss.add(player.discord_id);
-
-                await updateSeasonStats(player.id, currentSeasonId, { losses: 1 });
+            // Traitement Perdants (Loss)
+            for (const p of session.losers) {
+                await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
+                const pRes = await pool.query('SELECT id FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [p]);
+                if (pRes.rows[0]) await updateSeasonStats(pRes.rows[0].id, seasonId, { losses: 1 });
             }
 
-            // REPONSE FINALE
-            let finalMsg = `**Enregistré !** ${totalPoints} points attribués a ${pseudosRewarded.join(', ')}`;
-            if (pseudosSkipped.length > 0) {
-                finalMsg += `\n(${pseudosSkipped.join(', ')} : meme compte, points non cumules)`;
-            }
-            await interaction.editReply({ 
-                content: finalMsg, 
-                components: [] 
-            });
+            let msg = `**Match Enregistre !**\n${hasWon ? 'Victoire' : 'Defaite'} (${myC}v${enC})\nPoints: **${pts}**`;
+            msg += `\nJoueurs recompenses : ${paid.join(', ')}`;
+            if (skipped.length) msg += `\n(Non cumule : ${skipped.join(', ')})`;
+            
+            await interaction.editReply({ content: msg, components: [] });
         }
-    } catch (err) {
-        console.error("Erreur interaction:", err);
-    }
+
+    } catch (e) { console.error(e); }
 });
 
-// --- FONCTIONS DB ---
-
-// Insère la saison courante en BDD si elle n'existe pas encore, retourne son ID
+// --- HELPERS DB ---
 async function ensureCurrentSeason() {
     const { seasons, currentSeason } = getSeasons();
-    const current = seasons.find(s => s.id === currentSeason);
-    if (current) {
-        await pool.query(
-            'INSERT INTO seasons (id, start_date, end_date) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING',
-            [current.id, current.start.toISOString().split('T')[0], current.end.toISOString().split('T')[0]]
-        );
-    }
+    const cur = seasons.find(s => s.id === currentSeason);
+    if(cur) await pool.query('INSERT INTO seasons (id, start_date, end_date) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [cur.id, cur.start, cur.end]);
     return currentSeason;
 }
 
-// Met à jour season_stats pour un joueur (points / wins / losses, tout ce qui est passé)
-async function updateSeasonStats(playerId, seasonId, { points = 0, wins = 0, losses = 0 }) {
+async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0 }) {
     await pool.query(`
-        INSERT INTO season_stats (player_id, season_id, points, wins, losses)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (player_id, season_id)
-        DO UPDATE SET
-            points  = season_stats.points  + EXCLUDED.points,
-            wins    = season_stats.wins    + EXCLUDED.wins,
-            losses  = season_stats.losses  + EXCLUDED.losses
-    `, [playerId, seasonId, points, wins, losses]);
+        INSERT INTO season_stats (player_id, season_id, points, wins, losses) VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (player_id, season_id) DO UPDATE SET 
+        points = season_stats.points + EXCLUDED.points,
+        wins = season_stats.wins + EXCLUDED.wins,
+        losses = season_stats.losses + EXCLUDED.losses
+    `, [pid, sid, points, wins, losses]);
 }
 
 client.login(process.env.DISCORD_TOKEN);
