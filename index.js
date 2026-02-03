@@ -98,8 +98,7 @@ async function parseNuggetsWithAI(imageUrl) {
         ]);
 
         const text = result.response.text();
-        console.log("Gemini OCR:", text); 
-
+        
         const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
         const match = text.match(regex);
 
@@ -186,12 +185,11 @@ app.get('/', async (req, res) => {
             };
         });
 
-        const totalPoints = players.reduce((sum, p) => sum + p.total_points, 0);
         const countRes = await pool.query('SELECT COUNT(*) as c FROM matches');
         const { seasons, currentSeason } = getSeasons();
 
         res.render('index', { 
-            players, totalPoints, seasons, currentSeason, 
+            players, seasons, currentSeason, 
             totalCombats: parseInt(countRes.rows[0].c) 
         });
     } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
@@ -248,7 +246,6 @@ client.on('messageCreate', async message => {
 
     if (message.channel.id === config.CHANNEL_ID) {
         try {
-            // Nettoyage auto du surnom quand le joueur parle
             const rawNickname = message.member ? message.member.displayName : message.author.username;
             const cleanNickname = removeAccents(rawNickname);
             await pool.query('UPDATE players SET discord_nickname = $1 WHERE discord_id = $2', [cleanNickname, message.author.id]);
@@ -293,7 +290,7 @@ client.on('messageCreate', async message => {
                 const parsed = await parseNuggetsWithAI(attachment.url);
                 
                 if (!parsed || !parsed.alliance_amount) { 
-                    await msgRef.edit('Montant introuvable. Verifiez que le texte est visible.'); 
+                    await msgRef.edit('Montant introuvable.'); 
                     return; 
                 }
 
@@ -305,7 +302,7 @@ client.on('messageCreate', async message => {
                 await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
                 await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, recipientId]);
 
-                await msgRef.edit(`[OK] ${parsed.alliance_amount} pepites alliance.\n[+] ${playerShare} ajoutees a la banque de ${recipientName}.`);
+                await msgRef.edit(`[OK] ${parsed.alliance_amount} pepites alliance.\n[+] ${playerShare} pour ${recipientName}.`);
             }
         } catch (e) { 
             console.error(e);
@@ -471,7 +468,13 @@ client.on('interactionCreate', async interaction => {
                 for (const p of pseudos) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
                 
                 // Recup info (ID Dofus + ID Discord)
-                const rows = await pool.query(`SELECT id, dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`, [pseudos.map(x=>x.toLowerCase())]);
+                // CORRECTION : On trie pour prioriser les comptes LIÉS (discord_id non null) en premier
+                const rows = await pool.query(`
+                    SELECT id, dofus_pseudo, discord_id 
+                    FROM players 
+                    WHERE LOWER(dofus_pseudo) = ANY($1::text[])
+                    ORDER BY discord_id NULLS LAST
+                `, [pseudos.map(x=>x.toLowerCase())]);
 
                 for (const pName of pseudos) {
                     const pData = rows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
