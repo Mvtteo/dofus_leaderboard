@@ -64,9 +64,9 @@ async function parseScreenWithAI(imageUrl) {
              Regles :
              - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
-             - EXCLURE : Percepteur, Prisme, tout ce qui commence par "Do'" ou "Dofus"
+             - EXCLURE : Percepteur, Prisme, tout ce qui contient "Do'" ou "Dofus"
              - IGNORER : niveaux, XP, kamas, butin, classes
-             - Les pseudos peuvent contenir des tirets, apostrophes et chiffres
+             - Les pseudos peuvent contenir des tirets
              
              Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
         ]);
@@ -146,14 +146,14 @@ app.get('/', async (req, res) => {
     try {
         const query = `
             SELECT 
-                COALESCE(MAX(discord_nickname), MAX(discord_username), MAX(dofus_pseudo)) as display_name,
-                SUM(total_points) as total_points,
-                MAX(dofus_pseudo) as main_char,
-                MAX(wins) as wins,
-                MAX(losses) as losses
-            FROM players 
-            GROUP BY COALESCE(discord_id, dofus_pseudo)
-            HAVING SUM(total_points) > 0
+                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                SUM(ss.points)  as total_points,
+                SUM(ss.wins)    as wins,
+                SUM(ss.losses)  as losses
+            FROM players p
+            JOIN season_stats ss ON ss.player_id = p.id
+            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+            HAVING SUM(ss.points) > 0
             ORDER BY total_points DESC
         `;
 
@@ -199,14 +199,15 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
         const seasonId = req.params.seasonId;
         const query = `
             SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(sp.dofus_pseudo)) as dofus_pseudo,
-                SUM(sp.points) as total_points,
-                MAX(p.wins) as wins,
-                MAX(p.losses) as losses
-            FROM season_points sp
-            LEFT JOIN players p ON sp.dofus_pseudo = p.dofus_pseudo
-            WHERE sp.season_id = $1
-            GROUP BY COALESCE(p.discord_id, sp.dofus_pseudo)
+                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
+                SUM(ss.points)  as total_points,
+                SUM(ss.wins)    as wins,
+                SUM(ss.losses)  as losses
+            FROM players p
+            JOIN season_stats ss ON ss.player_id = p.id
+            WHERE ss.season_id = $1
+            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+            HAVING SUM(ss.points) > 0
             ORDER BY total_points DESC
         `;
         const result = await pool.query(query, [seasonId]);
@@ -473,59 +474,71 @@ client.on('interactionCreate', async interaction => {
             if (userSession.allianceTier === 'pool_2') allianceBonus = config.BONUSES.pool_2;
             const totalPoints = pointsToAdd + allianceBonus;
 
-            // GAGNANTS - Detection doublons discord_id
-            const winnersData = await pool.query(
-                `SELECT dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`,
-                [userSession.winners]
+            // --- Ensure tous les joueurs existent, fetch en bulk ---
+            const allPseudos = [...userSession.winners, ...userSession.losers];
+            for (const pseudo of allPseudos) {
+                await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [pseudo]);
+            }
+            const allPlayersRes = await pool.query(
+                `SELECT id, dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`,
+                [allPseudos.map(p => p.toLowerCase())]
             );
-            
+            const playerMap = new Map(allPlayersRes.rows.map(r => [r.dofus_pseudo.toLowerCase(), r]));
+
+            // --- Ensure la saison courante existe en BDD ---
+            const currentSeasonId = await ensureCurrentSeason();
+
+            // --- Créer le match ---
+            const matchRes = await pool.query(
+                'INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id',
+                [currentSeasonId, userSession.allianceTier || null, totalPoints]
+            );
+            const matchId = matchRes.rows[0].id;
+
+            // --- GAGNANTS ---
             const discordIdsRewarded = new Set();
             const pseudosRewarded = [];
             const pseudosSkipped = [];
-            
+
             for (const pseudo of userSession.winners) {
-                const playerRow = winnersData.rows.find(r => r.dofus_pseudo.toLowerCase() === pseudo.toLowerCase());
-                const discordId = playerRow?.discord_id;
-                
-                // Si le joueur a un discord_id et qu'on l'a deja recompense, skip
-                if (discordId && discordIdsRewarded.has(discordId)) {
+                const player = playerMap.get(pseudo.toLowerCase());
+                if (!player) continue;
+
+                // Historique complet dans match_participants (même si multicompte)
+                await pool.query(
+                    'INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, TRUE) ON CONFLICT DO NOTHING',
+                    [matchId, player.id]
+                );
+
+                // Anti-multicompte : skip points + win si discord_id déjà récompensé
+                if (player.discord_id && discordIdsRewarded.has(player.discord_id)) {
                     pseudosSkipped.push(pseudo);
-                    // On compte quand meme la win pour les stats du perso
-                    await pool.query(`INSERT INTO players (dofus_pseudo, wins) VALUES ($1, 1) ON CONFLICT (dofus_pseudo) DO UPDATE SET wins = players.wins + 1`, [pseudo]);
                     continue;
                 }
-                
-                if (discordId) discordIdsRewarded.add(discordId);
+
+                if (player.discord_id) discordIdsRewarded.add(player.discord_id);
                 pseudosRewarded.push(pseudo);
-                
-                await updatePlayerPoints(pseudo, totalPoints);
-                await pool.query(`INSERT INTO players (dofus_pseudo, wins) VALUES ($1, 1) ON CONFLICT (dofus_pseudo) DO UPDATE SET wins = players.wins + 1`, [pseudo]);
+
+                await updateSeasonStats(player.id, currentSeasonId, { points: totalPoints, wins: 1 });
             }
 
-            // PERDANTS - Meme logique pour les stats (pas de points)
-            const losersData = await pool.query(
-                `SELECT dofus_pseudo, discord_id FROM players WHERE dofus_pseudo = ANY($1)`,
-                [userSession.losers]
-            );
-            
+            // --- PERDANTS ---
             const discordIdsLoss = new Set();
-            
-            for (const pseudo of userSession.losers) {
-                const playerRow = losersData.rows.find(r => r.dofus_pseudo.toLowerCase() === pseudo.toLowerCase());
-                const discordId = playerRow?.discord_id;
-                
-                // Si deja compte une loss pour ce discord_id, skip la stat
-                if (discordId && discordIdsLoss.has(discordId)) {
-                    continue;
-                }
-                
-                if (discordId) discordIdsLoss.add(discordId);
-                await pool.query(`INSERT INTO players (dofus_pseudo, losses) VALUES ($1, 1) ON CONFLICT (dofus_pseudo) DO UPDATE SET losses = players.losses + 1`, [pseudo]);
-            }
 
-            try {
-                await pool.query("INSERT INTO matches (winners, losers) VALUES ($1, $2)", [userSession.winners.join(','), userSession.losers.join(',')]);
-            } catch (err) { console.error("Erreur save match:", err); }
+            for (const pseudo of userSession.losers) {
+                const player = playerMap.get(pseudo.toLowerCase());
+                if (!player) continue;
+
+                await pool.query(
+                    'INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, FALSE) ON CONFLICT DO NOTHING',
+                    [matchId, player.id]
+                );
+
+                if (player.discord_id && discordIdsLoss.has(player.discord_id)) continue;
+                if (player.discord_id) discordIdsLoss.add(player.discord_id);
+
+                await updateSeasonStats(player.id, currentSeasonId, { losses: 1 });
+            }
 
             // REPONSE FINALE
             let finalMsg = `**Enregistré !** ${totalPoints} points attribués a ${pseudosRewarded.join(', ')}`;
@@ -543,12 +556,31 @@ client.on('interactionCreate', async interaction => {
 });
 
 // --- FONCTIONS DB ---
-async function updatePlayerPoints(pseudo, points) {
-    const { currentSeason } = getSeasons();
-    const queryGlobal = `INSERT INTO players (dofus_pseudo, total_points) VALUES ($1, $2) ON CONFLICT (dofus_pseudo) DO UPDATE SET total_points = players.total_points + $2;`;
-    await pool.query(queryGlobal, [pseudo, points]);
-    const querySeason = `INSERT INTO season_points (dofus_pseudo, season_id, points) VALUES ($1, $2, $3) ON CONFLICT (dofus_pseudo, season_id) DO UPDATE SET points = season_points.points + $3;`;
-    await pool.query(querySeason, [pseudo, currentSeason, points]);
+
+// Insère la saison courante en BDD si elle n'existe pas encore, retourne son ID
+async function ensureCurrentSeason() {
+    const { seasons, currentSeason } = getSeasons();
+    const current = seasons.find(s => s.id === currentSeason);
+    if (current) {
+        await pool.query(
+            'INSERT INTO seasons (id, start_date, end_date) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING',
+            [current.id, current.start.toISOString().split('T')[0], current.end.toISOString().split('T')[0]]
+        );
+    }
+    return currentSeason;
+}
+
+// Met à jour season_stats pour un joueur (points / wins / losses, tout ce qui est passé)
+async function updateSeasonStats(playerId, seasonId, { points = 0, wins = 0, losses = 0 }) {
+    await pool.query(`
+        INSERT INTO season_stats (player_id, season_id, points, wins, losses)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (player_id, season_id)
+        DO UPDATE SET
+            points  = season_stats.points  + EXCLUDED.points,
+            wins    = season_stats.wins    + EXCLUDED.wins,
+            losses  = season_stats.losses  + EXCLUDED.losses
+    `, [playerId, seasonId, points, wins, losses]);
 }
 
 client.login(process.env.DISCORD_TOKEN);
