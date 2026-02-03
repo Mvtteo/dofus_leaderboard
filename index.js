@@ -14,7 +14,7 @@ const {
     TextInputStyle,
     StringSelectMenuBuilder, 
     StringSelectMenuOptionBuilder,
-    Events // Ajout pour corriger le warning
+    Events 
 } = require('discord.js');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -41,8 +41,8 @@ const activeSessions = new Map();
 // ============================================
 async function parseScreenWithAI(imageUrl) {
     try {
-        // CORRECTION : On utilise l'alias stable qui a du quota gratuit
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        // UTILISATION DE LA VERSION LITE (Plus stable pour ton quota)
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
         
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
@@ -72,17 +72,17 @@ async function parseScreenWithAI(imageUrl) {
 }
 
 // ============================================
-// 2. IA : LECTURE DES PEPITES
+// 2. IA : LECTURE DES PÉPITES
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
-        // CORRECTION ICI AUSSI
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        // UTILISATION DE LA VERSION LITE ICI AUSSI
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
-        // On demande une transcription brute pour eviter les erreurs de format JSON
+        // On demande une transcription brute pour éviter les erreurs de format JSON
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
@@ -91,7 +91,7 @@ async function parseNuggetsWithAI(imageUrl) {
         const text = result.response.text();
         console.log("Gemini OCR:", text); 
 
-        // Regex robuste pour trouver le deuxieme montant (alliance)
+        // Regex robuste pour trouver le deuxième montant (alliance)
         const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
         const match = text.match(regex);
 
@@ -102,7 +102,7 @@ async function parseNuggetsWithAI(imageUrl) {
         return null;
 
     } catch (error) { 
-        console.error("Erreur Gemini Pepites:", error.message);
+        console.error("Erreur Gemini Pépites:", error.message);
         return null; 
     }
 }
@@ -226,7 +226,6 @@ app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${co
 // ============================================
 // 4. BOT DISCORD
 // ============================================
-// CORRECTION : Utilisation de Events.ClientReady pour eviter le warning
 client.once(Events.ClientReady, async () => { 
     console.log(`Bot Connecte : ${client.user.tag}`);
     try {
