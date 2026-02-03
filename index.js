@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const crypto = require('crypto'); // Important pour l'anti-doublon
+const crypto = require('crypto');
 const { 
     Client, 
     GatewayIntentBits, 
@@ -22,7 +22,6 @@ const { pool } = require('./db');
 const config = require('./config');
 
 // --- GEMINI AI ---
-// ATTENTION : On utilise bien 'gemini-1.5-flash' (2.5 n'existe pas !)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 if (!config.CHANNEL_ID) {
@@ -41,7 +40,8 @@ const activeSessions = new Map();
 // ============================================
 async function parseScreenWithAI(imageUrl) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Utilisation de la version 001 pour eviter l'erreur 404
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
@@ -70,26 +70,24 @@ async function parseScreenWithAI(imageUrl) {
 }
 
 // ============================================
-// 2. IA : LECTURE DES PÉPITES (MÉTHODE OCR + REGEX)
+// 2. IA : LECTURE DES PEPITES
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Utilisation de la version 001 ici aussi
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
-        // On demande juste le texte brut, sans réfléchir
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
         ]);
 
         const text = result.response.text();
-        console.log("Gemini OCR:", text); // Tu verras le texte lu dans la console
+        console.log("Gemini OCR:", text); 
 
-        // REGEX MAGIQUE : Cherche un nombre situé juste après "et" et avant "ont été ajoutées"
-        // Fonctionne même si l'IA rajoute des espaces ou des sauts de ligne
         const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
         const match = text.match(regex);
 
@@ -100,7 +98,7 @@ async function parseNuggetsWithAI(imageUrl) {
         return null;
 
     } catch (error) { 
-        console.error("Erreur Gemini Pépites:", error.message);
+        console.error("Erreur Gemini Pepites:", error.message);
         return null; 
     }
 }
@@ -262,7 +260,7 @@ client.on('messageCreate', async message => {
         if(ch) ch.send({ embeds: [embed], components: [row] });
     }
 
-    // --- LOGIQUE PÉPITES ---
+    // --- LOGIQUE PEPITES ---
     if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
