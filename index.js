@@ -41,8 +41,9 @@ const activeSessions = new Map();
 // ============================================
 async function parseScreenWithAI(imageUrl) {
     try {
-        // UTILISATION DE LA VERSION LITE (Plus stable pour ton quota)
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+        // CORRECTION : Utilisation de l'alias 'gemini-flash-latest' présent dans ta liste
+        // C'est celui qui correspond à la version stable avec quota gratuit.
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
         
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
@@ -76,13 +77,12 @@ async function parseScreenWithAI(imageUrl) {
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
-        // UTILISATION DE LA VERSION LITE ICI AUSSI
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+        // CORRECTION ICI AUSSI
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
-        // On demande une transcription brute pour éviter les erreurs de format JSON
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
@@ -91,7 +91,6 @@ async function parseNuggetsWithAI(imageUrl) {
         const text = result.response.text();
         console.log("Gemini OCR:", text); 
 
-        // Regex robuste pour trouver le deuxième montant (alliance)
         const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
         const match = text.match(regex);
 
@@ -264,7 +263,7 @@ client.on('messageCreate', async message => {
         if(ch) ch.send({ embeds: [embed], components: [row] });
     }
 
-    // --- LOGIQUE PEPITES ---
+    // --- LOGIQUE PÉPITES ---
     if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
