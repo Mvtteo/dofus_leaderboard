@@ -83,26 +83,29 @@ async function parseNuggetsWithAI(imageUrl) {
 
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
-            `Analyse ce screenshot de chat Dofus.
-             Le texte ressemble à : "[Heure] Les objets ont été recyclés. Vous avez obtenu X [Pépite] et Y ont été ajoutées à la cagnotte de l'alliance."
+            `Regarde cette image de chat Dofus.
+             Cherche la phrase : "et X ont été ajoutées à la cagnotte".
              
-             TA MISSION :
-             1. Trouve la phrase parlant de recyclage ou de pépites.
-             2. Identifie les deux montants numériques principaux.
-             3. Le PREMIER (X) est pour le joueur (on l'ignore).
-             4. Le DEUXIÈME (Y) est pour l'alliance (C'est celui qu'on veut !).
+             TA SEULE MISSION : Renvoie UNIQUEMENT le nombre X.
+             Ne mets pas de JSON, pas de texte, juste le chiffre.
              
-             Exemple : "obtenu 269 ... et 161 ont été ajoutées" -> Tu renvoies 161.
-             
-             Reponds UNIQUEMENT en JSON valide : {"alliance_amount": <nombre entier>}`
+             Exemple : Si tu lis "et 44 ont été ajoutées", réponds juste : 44`
         ]);
 
-        const text = result.response.text();
-        // Nettoyage plus agressif pour éviter les erreurs JSON
-        const clean = text.replace(/```json|```/g, '').trim(); 
-        return JSON.parse(clean);
+        const text = result.response.text().trim();
+        console.log("Gemini Raw Pépites:", text); // Pour débugger dans ta console
+
+        // On nettoie tout ce qui n'est pas un chiffre
+        const amountString = text.replace(/[^0-9]/g, '');
+        const amount = parseInt(amountString);
+
+        if (isNaN(amount)) return null;
+
+        // On renvoie le format attendu par le reste du code
+        return { alliance_amount: amount };
+
     } catch (error) { 
-        console.error("Erreur Parsing Pépites:", error);
+        console.error("Erreur Gemini Pépites:", error);
         return null; 
     }
 }
