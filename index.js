@@ -71,6 +71,9 @@ async function parseScreenWithAI(imageUrl) {
 // ============================================
 // 2. IA : LECTURE DES PÉPITES
 // ============================================
+// ============================================
+// 2. IA : LECTURE DES PÉPITES (CORRIGÉE)
+// ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -80,16 +83,28 @@ async function parseNuggetsWithAI(imageUrl) {
 
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
-            `Analyse ce screenshot de chat Dofus (recyclage).
-             Le message est du type : "Vous avez obtenu X [Pépite] et Y ont été ajoutées à la cagnotte".
-             Récupère uniquement Y (le montant alliance, le deuxième nombre).
+            `Analyse ce screenshot de chat Dofus.
+             Le texte ressemble à : "[Heure] Les objets ont été recyclés. Vous avez obtenu X [Pépite] et Y ont été ajoutées à la cagnotte de l'alliance."
+             
+             TA MISSION :
+             1. Trouve la phrase parlant de recyclage ou de pépites.
+             2. Identifie les deux montants numériques principaux.
+             3. Le PREMIER (X) est pour le joueur (on l'ignore).
+             4. Le DEUXIÈME (Y) est pour l'alliance (C'est celui qu'on veut !).
+             
+             Exemple : "obtenu 269 ... et 161 ont été ajoutées" -> Tu renvoies 161.
+             
              Reponds UNIQUEMENT en JSON valide : {"alliance_amount": <nombre entier>}`
         ]);
 
         const text = result.response.text();
-        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
+        // Nettoyage plus agressif pour éviter les erreurs JSON
+        const clean = text.replace(/```json|```/g, '').trim(); 
         return JSON.parse(clean);
-    } catch (error) { return null; }
+    } catch (error) { 
+        console.error("Erreur Parsing Pépites:", error);
+        return null; 
+    }
 }
 
 // ============================================
