@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const crypto = require('crypto');
+const crypto = require('crypto'); // Important pour l'anti-doublon
 const { 
     Client, 
     GatewayIntentBits, 
@@ -22,6 +22,7 @@ const { pool } = require('./db');
 const config = require('./config');
 
 // --- GEMINI AI ---
+// ATTENTION : On utilise bien 'gemini-1.5-flash' (2.5 n'existe pas !)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 if (!config.CHANNEL_ID) {
@@ -69,10 +70,7 @@ async function parseScreenWithAI(imageUrl) {
 }
 
 // ============================================
-// 2. IA : LECTURE DES PÉPITES
-// ============================================
-// ============================================
-// 2. IA : LECTURE DES PÉPITES (CORRIGÉE)
+// 2. IA : LECTURE DES PÉPITES (MÉTHODE OCR + REGEX)
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
@@ -81,31 +79,28 @@ async function parseNuggetsWithAI(imageUrl) {
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
+        // On demande juste le texte brut, sans réfléchir
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
-            `Regarde cette image de chat Dofus.
-             Cherche la phrase : "et X ont été ajoutées à la cagnotte".
-             
-             TA SEULE MISSION : Renvoie UNIQUEMENT le nombre X.
-             Ne mets pas de JSON, pas de texte, juste le chiffre.
-             
-             Exemple : Si tu lis "et 44 ont été ajoutées", réponds juste : 44`
+            `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
         ]);
 
-        const text = result.response.text().trim();
-        console.log("Gemini Raw Pépites:", text); // Pour débugger dans ta console
+        const text = result.response.text();
+        console.log("Gemini OCR:", text); // Tu verras le texte lu dans la console
 
-        // On nettoie tout ce qui n'est pas un chiffre
-        const amountString = text.replace(/[^0-9]/g, '');
-        const amount = parseInt(amountString);
+        // REGEX MAGIQUE : Cherche un nombre situé juste après "et" et avant "ont été ajoutées"
+        // Fonctionne même si l'IA rajoute des espaces ou des sauts de ligne
+        const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
+        const match = text.match(regex);
 
-        if (isNaN(amount)) return null;
-
-        // On renvoie le format attendu par le reste du code
-        return { alliance_amount: amount };
+        if (match && match[1]) {
+            return { alliance_amount: parseInt(match[1]) };
+        }
+        
+        return null;
 
     } catch (error) { 
-        console.error("Erreur Gemini Pépites:", error);
+        console.error("Erreur Gemini Pépites:", error.message);
         return null; 
     }
 }
@@ -231,7 +226,6 @@ app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${co
 // ============================================
 client.once('ready', async () => { 
     console.log(`Bot Connecte : ${client.user.tag}`);
-    // Vérification tables
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS nuggets (id SERIAL PRIMARY KEY, discord_id TEXT, amount INT, image_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
@@ -242,7 +236,6 @@ client.once('ready', async () => {
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    // Mise à jour surnom auto
     if (message.channel.id === config.CHANNEL_ID) {
         try {
             const nickname = message.member ? message.member.displayName : message.author.username;
@@ -250,7 +243,6 @@ client.on('messageCreate', async message => {
         } catch (e) {}
     }
 
-    // --- COMMANDES ADMIN ---
     if (message.content.startsWith('!addplayer') && message.member.permissions.has('Administrator')) {
         const args = message.content.split(' ');
         if (args.length < 2) return message.reply("Usage : `!addplayer <PseudoExact>`");
@@ -286,17 +278,26 @@ client.on('messageCreate', async message => {
                 if (dup.rows.length > 0) { await msgRef.edit('Deja traite.'); return; }
 
                 const parsed = await parseNuggetsWithAI(attachment.url);
-                if (!parsed || !parsed.alliance_amount) { await msgRef.edit('Montant introuvable.'); return; }
+                
+                if (!parsed || !parsed.alliance_amount) { 
+                    await msgRef.edit('Montant introuvable. Verifiez que la phrase "ont ete ajoutees" est visible.'); 
+                    return; 
+                }
 
                 const playerShare = Math.floor(parsed.alliance_amount * 0.5);
-                const member = message.member || message.author;
+                const mentionedMember = message.mentions.members?.first();
+                const recipientId = mentionedMember ? mentionedMember.id : message.author.id;
+                const recipientName = mentionedMember ? mentionedMember.displayName : (message.member?.displayName || message.author.username);
                 
-                await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [member.id, parsed.alliance_amount, imageHash]);
-                await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, member.id]);
+                await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
+                await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, recipientId]);
 
-                await msgRef.edit(`**${parsed.alliance_amount}** pepites alliance.\n**${playerShare}** ajoutees a la banque de ${member.displayName} !`);
+                await msgRef.edit(`**${parsed.alliance_amount}** pepites alliance.\n**${playerShare}** ajoutees a la banque de ${recipientName} !`);
             }
-        } catch (e) { await msgRef.edit('Erreur technique.'); }
+        } catch (e) { 
+            console.error(e);
+            await msgRef.edit('Erreur technique.'); 
+        }
         return;
     }
 
@@ -333,11 +334,10 @@ client.on('messageCreate', async message => {
 });
 
 // ============================================
-// 5. INTERACTIONS (BOUTONS & MODALS)
+// 5. INTERACTIONS
 // ============================================
 client.on('interactionCreate', async interaction => {
     try {
-        // LIENS PERSONNAGES
         if (interaction.isButton() && (interaction.customId === 'btn_link_char' || interaction.customId === 'btn_unlink_char')) {
             const isLink = interaction.customId === 'btn_link_char';
             const modal = new ModalBuilder().setCustomId(isLink ? 'modal_link' : 'modal_unlink').setTitle(isLink ? 'Lier Personnage' : 'Delier Personnage');
@@ -345,7 +345,6 @@ client.on('interactionCreate', async interaction => {
             await interaction.showModal(modal); return;
         }
 
-        // RETOUR MODALS
         if (interaction.isModalSubmit()) {
             if (interaction.customId === 'modal_correct') {
                 const w = interaction.fields.getTextInputValue('winnersInput').split(',').map(s=>s.trim()).filter(s=>s);
@@ -387,7 +386,6 @@ client.on('interactionCreate', async interaction => {
             return;
         }
 
-        // LOGIQUE COMBAT (SUITE)
         const session = activeSessions.get(interaction.user.id);
         if (!session && ['attack','defense','result_win','result_lose'].includes(interaction.customId)) return interaction.reply({ content: "Session expiree.", ephemeral: true });
 
@@ -432,7 +430,6 @@ client.on('interactionCreate', async interaction => {
             const myC = Math.min(Math.max(myTeam.length, 1), 5); 
             const enC = Math.min(Math.max(enTeam.length, 1), 5);
             
-            // Matrice de points
             const PTS = {
                 WIN: [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
                 LOSE: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
@@ -441,19 +438,13 @@ client.on('interactionCreate', async interaction => {
             if (session.allianceTier === 'pool_1') pts += config.BONUSES.pool_1;
             if (session.allianceTier === 'pool_2') pts += config.BONUSES.pool_2;
 
-            // SAUVEGARDE DB
             const seasonId = await ensureCurrentSeason();
             await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3)", [seasonId, session.allianceTier, pts]);
             
-            // Traitement Gagnants (Points + Win)
-            // On gère l'anti-cumul via Set
             const rewardedDiscordIds = new Set();
             const paid = [], skipped = [];
 
-            // Pour traiter l'anti-cumul, il faut d'abord récupérer les discord_id de TOUTE l'équipe gagnante
-            // On s'assure d'abord qu'ils existent tous
             for (const p of session.winners) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
-            
             const winRows = await pool.query(`SELECT id, dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`, [session.winners.map(x=>x.toLowerCase())]);
             
             for (const pName of session.winners) {
@@ -471,11 +462,10 @@ client.on('interactionCreate', async interaction => {
                     await updateSeasonStats(pData.id, seasonId, { points: pts, wins: 1 });
                 } else {
                     skipped.push(pName);
-                    await updateSeasonStats(pData.id, seasonId, { wins: 1 }); // Win comptée mais pas les points
+                    await updateSeasonStats(pData.id, seasonId, { wins: 1 });
                 }
             }
 
-            // Traitement Perdants (Loss)
             for (const p of session.losers) {
                 await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
                 const pRes = await pool.query('SELECT id FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [p]);
@@ -492,7 +482,6 @@ client.on('interactionCreate', async interaction => {
     } catch (e) { console.error(e); }
 });
 
-// --- HELPERS DB ---
 async function ensureCurrentSeason() {
     const { seasons, currentSeason } = getSeasons();
     const cur = seasons.find(s => s.id === currentSeason);
