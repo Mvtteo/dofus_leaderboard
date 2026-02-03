@@ -400,11 +400,6 @@
                 if (document.getElementById('playerCount')) {
                     document.getElementById('playerCount').textContent = data.length;
                 }
-                if (document.getElementById('totalCombats')) {
-                    // On recalcule le total des points (ou combats) basé sur les nouvelles données
-                    const total = data.reduce((sum, p) => sum + parseInt(p.total_points), 0);
-                    document.getElementById('totalCombats').textContent = total.toLocaleString();
-                }
 
                 // console.log(`🔄 Mise à jour auto effectuée (${new Date().toLocaleTimeString()})`);
 
