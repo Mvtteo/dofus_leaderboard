@@ -13,7 +13,8 @@ const {
     TextInputBuilder,
     TextInputStyle,
     StringSelectMenuBuilder, 
-    StringSelectMenuOptionBuilder 
+    StringSelectMenuOptionBuilder,
+    Events // Ajout pour corriger le warning
 } = require('discord.js');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -40,8 +41,9 @@ const activeSessions = new Map();
 // ============================================
 async function parseScreenWithAI(imageUrl) {
     try {
-        // Utilisation de la version 001 pour eviter l'erreur 404
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+        // CORRECTION : On utilise l'alias stable qui a du quota gratuit
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
@@ -74,12 +76,13 @@ async function parseScreenWithAI(imageUrl) {
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
-        // Utilisation de la version 001 ici aussi
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+        // CORRECTION ICI AUSSI
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
+        // On demande une transcription brute pour eviter les erreurs de format JSON
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
@@ -88,6 +91,7 @@ async function parseNuggetsWithAI(imageUrl) {
         const text = result.response.text();
         console.log("Gemini OCR:", text); 
 
+        // Regex robuste pour trouver le deuxieme montant (alliance)
         const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
         const match = text.match(regex);
 
@@ -222,7 +226,8 @@ app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${co
 // ============================================
 // 4. BOT DISCORD
 // ============================================
-client.once('ready', async () => { 
+// CORRECTION : Utilisation de Events.ClientReady pour eviter le warning
+client.once(Events.ClientReady, async () => { 
     console.log(`Bot Connecte : ${client.user.tag}`);
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS nuggets (id SERIAL PRIMARY KEY, discord_id TEXT, amount INT, image_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`);
