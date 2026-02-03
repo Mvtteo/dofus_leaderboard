@@ -25,6 +25,12 @@ const config = require('./config');
 // --- GEMINI AI ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// --- FONCTION UTILITAIRE : SUPPRESSION ACCENTS ---
+function removeAccents(str) {
+    if (!str) return "";
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 if (!config.CHANNEL_ID) {
     console.error("ERREUR : CHANNEL_ID manquant dans le .env");
     process.exit(1);
@@ -41,8 +47,6 @@ const activeSessions = new Map();
 // ============================================
 async function parseScreenWithAI(imageUrl) {
     try {
-        // CORRECTION : Utilisation de l'alias 'gemini-flash-latest' présent dans ta liste
-        // C'est celui qui correspond à la version stable avec quota gratuit.
         const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
         
         const response = await fetch(imageUrl);
@@ -65,7 +69,13 @@ async function parseScreenWithAI(imageUrl) {
         
         const text = result.response.text();
         const clean = text.replace(/```json\n?|```\n?/g, '').trim();
-        return JSON.parse(clean);
+        const parsed = JSON.parse(clean);
+
+        // Nettoyage automatique des accents
+        if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
+        if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
+
+        return parsed;
     } catch (error) {
         console.error("Erreur Gemini PvP:", error.message);
         return null;
@@ -73,11 +83,10 @@ async function parseScreenWithAI(imageUrl) {
 }
 
 // ============================================
-// 2. IA : LECTURE DES PÉPITES
+// 2. IA : LECTURE DES PEPITES
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
-        // CORRECTION ICI AUSSI
         const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
@@ -101,7 +110,7 @@ async function parseNuggetsWithAI(imageUrl) {
         return null;
 
     } catch (error) { 
-        console.error("Erreur Gemini Pépites:", error.message);
+        console.error("Erreur Gemini Pepites:", error.message);
         return null; 
     }
 }
@@ -239,8 +248,10 @@ client.on('messageCreate', async message => {
 
     if (message.channel.id === config.CHANNEL_ID) {
         try {
-            const nickname = message.member ? message.member.displayName : message.author.username;
-            await pool.query('UPDATE players SET discord_nickname = $1 WHERE discord_id = $2', [nickname, message.author.id]);
+            // Nettoyage auto du surnom quand le joueur parle
+            const rawNickname = message.member ? message.member.displayName : message.author.username;
+            const cleanNickname = removeAccents(rawNickname);
+            await pool.query('UPDATE players SET discord_nickname = $1 WHERE discord_id = $2', [cleanNickname, message.author.id]);
         } catch (e) {}
     }
 
@@ -248,8 +259,9 @@ client.on('messageCreate', async message => {
         const args = message.content.split(' ');
         if (args.length < 2) return message.reply("Usage : `!addplayer <PseudoExact>`");
         try {
-            await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [args[1]]);
-            return message.reply(`**${args[1]}** ajoute !`);
+            const cleanArg = removeAccents(args[1]);
+            await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [cleanArg]);
+            return message.reply(`[OK] Joueur ${cleanArg} ajoute.`);
         } catch (err) { return message.reply("Erreur ajout."); }
     }
 
@@ -263,7 +275,7 @@ client.on('messageCreate', async message => {
         if(ch) ch.send({ embeds: [embed], components: [row] });
     }
 
-    // --- LOGIQUE PÉPITES ---
+    // --- LOGIQUE PEPITES ---
     if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
@@ -276,12 +288,12 @@ client.on('messageCreate', async message => {
                 const imageHash = crypto.createHash('sha256').update(Buffer.from(imgBuffer)).digest('hex');
                 
                 const dup = await pool.query('SELECT id FROM nuggets WHERE image_hash = $1', [imageHash]);
-                if (dup.rows.length > 0) { await msgRef.edit('Deja traite.'); return; }
+                if (dup.rows.length > 0) { await msgRef.edit('Image deja traitee.'); return; }
 
                 const parsed = await parseNuggetsWithAI(attachment.url);
                 
                 if (!parsed || !parsed.alliance_amount) { 
-                    await msgRef.edit('Montant introuvable. Verifiez que la phrase "ont ete ajoutees" est visible.'); 
+                    await msgRef.edit('Montant introuvable. Verifiez que le texte est visible.'); 
                     return; 
                 }
 
@@ -293,7 +305,7 @@ client.on('messageCreate', async message => {
                 await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
                 await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, recipientId]);
 
-                await msgRef.edit(`**${parsed.alliance_amount}** pepites alliance.\n**${playerShare}** ajoutees a la banque de ${recipientName} !`);
+                await msgRef.edit(`[OK] ${parsed.alliance_amount} pepites alliance.\n[+] ${playerShare} ajoutees a la banque de ${recipientName}.`);
             }
         } catch (e) { 
             console.error(e);
@@ -308,7 +320,7 @@ client.on('messageCreate', async message => {
     if (attachments.size === 0) return;
 
     let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null };
-    const msgRef = await message.reply(`Analyse PvP...`);
+    const msgRef = await message.reply(`Analyse PvP en cours...`);
 
     try {
         for (const [id, attachment] of attachments) {
@@ -327,9 +339,9 @@ client.on('messageCreate', async message => {
                 new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
-            await msgRef.edit({ content: `**Complet !**\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
+            await msgRef.edit({ content: `[COMPLET]\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
         } else {
-            await msgRef.edit(`**Partiel** : Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
+            await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
         }
     } catch (error) { msgRef.edit("Erreur analyse."); }
 });
@@ -348,8 +360,8 @@ client.on('interactionCreate', async interaction => {
 
         if (interaction.isModalSubmit()) {
             if (interaction.customId === 'modal_correct') {
-                const w = interaction.fields.getTextInputValue('winnersInput').split(',').map(s=>s.trim()).filter(s=>s);
-                const l = interaction.fields.getTextInputValue('losersInput').split(',').map(s=>s.trim()).filter(s=>s);
+                const w = interaction.fields.getTextInputValue('winnersInput').split(',').map(s=>s.trim()).filter(s=>s).map(s => removeAccents(s));
+                const l = interaction.fields.getTextInputValue('losersInput').split(',').map(s=>s.trim()).filter(s=>s).map(s => removeAccents(s));
                 const session = activeSessions.get(interaction.user.id);
                 if(session) {
                     session.winners = w; session.losers = l;
@@ -360,14 +372,14 @@ client.on('interactionCreate', async interaction => {
                         new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                         new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
                     );
-                    await interaction.reply({ content: `**Corrige !**\nGagnants: ${w.join(', ')}\nPerdants: ${l.join(', ')}`, components: [row] });
+                    await interaction.reply({ content: `[CORRIGE]\nGagnants: ${w.join(', ')}\nPerdants: ${l.join(', ')}`, components: [row] });
                 }
                 return;
             }
 
-            const pseudo = interaction.fields.getTextInputValue('pseudoInput').trim();
+            const pseudo = removeAccents(interaction.fields.getTextInputValue('pseudoInput').trim());
             const { id: discordId, username: discordName } = interaction.user;
-            const discordNickname = interaction.member.displayName;
+            const discordNickname = removeAccents(interaction.member.displayName);
 
             if (interaction.customId === 'modal_link') {
                 const check = await pool.query('SELECT * FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [pseudo]);
@@ -378,11 +390,11 @@ client.on('interactionCreate', async interaction => {
                     if (ex.discord_id && ex.discord_id !== discordId) return interaction.reply({ content: 'Deja lie a un autre compte.', ephemeral: true });
                     await pool.query('UPDATE players SET discord_id = $1, discord_username = $2, discord_nickname = $3 WHERE LOWER(dofus_pseudo) = LOWER($4)', [discordId, discordName, discordNickname, pseudo]);
                 }
-                await interaction.reply({ content: `**${pseudo}** lie !`, ephemeral: true });
+                await interaction.reply({ content: `[OK] ${pseudo} lie au compte Discord.`, ephemeral: true });
             }
             if (interaction.customId === 'modal_unlink') {
                 await pool.query('UPDATE players SET discord_id = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
-                await interaction.reply({ content: `**${pseudo}** delie.`, ephemeral: true });
+                await interaction.reply({ content: `[OK] ${pseudo} delie.`, ephemeral: true });
             }
             return;
         }
@@ -425,12 +437,18 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferUpdate();
 
             const hasWon = interaction.customId === 'result_win';
-            const myTeam = hasWon ? session.winners : session.losers;
-            const enTeam = hasWon ? session.losers : session.winners;
+            
+            // 1. NETTOYAGE DES PSEUDOS
+            const cleanWinners = session.winners.map(n => removeAccents(n));
+            const cleanLosers = session.losers.map(n => removeAccents(n));
+
+            const myTeam = hasWon ? cleanWinners : cleanLosers;
+            const enTeam = hasWon ? cleanLosers : cleanWinners;
             
             const myC = Math.min(Math.max(myTeam.length, 1), 5); 
             const enC = Math.min(Math.max(enTeam.length, 1), 5);
             
+            // Calcul Points
             const PTS = {
                 WIN: [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
                 LOSE: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
@@ -440,42 +458,66 @@ client.on('interactionCreate', async interaction => {
             if (session.allianceTier === 'pool_2') pts += config.BONUSES.pool_2;
 
             const seasonId = await ensureCurrentSeason();
-            await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3)", [seasonId, session.allianceTier, pts]);
+            // Enregistrement historique match
+            const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id", [seasonId, session.allianceTier, pts]);
+            const matchId = matchRes.rows[0].id;
             
-            const rewardedDiscordIds = new Set();
+            // --- LOGIQUE MULTI-COMPTE ---
+            const processedDiscordIds = new Set();
             const paid = [], skipped = [];
 
-            for (const p of session.winners) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
-            const winRows = await pool.query(`SELECT id, dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`, [session.winners.map(x=>x.toLowerCase())]);
+            const processPlayers = async (pseudos, isWinner) => {
+                // S'assurer que le joueur existe
+                for (const p of pseudos) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
+                
+                // Recup info (ID Dofus + ID Discord)
+                const rows = await pool.query(`SELECT id, dofus_pseudo, discord_id FROM players WHERE LOWER(dofus_pseudo) = ANY($1::text[])`, [pseudos.map(x=>x.toLowerCase())]);
+
+                for (const pName of pseudos) {
+                    const pData = rows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
+                    if (!pData) continue;
+
+                    // Ajouter participation dans tous les cas
+                    await pool.query('INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, $3)', [matchId, pData.id, isWinner]);
+
+                    // Verification Multi-compte
+                    let shouldCountStats = true;
+
+                    if (pData.discord_id) {
+                        if (processedDiscordIds.has(pData.discord_id)) {
+                            // Doublon Discord détecté -> On ignore
+                            shouldCountStats = false;
+                        } else {
+                            // Premier personnage de ce compte -> On valide
+                            processedDiscordIds.add(pData.discord_id);
+                        }
+                    }
+
+                    if (shouldCountStats) {
+                        // Compte principal : On donne points/wins/losses
+                        const pointsToAdd = isWinner ? pts : 0;
+                        const winsToAdd = isWinner ? 1 : 0;
+                        const lossesToAdd = isWinner ? 0 : 1;
+                        
+                        await updateSeasonStats(pData.id, seasonId, { points: pointsToAdd, wins: winsToAdd, losses: lossesToAdd });
+                        
+                        if (isWinner) paid.push(pName);
+                    } else {
+                        // Compte secondaire : On ne donne rien
+                        if (isWinner) skipped.push(pName);
+                    }
+                }
+            };
+
+            await processPlayers(cleanWinners, true);
+            await processPlayers(cleanLosers, false);
+
+            let msg = `[ENREGISTRE] Match ajoute.\n${hasWon ? 'Victoire' : 'Defaite'} (${myC}v${enC}) -> Points: ${pts}`;
+            msg += `\n[+] Joueurs credites : ${paid.join(', ')}`;
             
-            for (const pName of session.winners) {
-                const pData = winRows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
-                if (!pData) continue;
-
-                let givePoints = true;
-                if (pData.discord_id) {
-                    if (rewardedDiscordIds.has(pData.discord_id)) givePoints = false;
-                    else rewardedDiscordIds.add(pData.discord_id);
-                }
-
-                if (givePoints) {
-                    paid.push(pName);
-                    await updateSeasonStats(pData.id, seasonId, { points: pts, wins: 1 });
-                } else {
-                    skipped.push(pName);
-                    await updateSeasonStats(pData.id, seasonId, { wins: 1 });
-                }
+            if (skipped.length > 0) {
+                msg += `\n[Ignores - Multi] : ${skipped.join(', ')}`;
             }
-
-            for (const p of session.losers) {
-                await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
-                const pRes = await pool.query('SELECT id FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [p]);
-                if (pRes.rows[0]) await updateSeasonStats(pRes.rows[0].id, seasonId, { losses: 1 });
-            }
-
-            let msg = `**Match Enregistre !**\n${hasWon ? 'Victoire' : 'Defaite'} (${myC}v${enC})\nPoints: **${pts}**`;
-            msg += `\nJoueurs recompenses : ${paid.join(', ')}`;
-            if (skipped.length) msg += `\n(Non cumule : ${skipped.join(', ')})`;
             
             await interaction.editReply({ content: msg, components: [] });
         }
