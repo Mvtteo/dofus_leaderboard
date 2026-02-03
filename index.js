@@ -160,8 +160,8 @@ app.get('/', async (req, res) => {
         const result = await pool.query(query);
         
         const players = result.rows.map(p => {
-            const wins = p.wins || 0;
-            const losses = p.losses || 0;
+            const wins = Number(p.wins) || 0;
+            const losses = Number(p.losses) || 0;
             const totalGames = wins + losses;
             const winrate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
             
@@ -213,8 +213,8 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
         const result = await pool.query(query, [seasonId]);
         
         const players = result.rows.map(p => {
-            const wins = p.wins || 0;
-            const losses = p.losses || 0;
+            const wins = Number(p.wins) || 0;
+            const losses = Number(p.losses) || 0;
             const totalGames = wins + losses;
             const winrate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
             return {
