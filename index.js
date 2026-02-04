@@ -261,6 +261,45 @@ client.on('messageCreate', async message => {
             return message.reply(`[OK] Joueur ${cleanArg} ajoute.`);
         } catch (err) { return message.reply("Erreur ajout."); }
     }
+    // --- CLASSEMENT PÉPITES (ADMIN UNIQUEMENT) ---
+    if (message.content === '!pepites') {
+        // Sécurité : Si pas admin, on arrête tout de suite
+        if (!message.member.permissions.has('Administrator')) {
+            return message.reply("[REFUS] Cette commande est reservee aux administrateurs.");
+        }
+
+        try {
+            const res = await pool.query(`
+                SELECT COALESCE(discord_nickname, dofus_pseudo) as name, bank_nuggets 
+                FROM players 
+                WHERE bank_nuggets > 0 
+                ORDER BY bank_nuggets DESC 
+            `);
+
+            if (res.rows.length === 0) return message.reply("Aucune pepite en banque.");
+
+            const lines = res.rows.map((p, i) => {
+                let rank = `${i + 1}.`;
+                return `${rank} **${p.name}** : ${p.bank_nuggets}`;
+            });
+
+            // On coupe le message si trop long (Discord limite à 4096 caractères)
+            // Ici on affiche max les 20 premiers dans l'embed, le reste en texte si besoin
+            const topList = lines.slice(0, 20).join('\n');
+            
+            const embed = new EmbedBuilder()
+                .setTitle('Banque des Pepites (Alliance)')
+                .setColor(0xFFD700)
+                .setDescription(topList)
+                .setFooter({ text: `Total accumule - Top 20 sur ${res.rows.length} comptes` });
+
+            return message.reply({ embeds: [embed] });
+
+        } catch (e) {
+            console.error(e);
+            return message.reply("Erreur recuperation pepites.");
+        }
+    }
 
     if (message.content === '!setup_profile' && message.member.permissions.has('Administrator')) {
         const row = new ActionRowBuilder().addComponents(
