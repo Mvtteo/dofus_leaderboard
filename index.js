@@ -494,7 +494,6 @@ client.on('interactionCreate', async interaction => {
             if (session.allianceTier === 'pool_2') pts += config.BONUSES.pool_2;
 
             const seasonId = await ensureCurrentSeason();
-            // Enregistrement historique match
             const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id", [seasonId, session.allianceTier, pts]);
             const matchId = matchRes.rows[0].id;
             
@@ -502,12 +501,10 @@ client.on('interactionCreate', async interaction => {
             const processedDiscordIds = new Set();
             const paid = [], skipped = [];
 
-            const processPlayers = async (pseudos, isWinner) => {
-                // S'assurer que le joueur existe
+            // ON AJOUTE LE PARAMETRE 'isAlly'
+            const processPlayers = async (pseudos, isWinner, isAlly) => {
                 for (const p of pseudos) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
                 
-                // Recup info (ID Dofus + ID Discord)
-                // CORRECTION : On trie pour prioriser les comptes LIÉS (discord_id non null) en premier
                 const rows = await pool.query(`
                     SELECT id, dofus_pseudo, discord_id 
                     FROM players 
@@ -519,40 +516,43 @@ client.on('interactionCreate', async interaction => {
                     const pData = rows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
                     if (!pData) continue;
 
-                    // Ajouter participation dans tous les cas
+                    // On enregistre TOUJOURS la participation (pour l'historique)
                     await pool.query('INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, $3)', [matchId, pData.id, isWinner]);
 
-                    // Verification Multi-compte
-                    let shouldCountStats = true;
+                    // MAIS on ne met à jour le classement QUE si c'est un ALLIÉ
+                    if (isAlly) {
+                        let shouldCountStats = true;
 
-                    if (pData.discord_id) {
-                        if (processedDiscordIds.has(pData.discord_id)) {
-                            // Doublon Discord détecté -> On ignore
-                            shouldCountStats = false;
-                        } else {
-                            // Premier personnage de ce compte -> On valide
-                            processedDiscordIds.add(pData.discord_id);
+                        if (pData.discord_id) {
+                            if (processedDiscordIds.has(pData.discord_id)) {
+                                shouldCountStats = false; // Doublon Discord
+                            } else {
+                                processedDiscordIds.add(pData.discord_id);
+                            }
                         }
-                    }
 
-                    if (shouldCountStats) {
-                        // Compte principal : On donne points/wins/losses
-                        const pointsToAdd = isWinner ? pts : 0;
-                        const winsToAdd = isWinner ? 1 : 0;
-                        const lossesToAdd = isWinner ? 0 : 1;
-                        
-                        await updateSeasonStats(pData.id, seasonId, { points: pointsToAdd, wins: winsToAdd, losses: lossesToAdd });
-                        
-                        if (isWinner) paid.push(pName);
-                    } else {
-                        // Compte secondaire : On ne donne rien
-                        if (isWinner) skipped.push(pName);
+                        if (shouldCountStats) {
+                            const pointsToAdd = isWinner ? pts : 0;
+                            const winsToAdd = isWinner ? 1 : 0;
+                            const lossesToAdd = isWinner ? 0 : 1;
+                            
+                            await updateSeasonStats(pData.id, seasonId, { points: pointsToAdd, wins: winsToAdd, losses: lossesToAdd });
+                            
+                            if (isWinner) paid.push(pName);
+                        } else {
+                            if (isWinner) skipped.push(pName);
+                        }
                     }
                 }
             };
 
-            await processPlayers(cleanWinners, true);
-            await processPlayers(cleanLosers, false);
+            // APPEL LOGIQUE :
+            // Si j'ai gagné (hasWon=true) -> Les Winners sont mes Alliés (true).
+            // Si j'ai perdu (hasWon=false) -> Les Winners sont mes Ennemis (false).
+            await processPlayers(cleanWinners, true, hasWon); // Traitement des gagnants
+            
+            // Inverse pour les perdants
+            await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
 
             let msg = `[ENREGISTRE] Match ajoute.\n${hasWon ? 'Victoire' : 'Defaite'} (${myC}v${enC}) -> Points: ${pts}`;
             msg += `\n[+] Joueurs credites : ${paid.join(', ')}`;
