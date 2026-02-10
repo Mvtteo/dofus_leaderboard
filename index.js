@@ -31,6 +31,12 @@ function removeAccents(str) {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+function hasStaffRole(member) {
+    if (!member) return false;
+    if (member.permissions.has('Administrator')) return true;
+    return member.roles.cache.some(r => r.name.toUpperCase() === 'STAFF');
+}
+
 if (!config.CHANNEL_ID) {
     console.error("ERREUR : CHANNEL_ID manquant dans le .env");
     process.exit(1);
@@ -55,14 +61,18 @@ async function parseScreenWithAI(imageUrl) {
         
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType: "image/png" } },
-            `Analyse ce screenshot de fin de combat Dofus.
-             Extrait UNIQUEMENT les pseudos des joueurs.
+            `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
+             Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
              
-             Regles :
+             Regles STRICTES :
              - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
-             - EXCLURE : Percepteur, Prisme, tout ce qui contient "Do'" ou "Dofus"
-             - IGNORER : niveaux, XP, kamas, butin, classes
+             - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
+             - EXCLURE absolument : Percepteur, Prisme, tout ce qui contient "Do'", "Dofus", "Gardien", "Protecteur"
+             - EXCLURE les monstres, invocations, et PNJ
+             - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
+             - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
+             - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
              
              Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
         ]);
@@ -74,6 +84,10 @@ async function parseScreenWithAI(imageUrl) {
         // Nettoyage automatique des accents
         if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
         if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
+
+        // Cap a 5 joueurs par equipe (AvA = 5v5 max)
+        if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
+        if (parsed.losers && parsed.losers.length > 5) parsed.losers = parsed.losers.slice(0, 5);
 
         return parsed;
     } catch (error) {
@@ -165,23 +179,29 @@ app.get('/', async (req, res) => {
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
                 SUM(ss.points) as total_points,
                 SUM(ss.wins) as wins,
-                SUM(ss.losses) as losses
+                SUM(ss.losses) as losses,
+                MIN(ss.previous_rank) as previous_rank
             FROM players p
             JOIN season_stats ss ON ss.player_id = p.id
             GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-            HAVING SUM(ss.points) > 0
+            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
             ORDER BY total_points DESC
         `;
         const result = await pool.query(query);
-        const players = result.rows.map(p => {
+        const players = result.rows.map((p, index) => {
             const wins = Number(p.wins) || 0;
             const losses = Number(p.losses) || 0;
             const totalGames = wins + losses;
+            const currentRank = index + 1;
+            const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
+            let rankChange = 0;
+            if (prevRank !== null) rankChange = prevRank - currentRank; // positif = monte
             return {
                 dofus_pseudo: p.display_name,
                 total_points: parseInt(p.total_points),
                 wins, losses,
-                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0
+                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
+                rank_change: rankChange
             };
         });
 
@@ -203,24 +223,30 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
                 SUM(ss.points) as total_points,
                 SUM(ss.wins) as wins,
-                SUM(ss.losses) as losses
+                SUM(ss.losses) as losses,
+                MIN(ss.previous_rank) as previous_rank
             FROM players p
             JOIN season_stats ss ON ss.player_id = p.id
             WHERE ss.season_id = $1
             GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-            HAVING SUM(ss.points) > 0
+            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
             ORDER BY total_points DESC
         `;
         const result = await pool.query(query, [seasonId]);
-        const players = result.rows.map(p => {
+        const players = result.rows.map((p, index) => {
             const wins = Number(p.wins) || 0;
             const losses = Number(p.losses) || 0;
             const totalGames = wins + losses;
+            const currentRank = index + 1;
+            const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
+            let rankChange = 0;
+            if (prevRank !== null) rankChange = prevRank - currentRank;
             return {
                 dofus_pseudo: p.dofus_pseudo,
                 total_points: p.total_points,
                 wins, losses,
-                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0
+                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
+                rank_change: rankChange
             };
         });
         res.json(players);
@@ -237,6 +263,7 @@ client.once(Events.ClientReady, async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS nuggets (id SERIAL PRIMARY KEY, discord_id TEXT, amount INT, image_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
+        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS previous_rank INTEGER DEFAULT NULL`);
         console.log('[Startup] DB verifiee.');
     } catch (e) { console.error(e); }
 });
@@ -261,11 +288,10 @@ client.on('messageCreate', async message => {
             return message.reply(`[OK] Joueur ${cleanArg} ajoute.`);
         } catch (err) { return message.reply("Erreur ajout."); }
     }
-    // --- CLASSEMENT PÉPITES (ADMIN UNIQUEMENT) ---
+    // --- CLASSEMENT PEPITES (STAFF) ---
     if (message.content === '!pepites') {
-        // Sécurité : Si pas admin, on arrête tout de suite
-        if (!message.member.permissions.has('Administrator')) {
-            return message.reply("[REFUS] Cette commande est reservee aux administrateurs.");
+        if (!hasStaffRole(message.member)) {
+            return message.reply("[REFUS] Cette commande est reservee au STAFF.");
         }
 
         try {
@@ -298,6 +324,21 @@ client.on('messageCreate', async message => {
         } catch (e) {
             console.error(e);
             return message.reply("Erreur recuperation pepites.");
+        }
+    }
+
+    // --- RESET PEPITES (STAFF) ---
+    if (message.content === '!resetpepites') {
+        if (!hasStaffRole(message.member)) {
+            return message.reply("[REFUS] Cette commande est reservee au STAFF.");
+        }
+        try {
+            await pool.query('UPDATE players SET bank_nuggets = 0 WHERE bank_nuggets > 0');
+            await pool.query('DELETE FROM nuggets');
+            return message.reply("[OK] Toutes les pepites ont ete remises a zero.");
+        } catch (e) {
+            console.error(e);
+            return message.reply("Erreur reset pepites.");
         }
     }
 
@@ -494,12 +535,13 @@ client.on('interactionCreate', async interaction => {
             if (session.allianceTier === 'pool_2') pts += config.BONUSES.pool_2;
 
             const seasonId = await ensureCurrentSeason();
+            await snapshotRanks(seasonId); // Snapshot des rangs avant modification
             const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id", [seasonId, session.allianceTier, pts]);
             const matchId = matchRes.rows[0].id;
             
             // --- LOGIQUE MULTI-COMPTE ---
             const processedDiscordIds = new Set();
-            const paid = [], skipped = [];
+            const paid = [], skipped = [], defeated = [];
 
             // ON AJOUTE LE PARAMETRE 'isAlly'
             const processPlayers = async (pseudos, isWinner, isAlly) => {
@@ -519,7 +561,7 @@ client.on('interactionCreate', async interaction => {
                     // On enregistre TOUJOURS la participation (pour l'historique)
                     await pool.query('INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, $3)', [matchId, pData.id, isWinner]);
 
-                    // MAIS on ne met à jour le classement QUE si c'est un ALLIÉ
+                    // MAIS on ne met a jour le classement QUE si c'est un ALLIE
                     if (isAlly) {
                         let shouldCountStats = true;
 
@@ -532,13 +574,20 @@ client.on('interactionCreate', async interaction => {
                         }
 
                         if (shouldCountStats) {
-                            const pointsToAdd = isWinner ? pts : 0;
+                            // Victoire -> toujours les points. Defaite -> points LOSE en defense, 0 en attaque
+                            let pointsToAdd;
+                            if (isWinner) {
+                                pointsToAdd = pts;
+                            } else {
+                                pointsToAdd = session.context === 'defense' ? pts : 0;
+                            }
                             const winsToAdd = isWinner ? 1 : 0;
                             const lossesToAdd = isWinner ? 0 : 1;
                             
                             await updateSeasonStats(pData.id, seasonId, { points: pointsToAdd, wins: winsToAdd, losses: lossesToAdd });
                             
                             if (isWinner) paid.push(pName);
+                            else defeated.push(pName);
                         } else {
                             if (isWinner) skipped.push(pName);
                         }
@@ -554,8 +603,8 @@ client.on('interactionCreate', async interaction => {
             // Inverse pour les perdants
             await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
 
-            let msg = `[ENREGISTRE] Match ajoute.\n${hasWon ? 'Victoire' : 'Defaite'} (${myC}v${enC}) -> Points: ${pts}`;
-            msg += `\n[+] Joueurs credites : ${paid.join(', ')}`;
+            const allCredited = [...paid, ...defeated];
+            let msg = `Points attribues a : ${allCredited.join(', ')}`;
             
             if (skipped.length > 0) {
                 msg += `\n[Ignores - Multi] : ${skipped.join(', ')}`;
@@ -572,6 +621,21 @@ async function ensureCurrentSeason() {
     const cur = seasons.find(s => s.id === currentSeason);
     if(cur) await pool.query('INSERT INTO seasons (id, start_date, end_date) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [cur.id, cur.start, cur.end]);
     return currentSeason;
+}
+
+async function snapshotRanks(seasonId) {
+    // Capture les rangs actuels avant modification
+    await pool.query(`
+        WITH ranked AS (
+            SELECT ss.player_id, ss.season_id,
+                ROW_NUMBER() OVER (ORDER BY ss.points DESC, ss.wins DESC) as current_rank
+            FROM season_stats ss
+            WHERE ss.season_id = $1 AND (ss.wins + ss.losses) > 0
+        )
+        UPDATE season_stats SET previous_rank = ranked.current_rank
+        FROM ranked
+        WHERE season_stats.player_id = ranked.player_id AND season_stats.season_id = ranked.season_id
+    `, [seasonId]);
 }
 
 async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0 }) {
