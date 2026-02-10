@@ -1,651 +1,487 @@
-require('dotenv').config();
-const express = require('express');
-const path = require('path');
-const crypto = require('crypto');
-const { 
-    Client, 
-    GatewayIntentBits, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle,
-    EmbedBuilder,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle,
-    StringSelectMenuBuilder, 
-    StringSelectMenuOptionBuilder,
-    Events 
-} = require('discord.js');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-// --- IMPORTS ---
-const { pool } = require('./db');
-const config = require('./config');
-
-// --- GEMINI AI ---
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// --- FONCTION UTILITAIRE : SUPPRESSION ACCENTS ---
-function removeAccents(str) {
-    if (!str) return "";
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-function hasStaffRole(member) {
-    if (!member) return false;
-    if (member.permissions.has('Administrator')) return true;
-    return member.roles.cache.some(r => r.name.toUpperCase() === 'STAFF');
-}
-
-if (!config.CHANNEL_ID) {
-    console.error("ERREUR : CHANNEL_ID manquant dans le .env");
-    process.exit(1);
-}
-
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
-});
-
-const activeSessions = new Map();
-
-// ============================================
-// 1. IA : LECTURE DES SCREENS PVP
-// ============================================
-async function parseScreenWithAI(imageUrl) {
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ogre</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" type="image/png" href="web/assets/logo_ogre.png">
+    <style>
+        /* Winrate Styles */
+        .col-winrate {
+            width: 180px;
+            text-align: center;
+        }
+        .cell-winrate {
+            padding: 0.5rem;
+        }
+        .winrate-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .winrate-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .winrate-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e76f51, #e9c46a, #2a9d8f);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .winrate-value {
+            font-weight: 600;
+            font-size: 0.875rem;
+            min-width: 40px;
+            text-align: right;
+        }
+        .winrate-value.positive {
+            color: #2a9d8f;
+        }
+        .winrate-value.negative {
+            color: #e76f51;
+        }
+        .winrate-detail {
+            display: block;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 2px;
+        }
+        /* Rank Change Arrows */
+        .rank-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .rank-change.up {
+            color: #2a9d8f;
+        }
+        .rank-change.down {
+            color: #e76f51;
+        }
+        .rank-change.same {
+            color: rgba(255, 255, 255, 0.25);
+        }
+        .rank-change svg {
+            width: 12px;
+            height: 12px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background - Dofus Theme -->
+    <div class="bg-container">
+        <div class="bg-gradient"></div>
+        <div class="bg-grid"></div>
         
-        const response = await fetch(imageUrl);
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
+        <!-- Runes flottantes -->
+        <div class="floating-runes">
+            <div class="rune rune-1">&#x2726;</div>
+            <div class="rune rune-2">&#x2727;</div>
+            <div class="rune rune-3">&#x2728;</div>
+            <div class="rune rune-4">&#x2726;</div>
+            <div class="rune rune-5">&#x2729;</div>
+            <div class="rune rune-6">&#x2727;</div>
+        </div>
         
-        const result = await model.generateContent([
-            { inlineData: { data: base64, mimeType: "image/png" } },
-            `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
-             Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
-             
-             Regles STRICTES :
-             - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
-             - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
-             - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
-             - EXCLURE absolument : Percepteur, Prisme, tout ce qui contient "Do'", "Dofus", "Gardien", "Protecteur"
-             - EXCLURE les monstres, invocations, et PNJ
-             - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
-             - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
-             - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
-             
-             Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
-        ]);
+        <!-- Particules d'energie -->
+        <div class="energy-particles" id="particles"></div>
         
-        const text = result.response.text();
-        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
-        const parsed = JSON.parse(clean);
+        <!-- Brume magique -->
+        <div class="magic-mist"></div>
+    </div>
 
-        // Nettoyage automatique des accents
-        if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
-        if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
+    <!-- Header Compact -->
+    <header class="header">
+        <div class="header-inner">
+            <!-- Logo + Title -->
+            <div class="header-brand">
+                <div class="logo">
+                    <img src="/web/assets/logo_ogre.png" alt="Logo" />
+                </div>
+                <div class="brand-text">
+                    <h1 class="brand-title">OGRE</h1>
+                    <span class="brand-sub">PVP TRACKER</span>
+                </div>
+            </div>
 
-        // Cap a 5 joueurs par equipe (AvA = 5v5 max)
-        if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
-        if (parsed.losers && parsed.losers.length > 5) parsed.losers = parsed.losers.slice(0, 5);
+            <!-- Stats -->
+            <div class="header-stats">
+                <div class="stat-item">
+                    <div class="stat-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="playerCount"><%= players.length %></span>
+                        <span class="stat-label">Joueurs</span>
+                    </div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <div class="stat-icon gold">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/>
+                            <path d="M13 19l6-6"/>
+                            <path d="M16 16l4 4"/>
+                            <path d="M19 21l2-2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-value" id="totalCombats"><%= locals.totalCombats || 0 %></span>
+                        <span class="stat-label">Combats</span>
+                    </div>
+                </div>
+            </div>
 
-        return parsed;
-    } catch (error) {
-        console.error("Erreur Gemini PvP:", error.message);
-        return null;
-    }
-}
+            <!-- Search + Season -->
+            <div class="header-actions">
+                <div class="search-container" id="searchContainer">
+                    <button class="search-toggle" id="searchToggle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                        </svg>
+                    </button>
+                    <input type="text" id="searchInput" placeholder="Rechercher..." />
+                </div>
+                <div class="season-selector">
+                    <select class="season-dropdown" id="seasonSelect">
+                        <% seasons.forEach(function(season) { %>
+                            <option value="<%= season.id %>" <%= season.id === currentSeason ? 'selected' : '' %>>
+                                <%= season.label %>
+                            </option>
+                        <% }); %>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </header>
 
-// ============================================
-// 2. IA : LECTURE DES PEPITES
-// ============================================
-async function parseNuggetsWithAI(imageUrl) {
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-        const response = await fetch(imageUrl);
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Podium Horizontal -->
+        <section class="podium-section">
+            <% if (players.length >= 3) { %>
+            <div class="podium-container">
+                <!-- 2nd Place - Left -->
+                <div class="podium-item silver" data-rank="2">
+                    <div class="podium-avatar">
+                        <span><%= players[1].dofus_pseudo.charAt(0).toUpperCase() %></span>
+                    </div>
+                    <div class="podium-info">
+                        <div class="podium-name"><%= players[1].dofus_pseudo %></div>
+                        <div class="podium-score"><%= players[1].total_points.toLocaleString() %></div>
+                    </div>
+                    <div class="podium-pedestal">
+                        <div class="pedestal-front"></div>
+                        <div class="pedestal-top"></div>
+                    </div>
+                </div>
 
-        const result = await model.generateContent([
-            { inlineData: { data: base64, mimeType: "image/png" } },
-            `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
-        ]);
+                <!-- 1st Place - Center -->
+                <div class="podium-item gold" data-rank="1">
+                    <div class="crown-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
+                            <path d="M19 19H5v2h14v-2z"/>
+                        </svg>
+                    </div>
+                    <div class="podium-avatar">
+                        <span><%= players[0].dofus_pseudo.charAt(0).toUpperCase() %></span>
+                    </div>
+                    <div class="podium-info">
+                        <div class="podium-name"><%= players[0].dofus_pseudo %></div>
+                        <div class="podium-score"><%= players[0].total_points.toLocaleString() %></div>
+                        <div class="champion-tag">CHAMPION OGRE</div>
+                    </div>
+                    <div class="podium-pedestal">
+                        <div class="pedestal-front"></div>
+                        <div class="pedestal-top"></div>
+                    </div>
+                </div>
 
-        const text = result.response.text();
+                <!-- 3rd Place - Right -->
+                <div class="podium-item bronze" data-rank="3">
+                    <div class="podium-avatar">
+                        <span><%= players[2].dofus_pseudo.charAt(0).toUpperCase() %></span>
+                    </div>
+                    <div class="podium-info">
+                        <div class="podium-name"><%= players[2].dofus_pseudo %></div>
+                        <div class="podium-score"><%= players[2].total_points.toLocaleString() %></div>
+                    </div>
+                    <div class="podium-pedestal">
+                        <div class="pedestal-front"></div>
+                        <div class="pedestal-top"></div>
+                    </div>
+                </div>
+            </div>
+            <% } %>
+        </section>
+
+        <!-- Leaderboard Full Width -->
+        <section class="leaderboard-section">
+            <div class="table-container">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">RANG</th>
+                            <th class="col-player">JOUEUR</th>
+                            <th class="col-winrate">WINRATE</th>
+                            <th class="col-score">SCORE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody"></tbody>
+                </table>
+            </div>
+
+            <div id="paginationControls" class="pagination-container"></div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <span>ALLIANCE PVP TRACKER</span>
+        <span class="footer-dot"></span>
+        <span>Mise a jour: <%= new Date().toLocaleString('fr-FR') %></span>
+    </footer>
+
+    <script>
+        // 1. INJECTION INITIALE (Données au chargement de la page)
+        // Correction du typo 'et' -> 'const'
+        let allPlayers = <%- JSON.stringify(players) %>;
         
-        const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
-        const match = text.match(regex);
-
-        if (match && match[1]) {
-            return { alliance_amount: parseInt(match[1]) };
-        }
+        // Configuration
+        let currentPage = 1;
+        const rowsPerPage = 10;
+        let filteredPlayers = [...allPlayers]; 
         
-        return null;
+        // AUTO-UPDATE : Intervalle en millisecondes (ici 15 secondes)
+        const UPDATE_INTERVAL = 15000; 
 
-    } catch (error) { 
-        console.error("Erreur Gemini Pepites:", error.message);
-        return null; 
-    }
-}
+        const tableBody = document.getElementById('leaderboardBody');
+        const paginationDiv = document.getElementById('paginationControls');
 
-// ============================================
-// 3. SERVEUR WEB (SITE)
-// ============================================
-const app = express();
-app.set('view engine', 'ejs');
-app.set('views', __dirname);
-app.use(express.static(__dirname));
-app.use('/assets', express.static(path.join(__dirname, 'web/assets')));
+        // --- FONCTION : AFFICHER LE TABLEAU ---
+        function displayTable() {
+            tableBody.innerHTML = "";
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = startIndex + rowsPerPage;
+            const pageData = filteredPlayers.slice(startIndex, endIndex);
 
-function getSeasons() {
-    const INITIAL_DATE = new Date('2026-02-01T00:00:00'); 
-    const DAYS_PER_SEASON = 14;
-    const now = new Date();
-    const seasons = [];
-    let loopDate = new Date(INITIAL_DATE);
-    let id = 1;
-    let currentSeasonId = 1;
-
-    while (true) {
-        const start = new Date(loopDate);
-        if (start > now) break;
-        const end = new Date(start);
-        end.setDate(end.getDate() + DAYS_PER_SEASON);
-        end.setMilliseconds(-1); 
-
-        const isCurrent = (now >= start && now <= end);
-        if (isCurrent) currentSeasonId = id;
-
-        const startStr = start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-        const endStr = end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-        seasons.push({ id, label: `Saison ${id} (${startStr} - ${endStr})`, start, end, isCurrent });
-        
-        loopDate.setDate(loopDate.getDate() + DAYS_PER_SEASON);
-        id++;
-        if (id > 1000) break;
-    }
-    if (seasons.length === 0) {
-        const end = new Date(INITIAL_DATE);
-        end.setDate(end.getDate() + DAYS_PER_SEASON);
-        seasons.push({ id: 1, label: `Saison 1 (Bientot)`, start: INITIAL_DATE, end, isCurrent: true });
-    }
-    return { seasons, currentSeason: currentSeasonId };
-}
-
-app.get('/', async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
-                SUM(ss.points) as total_points,
-                SUM(ss.wins) as wins,
-                SUM(ss.losses) as losses,
-                MIN(ss.previous_rank) as previous_rank
-            FROM players p
-            JOIN season_stats ss ON ss.player_id = p.id
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
-            ORDER BY total_points DESC
-        `;
-        const result = await pool.query(query);
-        const players = result.rows.map((p, index) => {
-            const wins = Number(p.wins) || 0;
-            const losses = Number(p.losses) || 0;
-            const totalGames = wins + losses;
-            const currentRank = index + 1;
-            const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
-            let rankChange = 0;
-            if (prevRank !== null) rankChange = prevRank - currentRank; // positif = monte
-            return {
-                dofus_pseudo: p.display_name,
-                total_points: parseInt(p.total_points),
-                wins, losses,
-                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
-                rank_change: rankChange
-            };
-        });
-
-        const countRes = await pool.query('SELECT COUNT(*) as c FROM matches');
-        const { seasons, currentSeason } = getSeasons();
-
-        res.render('index', { 
-            players, seasons, currentSeason, 
-            totalCombats: parseInt(countRes.rows[0].c) 
-        });
-    } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
-});
-
-app.get('/api/leaderboard/:seasonId', async (req, res) => {
-    try {
-        const seasonId = req.params.seasonId;
-        const query = `
-            SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
-                SUM(ss.points) as total_points,
-                SUM(ss.wins) as wins,
-                SUM(ss.losses) as losses,
-                MIN(ss.previous_rank) as previous_rank
-            FROM players p
-            JOIN season_stats ss ON ss.player_id = p.id
-            WHERE ss.season_id = $1
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
-            ORDER BY total_points DESC
-        `;
-        const result = await pool.query(query, [seasonId]);
-        const players = result.rows.map((p, index) => {
-            const wins = Number(p.wins) || 0;
-            const losses = Number(p.losses) || 0;
-            const totalGames = wins + losses;
-            const currentRank = index + 1;
-            const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
-            let rankChange = 0;
-            if (prevRank !== null) rankChange = prevRank - currentRank;
-            return {
-                dofus_pseudo: p.dofus_pseudo,
-                total_points: p.total_points,
-                wins, losses,
-                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
-                rank_change: rankChange
-            };
-        });
-        res.json(players);
-    } catch (error) { res.status(500).json({ error: 'Erreur serveur' }); }
-});
-
-app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${config.WEB_PORT}`); });
-
-// ============================================
-// 4. BOT DISCORD
-// ============================================
-client.once(Events.ClientReady, async () => { 
-    console.log(`Bot Connecte : ${client.user.tag}`);
-    try {
-        await pool.query(`CREATE TABLE IF NOT EXISTS nuggets (id SERIAL PRIMARY KEY, discord_id TEXT, amount INT, image_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`);
-        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
-        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS previous_rank INTEGER DEFAULT NULL`);
-        console.log('[Startup] DB verifiee.');
-    } catch (e) { console.error(e); }
-});
-
-client.on('messageCreate', async message => {
-    if (message.author.bot) return;
-
-    if (message.channel.id === config.CHANNEL_ID) {
-        try {
-            const rawNickname = message.member ? message.member.displayName : message.author.username;
-            const cleanNickname = removeAccents(rawNickname);
-            await pool.query('UPDATE players SET discord_nickname = $1 WHERE discord_id = $2', [cleanNickname, message.author.id]);
-        } catch (e) {}
-    }
-
-    if (message.content.startsWith('!addplayer') && message.member.permissions.has('Administrator')) {
-        const args = message.content.split(' ');
-        if (args.length < 2) return message.reply("Usage : `!addplayer <PseudoExact>`");
-        try {
-            const cleanArg = removeAccents(args[1]);
-            await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [cleanArg]);
-            return message.reply(`[OK] Joueur ${cleanArg} ajoute.`);
-        } catch (err) { return message.reply("Erreur ajout."); }
-    }
-    // --- CLASSEMENT PEPITES (STAFF) ---
-    if (message.content === '!pepites') {
-        if (!hasStaffRole(message.member)) {
-            return message.reply("[REFUS] Cette commande est reservee au STAFF.");
-        }
-
-        try {
-            const res = await pool.query(`
-                SELECT COALESCE(discord_nickname, dofus_pseudo) as name, bank_nuggets 
-                FROM players 
-                WHERE bank_nuggets > 0 
-                ORDER BY bank_nuggets DESC 
-            `);
-
-            if (res.rows.length === 0) return message.reply("Aucune pepite en banque.");
-
-            const lines = res.rows.map((p, i) => {
-                let rank = `${i + 1}.`;
-                return `${rank} **${p.name}** : ${p.bank_nuggets}`;
-            });
-
-            // On coupe le message si trop long (Discord limite à 4096 caractères)
-            // Ici on affiche max les 20 premiers dans l'embed, le reste en texte si besoin
-            const topList = lines.slice(0, 20).join('\n');
-            
-            const embed = new EmbedBuilder()
-                .setTitle('Banque des Pepites (Alliance)')
-                .setColor(0xFFD700)
-                .setDescription(topList)
-                .setFooter({ text: `Total accumule - Top 20 sur ${res.rows.length} comptes` });
-
-            return message.reply({ embeds: [embed] });
-
-        } catch (e) {
-            console.error(e);
-            return message.reply("Erreur recuperation pepites.");
-        }
-    }
-
-    // --- RESET PEPITES (STAFF) ---
-    if (message.content === '!resetpepites') {
-        if (!hasStaffRole(message.member)) {
-            return message.reply("[REFUS] Cette commande est reservee au STAFF.");
-        }
-        try {
-            await pool.query('UPDATE players SET bank_nuggets = 0 WHERE bank_nuggets > 0');
-            await pool.query('DELETE FROM nuggets');
-            return message.reply("[OK] Toutes les pepites ont ete remises a zero.");
-        } catch (e) {
-            console.error(e);
-            return message.reply("Erreur reset pepites.");
-        }
-    }
-
-    if (message.content === '!setup_profile' && message.member.permissions.has('Administrator')) {
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('btn_link_char').setLabel('Lier un Personnage').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('btn_unlink_char').setLabel('Delier un Personnage').setStyle(ButtonStyle.Danger)
-        );
-        const embed = new EmbedBuilder().setTitle('Gestion de vos Personnages').setDescription("Liez vos personnages Dofus a votre compte Discord !").setColor(0x00FF00);
-        const ch = await client.channels.fetch(config.PROFILE_CHANNEL_ID);
-        if(ch) ch.send({ embeds: [embed], components: [row] });
-    }
-
-    // --- LOGIQUE PEPITES ---
-    if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
-        const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
-        if (attachments.size === 0) return;
-        const msgRef = await message.reply('Analyse pepites...');
-        
-        try {
-            for (const [id, attachment] of attachments) {
-                const imgResponse = await fetch(attachment.url);
-                const imgBuffer = await imgResponse.arrayBuffer();
-                const imageHash = crypto.createHash('sha256').update(Buffer.from(imgBuffer)).digest('hex');
-                
-                const dup = await pool.query('SELECT id FROM nuggets WHERE image_hash = $1', [imageHash]);
-                if (dup.rows.length > 0) { await msgRef.edit('Image deja traitee.'); return; }
-
-                const parsed = await parseNuggetsWithAI(attachment.url);
-                
-                if (!parsed || !parsed.alliance_amount) { 
-                    await msgRef.edit('Montant introuvable.'); 
-                    return; 
-                }
-
-                const playerShare = Math.floor(parsed.alliance_amount * 0.5);
-                const mentionedMember = message.mentions.members?.first();
-                const recipientId = mentionedMember ? mentionedMember.id : message.author.id;
-                const recipientName = mentionedMember ? mentionedMember.displayName : (message.member?.displayName || message.author.username);
-                
-                await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
-                await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, recipientId]);
-
-                await msgRef.edit(`[OK] ${parsed.alliance_amount} pepites alliance.\n[+] ${playerShare} pour ${recipientName}.`);
-            }
-        } catch (e) { 
-            console.error(e);
-            await msgRef.edit('Erreur technique.'); 
-        }
-        return;
-    }
-
-    // --- LOGIQUE PVP ---
-    if (message.channel.id !== config.CHANNEL_ID) return;
-    const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
-    if (attachments.size === 0) return;
-
-    let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null };
-    const msgRef = await message.reply(`Analyse PvP en cours...`);
-
-    try {
-        for (const [id, attachment] of attachments) {
-            const parsed = await parseScreenWithAI(attachment.url);
-            if (parsed) {
-                if (parsed.winners) userSession.winners = [...new Set([...userSession.winners, ...parsed.winners])];
-                if (parsed.losers) userSession.losers = [...new Set([...userSession.losers, ...parsed.losers])];
-            }
-        }
-        activeSessions.set(message.author.id, userSession);
-
-        if (userSession.winners.length > 0 && userSession.losers.length > 0) {
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
-            );
-            await msgRef.edit({ content: `[COMPLET]\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
-        } else {
-            await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
-        }
-    } catch (error) { msgRef.edit("Erreur analyse."); }
-});
-
-// ============================================
-// 5. INTERACTIONS
-// ============================================
-client.on('interactionCreate', async interaction => {
-    try {
-        if (interaction.isButton() && (interaction.customId === 'btn_link_char' || interaction.customId === 'btn_unlink_char')) {
-            const isLink = interaction.customId === 'btn_link_char';
-            const modal = new ModalBuilder().setCustomId(isLink ? 'modal_link' : 'modal_unlink').setTitle(isLink ? 'Lier Personnage' : 'Delier Personnage');
-            modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pseudoInput').setLabel("Pseudo Dofus").setStyle(TextInputStyle.Short)));
-            await interaction.showModal(modal); return;
-        }
-
-        if (interaction.isModalSubmit()) {
-            if (interaction.customId === 'modal_correct') {
-                const w = interaction.fields.getTextInputValue('winnersInput').split(',').map(s=>s.trim()).filter(s=>s).map(s => removeAccents(s));
-                const l = interaction.fields.getTextInputValue('losersInput').split(',').map(s=>s.trim()).filter(s=>s).map(s => removeAccents(s));
-                const session = activeSessions.get(interaction.user.id);
-                if(session) {
-                    session.winners = w; session.losers = l;
-                    activeSessions.set(interaction.user.id, session);
-                    const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
-                        new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
-                        new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
-                        new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
-                    );
-                    await interaction.reply({ content: `[CORRIGE]\nGagnants: ${w.join(', ')}\nPerdants: ${l.join(', ')}`, components: [row] });
-                }
+            if (pageData.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:rgba(255,255,255,0.3);">Aucun joueur trouvé.</td></tr>`;
+                paginationDiv.innerHTML = "";
                 return;
             }
 
-            const pseudo = removeAccents(interaction.fields.getTextInputValue('pseudoInput').trim());
-            const { id: discordId, username: discordName } = interaction.user;
-            const discordNickname = removeAccents(interaction.member.displayName);
-
-            if (interaction.customId === 'modal_link') {
-                const check = await pool.query('SELECT * FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [pseudo]);
-                if (check.rows.length === 0) {
-                    await pool.query('INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4)', [pseudo, discordId, discordName, discordNickname]);
-                } else {
-                    const ex = check.rows[0];
-                    if (ex.discord_id && ex.discord_id !== discordId) return interaction.reply({ content: 'Deja lie a un autre compte.', ephemeral: true });
-                    await pool.query('UPDATE players SET discord_id = $1, discord_username = $2, discord_nickname = $3 WHERE LOWER(dofus_pseudo) = LOWER($4)', [discordId, discordName, discordNickname, pseudo]);
-                }
-                await interaction.reply({ content: `[OK] ${pseudo} lie au compte Discord.`, ephemeral: true });
-            }
-            if (interaction.customId === 'modal_unlink') {
-                await pool.query('UPDATE players SET discord_id = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
-                await interaction.reply({ content: `[OK] ${pseudo} delie.`, ephemeral: true });
-            }
-            return;
-        }
-
-        const session = activeSessions.get(interaction.user.id);
-        if (!session && ['attack','defense','result_win','result_lose'].includes(interaction.customId)) return interaction.reply({ content: "Session expiree.", ephemeral: true });
-
-        if (interaction.customId === 'reset') { activeSessions.delete(interaction.user.id); return interaction.update({ content: "Annule.", components: [] }); }
-        
-        if (interaction.customId === 'correct') {
-            const modal = new ModalBuilder().setCustomId('modal_correct').setTitle('Correction');
-            modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('winnersInput').setLabel('Gagnants').setStyle(TextInputStyle.Short).setValue(session.winners.join(', '))),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('losersInput').setLabel('Perdants').setStyle(TextInputStyle.Short).setValue(session.losers.join(', ')))
-            );
-            await interaction.showModal(modal); return;
-        }
-
-        if (interaction.customId === 'attack' || interaction.customId === 'defense') {
-            session.context = interaction.customId;
-            const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(
-                new StringSelectMenuOptionBuilder().setLabel('Standard').setValue('standard'),
-                new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_1).setValue('pool_1'),
-                new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_2).setValue('pool_2')
-            ));
-            await interaction.update({ content: `Mode: **${interaction.customId}**. Adversaire ?`, components: [row] });
-        }
-
-        else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
-            session.allianceTier = interaction.values[0];
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('result_lose').setLabel('DEFAITE').setStyle(ButtonStyle.Danger)
-            );
-            await interaction.update({ content: `Adversaire: **${session.allianceTier}**. Resultat ?`, components: [row] });
-        }
-
-        else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
-            activeSessions.delete(interaction.user.id);
-            await interaction.deferUpdate();
-
-            const hasWon = interaction.customId === 'result_win';
-            
-            // 1. NETTOYAGE DES PSEUDOS
-            const cleanWinners = session.winners.map(n => removeAccents(n));
-            const cleanLosers = session.losers.map(n => removeAccents(n));
-
-            const myTeam = hasWon ? cleanWinners : cleanLosers;
-            const enTeam = hasWon ? cleanLosers : cleanWinners;
-            
-            const myC = Math.min(Math.max(myTeam.length, 1), 5); 
-            const enC = Math.min(Math.max(enTeam.length, 1), 5);
-            
-            // Calcul Points
-            const PTS = {
-                WIN: [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
-                LOSE: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
-            };
-            let pts = hasWon ? PTS.WIN[myC-1][enC-1] : PTS.LOSE[myC-1][enC-1];
-            if (session.allianceTier === 'pool_1') pts += config.BONUSES.pool_1;
-            if (session.allianceTier === 'pool_2') pts += config.BONUSES.pool_2;
-
-            const seasonId = await ensureCurrentSeason();
-            await snapshotRanks(seasonId); // Snapshot des rangs avant modification
-            const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id", [seasonId, session.allianceTier, pts]);
-            const matchId = matchRes.rows[0].id;
-            
-            // --- LOGIQUE MULTI-COMPTE ---
-            const processedDiscordIds = new Set();
-            const paid = [], skipped = [], defeated = [];
-
-            // ON AJOUTE LE PARAMETRE 'isAlly'
-            const processPlayers = async (pseudos, isWinner, isAlly) => {
-                for (const p of pseudos) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
+            pageData.forEach((player) => {
+                // Calculs
+                const realRank = filteredPlayers.indexOf(player) + 1;
+                const winrate = player.winrate || 0;
+                const wins = player.wins || 0;
+                const losses = player.losses || 0;
                 
-                const rows = await pool.query(`
-                    SELECT id, dofus_pseudo, discord_id 
-                    FROM players 
-                    WHERE LOWER(dofus_pseudo) = ANY($1::text[])
-                    ORDER BY discord_id NULLS LAST
-                `, [pseudos.map(x=>x.toLowerCase())]);
+                // Styles CSS dynamiques
+                const rowClass = realRank <= 3 ? `top-${realRank}` : '';
+                
+                let winrateColorClass = 'text-low';
+                let winrateFillClass = 'fill-low';
+                if (winrate >= 60) { winrateColorClass = 'text-high'; winrateFillClass = 'fill-high'; }
+                else if (winrate >= 45) { winrateColorClass = 'text-mid'; winrateFillClass = 'fill-mid'; }
 
-                for (const pName of pseudos) {
-                    const pData = rows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
-                    if (!pData) continue;
+                // HTML Médaille
+                let rankHTML = `<span>${realRank}</span>`;
+                if (realRank <= 3) rankHTML = `<div class="rank-medal rank-${realRank}">${realRank}</div>`;
 
-                    // On enregistre TOUJOURS la participation (pour l'historique)
-                    await pool.query('INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, $3)', [matchId, pData.id, isWinner]);
-
-                    // MAIS on ne met a jour le classement QUE si c'est un ALLIE
-                    if (isAlly) {
-                        let shouldCountStats = true;
-
-                        if (pData.discord_id) {
-                            if (processedDiscordIds.has(pData.discord_id)) {
-                                shouldCountStats = false; // Doublon Discord
-                            } else {
-                                processedDiscordIds.add(pData.discord_id);
-                            }
-                        }
-
-                        if (shouldCountStats) {
-                            // Victoire -> toujours les points. Defaite -> points LOSE en defense, 0 en attaque
-                            let pointsToAdd;
-                            if (isWinner) {
-                                pointsToAdd = pts;
-                            } else {
-                                pointsToAdd = session.context === 'defense' ? pts : 0;
-                            }
-                            const winsToAdd = isWinner ? 1 : 0;
-                            const lossesToAdd = isWinner ? 0 : 1;
-                            
-                            await updateSeasonStats(pData.id, seasonId, { points: pointsToAdd, wins: winsToAdd, losses: lossesToAdd });
-                            
-                            if (isWinner) paid.push(pName);
-                            else defeated.push(pName);
-                        } else {
-                            if (isWinner) skipped.push(pName);
-                        }
-                    }
+                // HTML Rank Change Arrow
+                const rankChange = player.rank_change || 0;
+                let rankChangeHTML = '';
+                if (rankChange > 0) {
+                    rankChangeHTML = `<span class="rank-change up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 19V5m-7 7l7-7 7 7"/></svg>${rankChange}</span>`;
+                } else if (rankChange < 0) {
+                    rankChangeHTML = `<span class="rank-change down"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14m7-7l-7 7-7-7"/></svg>${Math.abs(rankChange)}</span>`;
                 }
-            };
 
-            // APPEL LOGIQUE :
-            // Si j'ai gagné (hasWon=true) -> Les Winners sont mes Alliés (true).
-            // Si j'ai perdu (hasWon=false) -> Les Winners sont mes Ennemis (false).
-            await processPlayers(cleanWinners, true, hasWon); // Traitement des gagnants
-            
-            // Inverse pour les perdants
-            await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
+                // Construction de la ligne
+                const row = `
+                    <tr class="player-row ${rowClass} visible">
+                        <td class="cell-rank"><div class="rank-badge">${rankHTML}${rankChangeHTML}</div></td>
+                        <td class="cell-player">
+                            <div class="player-info">
+                                <div class="player-avatar">${player.dofus_pseudo.charAt(0).toUpperCase()}</div>
+                                <span class="player-name">${player.dofus_pseudo}</span>
+                            </div>
+                        </td>
+                        <td class="cell-winrate">
+                            <div class="winrate-container">
+                                <div class="winrate-bar">
+                                    <div class="winrate-fill ${winrateFillClass}" style="width: ${winrate}%"></div>
+                                </div>
+                                <span class="winrate-value ${winrateColorClass}">${winrate}%</span>
+                            </div>
+                            <span class="winrate-detail">${wins}V / ${losses}D</span>
+                        </td>
+                        <td class="cell-score">
+                            <span class="score-value">${parseInt(player.total_points).toLocaleString()}</span>
+                            <span class="score-label">pts</span>
+                        </td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
 
-            const allCredited = [...paid, ...defeated];
-            let msg = `Points attribues a : ${allCredited.join(', ')}`;
-            
-            if (skipped.length > 0) {
-                msg += `\n[Ignores - Multi] : ${skipped.join(', ')}`;
-            }
-            
-            await interaction.editReply({ content: msg, components: [] });
+            displayPagination();
         }
 
-    } catch (e) { console.error(e); }
-});
+        // --- FONCTION : PAGINATION ---
+        function displayPagination() {
+            paginationDiv.innerHTML = "";
+            const pageCount = Math.ceil(filteredPlayers.length / rowsPerPage);
+            if (pageCount <= 1) return;
 
-async function ensureCurrentSeason() {
-    const { seasons, currentSeason } = getSeasons();
-    const cur = seasons.find(s => s.id === currentSeason);
-    if(cur) await pool.query('INSERT INTO seasons (id, start_date, end_date) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [cur.id, cur.start, cur.end]);
-    return currentSeason;
-}
+            // Bouton Précédent
+            const prevBtn = document.createElement('button');
+            prevBtn.innerHTML = "&lsaquo;";
+            prevBtn.className = "page-btn";
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.onclick = () => { currentPage--; displayTable(); };
+            paginationDiv.appendChild(prevBtn);
 
-async function snapshotRanks(seasonId) {
-    // Capture les rangs actuels avant modification
-    await pool.query(`
-        WITH ranked AS (
-            SELECT ss.player_id, ss.season_id,
-                ROW_NUMBER() OVER (ORDER BY ss.points DESC, ss.wins DESC) as current_rank
-            FROM season_stats ss
-            WHERE ss.season_id = $1 AND (ss.wins + ss.losses) > 0
-        )
-        UPDATE season_stats SET previous_rank = ranked.current_rank
-        FROM ranked
-        WHERE season_stats.player_id = ranked.player_id AND season_stats.season_id = ranked.season_id
-    `, [seasonId]);
-}
+            // Boutons numérotés intelligents
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(pageCount, currentPage + 2);
 
-async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0 }) {
-    await pool.query(`
-        INSERT INTO season_stats (player_id, season_id, points, wins, losses) VALUES ($1,$2,$3,$4,$5)
-        ON CONFLICT (player_id, season_id) DO UPDATE SET 
-        points = season_stats.points + EXCLUDED.points,
-        wins = season_stats.wins + EXCLUDED.wins,
-        losses = season_stats.losses + EXCLUDED.losses
-    `, [pid, sid, points, wins, losses]);
-}
+            if (startPage > 1) {
+                createPageBtn(1);
+                if(startPage > 2) paginationDiv.appendChild(document.createTextNode("..."));
+            }
 
-client.login(process.env.DISCORD_TOKEN);
+            for (let i = startPage; i <= endPage; i++) {
+                createPageBtn(i);
+            }
+
+            if (endPage < pageCount) {
+                if(endPage < pageCount - 1) paginationDiv.appendChild(document.createTextNode("..."));
+                createPageBtn(pageCount);
+            }
+
+            // Bouton Suivant
+            const nextBtn = document.createElement('button');
+            nextBtn.innerHTML = "&rsaquo;";
+            nextBtn.className = "page-btn";
+            nextBtn.disabled = currentPage === pageCount;
+            nextBtn.onclick = () => { currentPage++; displayTable(); };
+            paginationDiv.appendChild(nextBtn);
+
+            function createPageBtn(i) {
+                const btn = document.createElement('button');
+                btn.innerText = i;
+                btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+                btn.onclick = () => { currentPage = i; displayTable(); };
+                paginationDiv.appendChild(btn);
+            }
+        }
+
+        // --- FONCTION : FILTRER LES DONNÉES (Recherche) ---
+        function filterData(resetPage = true) {
+            const input = document.getElementById('searchInput').value.toLowerCase();
+            // On filtre sur la liste globale 'allPlayers'
+            filteredPlayers = allPlayers.filter(p => p.dofus_pseudo.toLowerCase().includes(input));
+            
+            if (resetPage) currentPage = 1; // On revient page 1 si on tape une recherche
+            displayTable();
+        }
+
+        // --- 🚀 FONCTION : FETCH DATA (Auto Update) ---
+        async function fetchLeaderboardData() {
+            try {
+                // 1. Quel saison est sélectionnée ?
+                const seasonSelect = document.getElementById('seasonSelect');
+                const seasonId = seasonSelect ? seasonSelect.value : 1;
+
+                // 2. Appel API
+                const response = await fetch(`/api/leaderboard/${seasonId}`);
+                if (!response.ok) throw new Error("Erreur réseau");
+
+                const data = await response.json();
+                
+                // 3. Mise à jour des variables
+                allPlayers = data;
+                
+                // 4. On réapplique le filtre de recherche actuel (sans reset la page si possible)
+                // Comme ça si tu es page 2, tu restes page 2
+                filterData(false);
+
+                // 5. Mise à jour des stats du Header
+                if (document.getElementById('playerCount')) {
+                    document.getElementById('playerCount').textContent = data.length;
+                }
+
+                // console.log(`🔄 Mise à jour auto effectuée (${new Date().toLocaleTimeString()})`);
+
+            } catch (error) {
+                console.error("Erreur Auto-Update:", error);
+            }
+        }
+
+        // --- INITIALISATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            displayTable(); 
+            
+            // Animation Particules
+            const container = document.getElementById('particles');
+            if(container) {
+                for (let i = 0; i < 25; i++) {
+                    const p = document.createElement('div');
+                    p.className = 'energy-particle';
+                    p.style.cssText = `left:${Math.random()*100}%; --duration:${5+Math.random()*5}s; --delay:${Math.random()*4}s; --size:${3+Math.random()*4}px;`;
+                    container.appendChild(p);
+                }
+            }
+
+            // Animation Podium
+            document.querySelectorAll('.podium-item').forEach((item, i) => {
+                setTimeout(() => item.classList.add('visible'), 200 + (i * 150));
+            });
+
+            // ⏱️ Lancer l'Auto-Update
+            setInterval(fetchLeaderboardData, UPDATE_INTERVAL);
+        });
+
+        // Events Listeners UI
+        const searchInput = document.getElementById('searchInput');
+        if(searchInput) searchInput.addEventListener('keyup', () => filterData(true));
+        
+        const searchToggle = document.getElementById('searchToggle');
+        const searchContainer = document.getElementById('searchContainer');
+        if(searchToggle && searchContainer) {
+            searchToggle.addEventListener('click', () => {
+                searchContainer.classList.toggle('expanded');
+                if(searchContainer.classList.contains('expanded')) document.getElementById('searchInput').focus();
+            });
+        }
+
+        // Changement manuel de saison (Déclenche un fetch immédiat)
+        const seasonSelect = document.getElementById('seasonSelect');
+        if(seasonSelect) {
+            seasonSelect.addEventListener('change', fetchLeaderboardData);
+        }
+    </script>
+</body>
+</html>
