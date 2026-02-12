@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ogre - Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/web/assets/logo_ogre.png">
+    <style>
+        :root {
+            --bg-primary: #264653;
+            --bg-secondary: #1d3a44;
+            --bg-card: rgba(42, 157, 143, 0.08);
+            --bg-card-hover: rgba(42, 157, 143, 0.15);
+            --border-subtle: rgba(42, 157, 143, 0.2);
+            --border-medium: rgba(42, 157, 143, 0.4);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.75);
+            --text-muted: rgba(255, 255, 255, 0.5);
+            --accent: #2a9d8f;
+            --accent-glow: rgba(42, 157, 143, 0.4);
+            --gold: #e9c46a;
+            --orange: #f4a261;
+            --red: #e76f51;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* ===== BACKGROUND ===== */
+        .bg-grid {
+            position: fixed; inset: 0;
+            background-image: 
+                linear-gradient(rgba(42, 157, 143, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(42, 157, 143, 0.04) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none; z-index: 0;
+        }
+
+        /* ===== LOGIN ===== */
+        .login-wrapper {
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; padding: 2rem; position: relative; z-index: 1;
+        }
+        .login-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
+            width: 100%; max-width: 400px;
+            backdrop-filter: blur(20px);
+        }
+        .login-card h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem; font-weight: 700;
+            margin-bottom: 0.5rem; text-align: center;
+        }
+        .login-card .subtitle {
+            color: var(--text-muted); text-align: center;
+            margin-bottom: 2rem; font-size: 0.875rem;
+        }
+        .login-error {
+            background: rgba(231, 111, 81, 0.15);
+            border: 1px solid rgba(231, 111, 81, 0.3);
+            color: var(--red); border-radius: var(--radius-sm);
+            padding: 0.75rem 1rem; margin-bottom: 1rem;
+            font-size: 0.875rem; text-align: center;
+        }
+
+        /* ===== FORM ELEMENTS ===== */
+        .form-group { margin-bottom: 1.25rem; }
+        .form-label {
+            display: block; font-size: 0.8rem; font-weight: 600;
+            color: var(--text-secondary); margin-bottom: 0.4rem;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .form-input, .form-select {
+            width: 100%; padding: 0.7rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary); font-size: 0.95rem;
+            font-family: inherit; transition: all 0.2s;
+        }
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .form-input::placeholder { color: var(--text-muted); }
+        .form-input-small { width: 100px; text-align: center; }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 0.7rem 1.5rem; border: none; border-radius: var(--radius-sm);
+            font-family: inherit; font-size: 0.9rem; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--accent); color: white;
+        }
+        .btn-primary:hover { background: #238b7e; }
+        .btn-warning {
+            background: var(--orange); color: white;
+        }
+        .btn-warning:hover { background: #e08c3a; }
+        .btn-danger {
+            background: var(--red); color: white;
+        }
+        .btn-danger:hover { background: #d4573b; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        .btn-full { width: 100%; }
+
+        /* ===== DASHBOARD LAYOUT ===== */
+        .dashboard {
+            position: relative; z-index: 1;
+            max-width: 1200px; margin: 0 auto;
+            padding: 2rem;
+        }
+        .dash-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;
+        }
+        .dash-header h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem; font-weight: 700;
+            display: flex; align-items: center; gap: 0.75rem;
+        }
+        .dash-header h1 img { height: 36px; }
+        .back-link {
+            color: var(--text-muted); text-decoration: none;
+            font-size: 0.85rem; transition: color 0.2s;
+        }
+        .back-link:hover { color: var(--text-primary); }
+
+        .dash-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            backdrop-filter: blur(20px);
+        }
+        .card-full { grid-column: 1 / -1; }
+        .card-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem; font-weight: 700;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .card-title .icon {
+            width: 20px; height: 20px;
+            color: var(--accent);
+        }
+
+        /* ===== POOLS TABLE ===== */
+        .pool-grid {
+            display: grid; grid-template-columns: 1fr 1fr 1fr auto;
+            gap: 0.75rem; align-items: end;
+        }
+        .pool-row {
+            display: contents;
+        }
+        .pool-label {
+            font-size: 0.8rem; font-weight: 600;
+            color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: 0.05em; padding-bottom: 0.5rem;
+        }
+
+        /* ===== PLAYER POINTS ===== */
+        .player-search-row {
+            display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap;
+        }
+        .player-search-row .form-group { flex: 1; min-width: 180px; margin-bottom: 0; }
+        .player-search-row .form-group.small { flex: 0 0 120px; min-width: 120px; }
+
+        /* ===== AUTOCOMPLETE ===== */
+        .autocomplete-wrapper { position: relative; }
+        .autocomplete-list {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-sm);
+            max-height: 200px; overflow-y: auto;
+            z-index: 100; display: none;
+        }
+        .autocomplete-list.show { display: block; }
+        .autocomplete-item {
+            padding: 0.5rem 1rem; cursor: pointer;
+            font-size: 0.9rem; transition: background 0.15s;
+        }
+        .autocomplete-item:hover { background: var(--bg-card-hover); }
+
+        /* ===== NUGGETS TABLE ===== */
+        .nuggets-table {
+            width: 100%; border-collapse: collapse;
+        }
+        .nuggets-table thead th {
+            text-align: left; padding: 0.6rem 0.75rem;
+            font-size: 0.75rem; font-weight: 600;
+            color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .nuggets-table tbody td {
+            padding: 0.6rem 0.75rem;
+            font-size: 0.9rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .nuggets-table tbody tr:hover { background: var(--bg-card-hover); }
+        .nuggets-rank {
+            font-weight: 700; color: var(--text-muted);
+            width: 40px;
+        }
+        .nuggets-name { font-weight: 500; }
+        .nuggets-amount {
+            font-weight: 700; color: var(--gold);
+            text-align: right;
+        }
+        .nuggets-total-row td {
+            font-weight: 700; color: var(--accent);
+            border-top: 2px solid var(--border-medium);
+            padding-top: 0.75rem;
+        }
+        .empty-state {
+            text-align: center; padding: 2rem;
+            color: var(--text-muted); font-size: 0.9rem;
+        }
+
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem;
+            padding: 0.75rem 1.5rem; border-radius: var(--radius-sm);
+            font-size: 0.9rem; font-weight: 500;
+            transform: translateY(100px); opacity: 0;
+            transition: all 0.3s ease; z-index: 1000;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { background: var(--accent); color: white; }
+        .toast.error { background: var(--red); color: white; }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .dash-grid { grid-template-columns: 1fr; }
+            .pool-grid { grid-template-columns: 1fr; }
+            .pool-label { display: none; }
+            .player-search-row { flex-direction: column; }
+            .player-search-row .form-group.small { flex: 1; min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+
+    <% if (!authenticated) { %>
+    <!-- ===== LOGIN ===== -->
+    <div class="login-wrapper">
+        <div class="login-card">
+            <h1>OGRE ADMIN</h1>
+            <p class="subtitle">Panneau d'administration</p>
+            <% if (error) { %>
+                <div class="login-error"><%= error %></div>
+            <% } %>
+            <form method="POST" action="/admin/login">
+                <div class="form-group">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" name="password" class="form-input" placeholder="Mot de passe admin" autofocus required />
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Connexion</button>
+            </form>
+        </div>
+    </div>
+
+    <% } else { %>
+    <!-- ===== DASHBOARD ===== -->
+    <div class="dashboard">
+        <div class="dash-header">
+            <h1>
+                <img src="/web/assets/logo_ogre.png" alt="Logo" />
+                ADMIN
+            </h1>
+            <div style="display:flex; gap:1rem; align-items:center;">
+                <a href="/" class="back-link">Retour au site</a>
+                <form method="POST" action="/admin/logout" style="margin:0;">
+                    <button type="submit" class="btn btn-danger btn-sm">Deconnexion</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="dash-grid">
+            <!-- ===== CARD : POOLS ===== -->
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    Bonus Pools
+                </div>
+                <form id="poolForm">
+                    <div class="pool-grid">
+                        <span class="pool-label">Pool</span>
+                        <span class="pool-label">Nom affiché</span>
+                        <span class="pool-label">Bonus pts</span>
+                        <span class="pool-label"></span>
+
+                        <div class="pool-row">
+                            <div style="display:flex;align-items:center;font-weight:600;font-size:0.9rem;">Pool 1</div>
+                        </div>
+                        <div><input type="text" name="pool_1_name" value="<%= settings.pool_1_name %>" class="form-input" /></div>
+                        <div><input type="number" name="pool_1_bonus" value="<%= settings.pool_1_bonus %>" class="form-input form-input-small" /></div>
+                        <div></div>
+
+                        <div class="pool-row">
+                            <div style="display:flex;align-items:center;font-weight:600;font-size:0.9rem;">Pool 2</div>
+                        </div>
+                        <div><input type="text" name="pool_2_name" value="<%= settings.pool_2_name %>" class="form-input" /></div>
+                        <div><input type="number" name="pool_2_bonus" value="<%= settings.pool_2_bonus %>" class="form-input form-input-small" /></div>
+                        <div></div>
+                    </div>
+                    <div style="margin-top:1.25rem; text-align:right;">
+                        <button type="submit" class="btn btn-primary">Sauvegarder</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ===== CARD : PLAYER POINTS ===== -->
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Points joueur
+                </div>
+                <form id="pointsForm">
+                    <div class="player-search-row">
+                        <div class="form-group autocomplete-wrapper">
+                            <label class="form-label">Joueur</label>
+                            <input type="text" id="playerSearch" name="pseudo" class="form-input" placeholder="Rechercher un joueur..." autocomplete="off" required />
+                            <div class="autocomplete-list" id="autocompleteList"></div>
+                        </div>
+                        <div class="form-group small">
+                            <label class="form-label">Points (+/-)</label>
+                            <input type="number" name="points" class="form-input" placeholder="Ex: 5" required />
+                        </div>
+                        <div style="padding-bottom:1px;">
+                            <button type="submit" class="btn btn-warning">Appliquer</button>
+                        </div>
+                    </div>
+                </form>
+                <div id="pointsResult" style="margin-top:1rem;"></div>
+            </div>
+
+            <!-- ===== CARD : PEPITES ===== -->
+            <div class="card card-full">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/>
+                    </svg>
+                    Classement Pepites
+                    <% if (nuggets.length > 0) { %>
+                        <span style="margin-left:auto;font-size:0.8rem;color:var(--gold);font-weight:500;">
+                            Total : <%= nuggets.reduce((s, n) => s + n.bank_nuggets, 0).toLocaleString() %>
+                        </span>
+                    <% } %>
+                </div>
+                <% if (nuggets.length === 0) { %>
+                    <div class="empty-state">Aucune pepite en banque.</div>
+                <% } else { %>
+                    <table class="nuggets-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Joueur</th>
+                                <th style="text-align:right;">Pepites</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% nuggets.forEach((n, i) => { %>
+                            <tr>
+                                <td class="nuggets-rank"><%= i + 1 %></td>
+                                <td class="nuggets-name"><%= n.name %></td>
+                                <td class="nuggets-amount"><%= n.bank_nuggets.toLocaleString() %></td>
+                            </tr>
+                            <% }); %>
+                            <tr class="nuggets-total-row">
+                                <td></td>
+                                <td>Total alliance</td>
+                                <td style="text-align:right;"><%= nuggets.reduce((s, n) => s + n.bank_nuggets, 0).toLocaleString() %></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ===== TOAST =====
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `toast ${type} show`;
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // ===== POOLS FORM =====
+        document.getElementById('poolForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const body = Object.fromEntries(fd.entries());
+            try {
+                const res = await fetch('/admin/api/pools', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.ok) showToast('Pools mis a jour.');
+                else showToast(data.error || 'Erreur.', 'error');
+            } catch { showToast('Erreur reseau.', 'error'); }
+        });
+
+        // ===== AUTOCOMPLETE =====
+        let allPlayerNames = [];
+        async function loadPlayers() {
+            try {
+                const res = await fetch('/admin/api/players');
+                allPlayerNames = await res.json();
+            } catch {}
+        }
+        loadPlayers();
+
+        const searchInput = document.getElementById('playerSearch');
+        const acList = document.getElementById('autocompleteList');
+
+        searchInput.addEventListener('input', () => {
+            const val = searchInput.value.toLowerCase();
+            if (val.length < 1) { acList.classList.remove('show'); return; }
+            const matches = allPlayerNames.filter(n => n.toLowerCase().includes(val)).slice(0, 10);
+            if (matches.length === 0) { acList.classList.remove('show'); return; }
+            acList.innerHTML = matches.map(m => `<div class="autocomplete-item">${m}</div>`).join('');
+            acList.classList.add('show');
+            acList.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    searchInput.value = item.textContent;
+                    acList.classList.remove('show');
+                });
+            });
+        });
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.autocomplete-wrapper')) acList.classList.remove('show');
+        });
+
+        // ===== POINTS FORM =====
+        document.getElementById('pointsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const body = Object.fromEntries(fd.entries());
+            try {
+                const res = await fetch('/admin/api/player-points', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast(`${data.pseudo} : ${data.newTotal} pts (${data.delta >= 0 ? '+' : ''}${data.delta})`);
+                    document.querySelector('[name="points"]').value = '';
+                } else {
+                    showToast(data.error || 'Erreur.', 'error');
+                }
+            } catch { showToast('Erreur reseau.', 'error'); }
+        });
+    </script>
+    <% } %>
+</body>
+</html>

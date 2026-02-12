@@ -134,8 +134,48 @@ async function parseNuggetsWithAI(imageUrl) {
 const app = express();
 app.set('view engine', 'ejs');
 app.set('views', __dirname);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 app.use('/assets', express.static(path.join(__dirname, 'web/assets')));
+
+// --- ADMIN AUTH ---
+const adminTokens = new Set();
+
+function adminAuth(req, res, next) {
+    const token = req.headers.cookie?.split(';').map(c => c.trim()).find(c => c.startsWith('admin_token='))?.split('=')[1];
+    if (token && adminTokens.has(token)) { req.adminAuth = true; return next(); }
+    req.adminAuth = false; next();
+}
+
+// --- LIVE SETTINGS (pool bonuses en DB) ---
+const liveConfig = {
+    pool_1_name: config.POOL_NAMES?.pool_1 || 'Pool 1',
+    pool_1_bonus: config.BONUSES?.pool_1 || 0,
+    pool_2_name: config.POOL_NAMES?.pool_2 || 'Pool 2',
+    pool_2_bonus: config.BONUSES?.pool_2 || 0
+};
+
+async function loadSettings() {
+    try {
+        await pool.query(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
+        const res = await pool.query('SELECT key, value FROM settings');
+        for (const row of res.rows) {
+            if (row.key in liveConfig) {
+                liveConfig[row.key] = row.key.includes('bonus') ? parseInt(row.value) || 0 : row.value;
+            }
+        }
+        console.log('[Settings] Chargés depuis la DB:', liveConfig);
+    } catch (e) { console.error('[Settings] Fallback config.js:', e.message); }
+}
+
+async function saveSetting(key, value) {
+    await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, String(value)]);
+    liveConfig[key] = key.includes('bonus') ? parseInt(value) || 0 : value;
+}
+
+// Charger les settings au demarrage
+loadSettings();
 
 function getSeasons() {
     const INITIAL_DATE = new Date('2026-02-01T00:00:00'); 
@@ -251,6 +291,93 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
         });
         res.json(players);
     } catch (error) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// ============================================
+// 3b. ROUTES ADMIN
+// ============================================
+app.get('/admin', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.render('admin', { authenticated: false, error: null });
+    try {
+        const nuggetsRes = await pool.query(`
+            SELECT COALESCE(discord_nickname, dofus_pseudo) as name, bank_nuggets 
+            FROM players WHERE bank_nuggets > 0 ORDER BY bank_nuggets DESC
+        `);
+        res.render('admin', { 
+            authenticated: true, error: null,
+            settings: liveConfig,
+            nuggets: nuggetsRes.rows
+        });
+    } catch (e) { 
+        console.error(e);
+        res.render('admin', { authenticated: true, error: null, settings: liveConfig, nuggets: [] });
+    }
+});
+
+app.post('/admin/login', (req, res) => {
+    const pwd = req.body.password;
+    if (pwd === process.env.ADMIN_PASSWORD) {
+        const token = crypto.randomBytes(32).toString('hex');
+        adminTokens.add(token);
+        res.setHeader('Set-Cookie', `admin_token=${token}; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=86400`);
+        return res.redirect('/admin');
+    }
+    res.render('admin', { authenticated: false, error: 'Mot de passe incorrect.' });
+});
+
+app.post('/admin/logout', (req, res) => {
+    const token = req.headers.cookie?.split(';').map(c => c.trim()).find(c => c.startsWith('admin_token='))?.split('=')[1];
+    if (token) adminTokens.delete(token);
+    res.setHeader('Set-Cookie', 'admin_token=; Path=/admin; Max-Age=0');
+    res.redirect('/admin');
+});
+
+app.post('/admin/api/pools', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { pool_1_name, pool_1_bonus, pool_2_name, pool_2_bonus } = req.body;
+        await saveSetting('pool_1_name', pool_1_name);
+        await saveSetting('pool_1_bonus', pool_1_bonus);
+        await saveSetting('pool_2_name', pool_2_name);
+        await saveSetting('pool_2_bonus', pool_2_bonus);
+        res.json({ ok: true });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+app.get('/admin/api/players', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json([]);
+    try {
+        const r = await pool.query(`SELECT COALESCE(discord_nickname, dofus_pseudo) as name FROM players ORDER BY name`);
+        res.json(r.rows.map(p => p.name));
+    } catch { res.json([]); }
+});
+
+app.post('/admin/api/player-points', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { pseudo, points } = req.body;
+        const pts = parseInt(points);
+        if (!pseudo || isNaN(pts)) return res.status(400).json({ error: 'Pseudo ou points invalides.' });
+
+        // Trouver le joueur
+        const playerRes = await pool.query(`
+            SELECT id, COALESCE(discord_nickname, dofus_pseudo) as name 
+            FROM players WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1)
+        `, [pseudo]);
+        if (playerRes.rows.length === 0) return res.status(404).json({ error: 'Joueur introuvable.' });
+
+        const playerId = playerRes.rows[0].id;
+        const playerName = playerRes.rows[0].name;
+        const seasonId = await ensureCurrentSeason();
+
+        await updateSeasonStats(playerId, seasonId, { points: pts, wins: 0, losses: 0 });
+
+        // Recalculer le total
+        const totalRes = await pool.query('SELECT SUM(points) as total FROM season_stats WHERE player_id = $1', [playerId]);
+        const newTotal = parseInt(totalRes.rows[0].total) || 0;
+
+        res.json({ ok: true, pseudo: playerName, delta: pts, newTotal });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${config.WEB_PORT}`); });
@@ -495,15 +622,15 @@ client.on('interactionCreate', async interaction => {
             session.context = interaction.customId;
             const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(
                 new StringSelectMenuOptionBuilder().setLabel('Standard').setValue('standard'),
-                new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_1).setValue('pool_1'),
-                new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_2).setValue('pool_2')
+                new StringSelectMenuOptionBuilder().setLabel(liveConfig.pool_1_name).setValue('pool_1'),
+                new StringSelectMenuOptionBuilder().setLabel(liveConfig.pool_2_name).setValue('pool_2')
             ));
             await interaction.update({ content: `Mode : **${interaction.customId}**. Adversaire ?`, components: [row] });
         }
 
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
             session.allianceTier = interaction.values[0];
-            const tierName = session.allianceTier === 'standard' ? 'Standard' : (config.POOL_NAMES[session.allianceTier] || session.allianceTier);
+            const tierName = session.allianceTier === 'standard' ? 'Standard' : (liveConfig[session.allianceTier + '_name'] || session.allianceTier);
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
@@ -533,8 +660,8 @@ client.on('interactionCreate', async interaction => {
                 LOSE: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
             };
             let pts = hasWon ? PTS.WIN[myC-1][enC-1] : PTS.LOSE[myC-1][enC-1];
-            if (session.allianceTier === 'pool_1') pts += config.BONUSES.pool_1;
-            if (session.allianceTier === 'pool_2') pts += config.BONUSES.pool_2;
+            if (session.allianceTier === 'pool_1') pts += liveConfig.pool_1_bonus;
+            if (session.allianceTier === 'pool_2') pts += liveConfig.pool_2_bonus;
 
             const seasonId = await ensureCurrentSeason();
             await snapshotRanks(seasonId); // Snapshot des rangs avant modification
