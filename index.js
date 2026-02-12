@@ -285,13 +285,13 @@ client.on('messageCreate', async message => {
         try {
             const cleanArg = removeAccents(args[1]);
             await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [cleanArg]);
-            return message.reply(`[OK] Joueur ${cleanArg} ajoute.`);
-        } catch (err) { return message.reply("Erreur ajout."); }
+            return message.reply(`[OK] Joueur ${cleanArg} ajouté.`);
+        } catch (err) { return message.reply("Erreur d'ajout."); }
     }
     // --- CLASSEMENT PEPITES (STAFF) ---
     if (message.content === '!pepites') {
         if (!hasStaffRole(message.member)) {
-            return message.reply("[REFUS] Cette commande est reservee au STAFF.");
+            return message.reply("[REFUS] Cette commande est réservée au STAFF.");
         }
 
         try {
@@ -302,7 +302,7 @@ client.on('messageCreate', async message => {
                 ORDER BY bank_nuggets DESC 
             `);
 
-            if (res.rows.length === 0) return message.reply("Aucune pepite en banque.");
+            if (res.rows.length === 0) return message.reply("Aucune pépite en banque.");
 
             const lines = res.rows.map((p, i) => {
                 let rank = `${i + 1}.`;
@@ -314,40 +314,40 @@ client.on('messageCreate', async message => {
             const topList = lines.slice(0, 20).join('\n');
             
             const embed = new EmbedBuilder()
-                .setTitle('Banque des Pepites (Alliance)')
+                .setTitle('Banque des Pépites (Alliance)')
                 .setColor(0xFFD700)
                 .setDescription(topList)
-                .setFooter({ text: `Total accumule - Top 20 sur ${res.rows.length} comptes` });
+                .setFooter({ text: `Total accumulé - Top 20 sur ${res.rows.length} comptes` });
 
             return message.reply({ embeds: [embed] });
 
         } catch (e) {
             console.error(e);
-            return message.reply("Erreur recuperation pepites.");
+            return message.reply("Erreur récupération pépites.");
         }
     }
 
     // --- RESET PEPITES (STAFF) ---
     if (message.content === '!resetpepites') {
         if (!hasStaffRole(message.member)) {
-            return message.reply("[REFUS] Cette commande est reservee au STAFF.");
+            return message.reply("[REFUS] Cette commande est réservée au STAFF.");
         }
         try {
             await pool.query('UPDATE players SET bank_nuggets = 0 WHERE bank_nuggets > 0');
             await pool.query('DELETE FROM nuggets');
-            return message.reply("[OK] Toutes les pepites ont ete remises a zero.");
+            return message.reply("[OK] Toutes les pépites ont été remises à zéro.");
         } catch (e) {
             console.error(e);
-            return message.reply("Erreur reset pepites.");
+            return message.reply("Erreur reset pépites.");
         }
     }
 
     if (message.content === '!setup_profile' && message.member.permissions.has('Administrator')) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('btn_link_char').setLabel('Lier un Personnage').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('btn_unlink_char').setLabel('Delier un Personnage').setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('btn_unlink_char').setLabel('Délier un Personnage').setStyle(ButtonStyle.Danger)
         );
-        const embed = new EmbedBuilder().setTitle('Gestion de vos Personnages').setDescription("Liez vos personnages Dofus a votre compte Discord !").setColor(0x00FF00);
+        const embed = new EmbedBuilder().setTitle('Gestion de vos Personnages').setDescription("Liez vos personnages Dofus à votre compte Discord !").setColor(0x00FF00);
         const ch = await client.channels.fetch(config.PROFILE_CHANNEL_ID);
         if(ch) ch.send({ embeds: [embed], components: [row] });
     }
@@ -356,7 +356,7 @@ client.on('messageCreate', async message => {
     if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
-        const msgRef = await message.reply('Analyse pepites...');
+        const msgRef = await message.reply('Analyse pépites...');
         
         try {
             for (const [id, attachment] of attachments) {
@@ -365,7 +365,7 @@ client.on('messageCreate', async message => {
                 const imageHash = crypto.createHash('sha256').update(Buffer.from(imgBuffer)).digest('hex');
                 
                 const dup = await pool.query('SELECT id FROM nuggets WHERE image_hash = $1', [imageHash]);
-                if (dup.rows.length > 0) { await msgRef.edit('Image deja traitee.'); return; }
+                if (dup.rows.length > 0) { await msgRef.edit('Image déjà traitée.'); return; }
 
                 const parsed = await parseNuggetsWithAI(attachment.url);
                 
@@ -382,7 +382,7 @@ client.on('messageCreate', async message => {
                 await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
                 await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, recipientId]);
 
-                await msgRef.edit(`[OK] ${parsed.alliance_amount} pepites alliance.\n[+] ${playerShare} pour ${recipientName}.`);
+                await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${recipientName}.`);
             }
         } catch (e) { 
             console.error(e);
@@ -412,7 +412,7 @@ client.on('messageCreate', async message => {
         if (userSession.winners.length > 0 && userSession.losers.length > 0) {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('defense').setLabel('Défense').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
@@ -420,7 +420,7 @@ client.on('messageCreate', async message => {
         } else {
             await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
         }
-    } catch (error) { msgRef.edit("Erreur analyse."); }
+    } catch (error) { msgRef.edit("Erreur d'analyse."); }
 });
 
 // ============================================
@@ -445,11 +445,11 @@ client.on('interactionCreate', async interaction => {
                     activeSessions.set(interaction.user.id, session);
                     const row = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
-                        new ButtonBuilder().setCustomId('defense').setLabel('Defense').setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder().setCustomId('defense').setLabel('Défense').setStyle(ButtonStyle.Primary),
                         new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                         new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
                     );
-                    await interaction.reply({ content: `[CORRIGE]\nGagnants: ${w.join(', ')}\nPerdants: ${l.join(', ')}`, components: [row] });
+                    await interaction.reply({ content: `[CORRIGÉ]\nGagnants: ${w.join(', ')}\nPerdants: ${l.join(', ')}`, components: [row] });
                 }
                 return;
             }
@@ -464,22 +464,22 @@ client.on('interactionCreate', async interaction => {
                     await pool.query('INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4)', [pseudo, discordId, discordName, discordNickname]);
                 } else {
                     const ex = check.rows[0];
-                    if (ex.discord_id && ex.discord_id !== discordId) return interaction.reply({ content: 'Deja lie a un autre compte.', ephemeral: true });
+                    if (ex.discord_id && ex.discord_id !== discordId) return interaction.reply({ content: 'Déjà lié à un autre compte.', ephemeral: true });
                     await pool.query('UPDATE players SET discord_id = $1, discord_username = $2, discord_nickname = $3 WHERE LOWER(dofus_pseudo) = LOWER($4)', [discordId, discordName, discordNickname, pseudo]);
                 }
-                await interaction.reply({ content: `[OK] ${pseudo} lie au compte Discord.`, ephemeral: true });
+                await interaction.reply({ content: `[OK] ${pseudo} lié au compte Discord.`, ephemeral: true });
             }
             if (interaction.customId === 'modal_unlink') {
                 await pool.query('UPDATE players SET discord_id = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
-                await interaction.reply({ content: `[OK] ${pseudo} delie.`, ephemeral: true });
+                await interaction.reply({ content: `[OK] ${pseudo} délié.`, ephemeral: true });
             }
             return;
         }
 
         const session = activeSessions.get(interaction.user.id);
-        if (!session && ['attack','defense','result_win','result_lose'].includes(interaction.customId)) return interaction.reply({ content: "Session expiree.", ephemeral: true });
+        if (!session && ['attack','defense','result_win','result_lose'].includes(interaction.customId)) return interaction.reply({ content: "Session expirée.", ephemeral: true });
 
-        if (interaction.customId === 'reset') { activeSessions.delete(interaction.user.id); return interaction.update({ content: "Annule.", components: [] }); }
+        if (interaction.customId === 'reset') { activeSessions.delete(interaction.user.id); return interaction.update({ content: "Annulé.", components: [] }); }
         
         if (interaction.customId === 'correct') {
             const modal = new ModalBuilder().setCustomId('modal_correct').setTitle('Correction');
@@ -497,16 +497,17 @@ client.on('interactionCreate', async interaction => {
                 new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_1).setValue('pool_1'),
                 new StringSelectMenuOptionBuilder().setLabel(config.POOL_NAMES.pool_2).setValue('pool_2')
             ));
-            await interaction.update({ content: `Mode: **${interaction.customId}**. Adversaire ?`, components: [row] });
+            await interaction.update({ content: `Mode : **${interaction.customId}**. Adversaire ?`, components: [row] });
         }
 
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
             session.allianceTier = interaction.values[0];
+            const tierName = session.allianceTier === 'standard' ? 'Standard' : (config.POOL_NAMES[session.allianceTier] || session.allianceTier);
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('result_lose').setLabel('DEFAITE').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
             );
-            await interaction.update({ content: `Adversaire: **${session.allianceTier}**. Resultat ?`, components: [row] });
+            await interaction.update({ content: `Adversaire : **${tierName}**. Résultat ?`, components: [row] });
         }
 
         else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
@@ -604,10 +605,10 @@ client.on('interactionCreate', async interaction => {
             await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
 
             const allCredited = [...paid, ...defeated];
-            let msg = `Points attribues a : ${allCredited.join(', ')}`;
+            let msg = `Points attribués à : ${allCredited.join(', ')}`;
             
             if (skipped.length > 0) {
-                msg += `\n[Ignores - Multi] : ${skipped.join(', ')}`;
+                msg += `\n[Ignorés - Multi] : ${skipped.join(', ')}`;
             }
             
             await interaction.editReply({ content: msg, components: [] });

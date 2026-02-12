@@ -258,7 +258,7 @@
     <footer class="footer">
         <span>ALLIANCE PVP TRACKER</span>
         <span class="footer-dot"></span>
-        <span>Mise a jour: <%= new Date().toLocaleString('fr-FR') %></span>
+        <span>Mise à jour : <%= new Date().toLocaleString('fr-FR') %></span>
     </footer>
 
     <script>
@@ -292,7 +292,7 @@
 
             pageData.forEach((player) => {
                 // Calculs
-                const realRank = filteredPlayers.indexOf(player) + 1;
+                const realRank = allPlayers.indexOf(player) + 1;
                 const winrate = player.winrate || 0;
                 const wins = player.wins || 0;
                 const losses = player.losses || 0;
