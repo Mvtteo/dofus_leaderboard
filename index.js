@@ -605,7 +605,18 @@ client.on('interactionCreate', async interaction => {
             await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
 
             const allCredited = [...paid, ...defeated];
-            let msg = `Points attribués à : ${allCredited.join(', ')}`;
+            const defPts = session.context === 'defense' ? pts : 0;
+            
+            let msg;
+            if (paid.length > 0 && defeated.length > 0) {
+                msg = `**+${pts} pts** : ${paid.join(', ')}\n**+${defPts} pts** (défaite) : ${defeated.join(', ')}`;
+            } else if (paid.length > 0) {
+                msg = `**+${pts} pts** : ${paid.join(', ')}`;
+            } else if (defeated.length > 0) {
+                msg = `**+${defPts} pts** : ${defeated.join(', ')}`;
+            } else {
+                msg = `Aucun joueur crédité.`;
+            }
             
             if (skipped.length > 0) {
                 msg += `\n[Ignorés - Multi] : ${skipped.join(', ')}`;
