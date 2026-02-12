@@ -10,43 +10,56 @@
     <link rel="icon" type="image/png" href="/web/assets/logo_ogre.png">
     <style>
         :root {
-            --bg-primary: #264653;
-            --bg-secondary: #1d3a44;
-            --bg-card: rgba(42, 157, 143, 0.08);
-            --bg-card-hover: rgba(42, 157, 143, 0.15);
-            --border-subtle: rgba(42, 157, 143, 0.2);
-            --border-medium: rgba(42, 157, 143, 0.4);
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255, 255, 255, 0.75);
-            --text-muted: rgba(255, 255, 255, 0.5);
+            --bg-deep: #0b1218;
+            --bg-primary: #0f1923;
+            --bg-card: rgba(42, 157, 143, 0.04);
+            --bg-card-hover: rgba(42, 157, 143, 0.08);
+            --bg-input: rgba(255, 255, 255, 0.03);
+            --border-subtle: rgba(42, 157, 143, 0.12);
+            --border-medium: rgba(42, 157, 143, 0.25);
+            --text-primary: #e8edf2;
+            --text-secondary: rgba(232, 237, 242, 0.65);
+            --text-muted: rgba(232, 237, 242, 0.35);
             --accent: #2a9d8f;
-            --accent-glow: rgba(42, 157, 143, 0.4);
+            --accent-bright: #3dc4b3;
+            --accent-glow: rgba(42, 157, 143, 0.25);
             --gold: #e9c46a;
+            --gold-glow: rgba(233, 196, 106, 0.2);
             --orange: #f4a261;
             --red: #e76f51;
             --radius-sm: 8px;
             --radius-md: 12px;
             --radius-lg: 16px;
+            --radius-xl: 24px;
         }
-
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
         body {
-            background: var(--bg-primary);
+            background: var(--bg-deep);
             color: var(--text-primary);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            line-height: 1.6;
-            min-height: 100vh;
+            line-height: 1.6; min-height: 100vh; overflow-x: hidden;
         }
 
         /* ===== BACKGROUND ===== */
+        .bg-container { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+        .bg-gradient {
+            position: absolute; inset: 0;
+            background: 
+                radial-gradient(ellipse 800px 600px at 20% 20%, rgba(42, 157, 143, 0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 600px 800px at 80% 80%, rgba(233, 196, 106, 0.04) 0%, transparent 60%),
+                radial-gradient(ellipse 400px 400px at 50% 50%, rgba(42, 157, 143, 0.03) 0%, transparent 60%);
+        }
         .bg-grid {
-            position: fixed; inset: 0;
+            position: absolute; inset: 0;
             background-image: 
-                linear-gradient(rgba(42, 157, 143, 0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(42, 157, 143, 0.04) 1px, transparent 1px);
-            background-size: 60px 60px;
-            pointer-events: none; z-index: 0;
+                linear-gradient(rgba(42, 157, 143, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(42, 157, 143, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+        .bg-noise {
+            position: absolute; inset: 0; opacity: 0.015;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 256px;
         }
 
         /* ===== LOGIN ===== */
@@ -55,135 +68,164 @@
             min-height: 100vh; padding: 2rem; position: relative; z-index: 1;
         }
         .login-card {
-            background: var(--bg-card);
+            background: linear-gradient(145deg, rgba(42, 157, 143, 0.06), rgba(15, 25, 35, 0.95));
             border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-lg);
-            padding: 2.5rem;
-            width: 100%; max-width: 400px;
-            backdrop-filter: blur(20px);
+            border-radius: var(--radius-xl);
+            padding: 3rem 2.5rem;
+            width: 100%; max-width: 420px;
+            backdrop-filter: blur(40px);
+            box-shadow: 0 0 80px rgba(42, 157, 143, 0.06), 0 25px 50px rgba(0, 0, 0, 0.4);
+            position: relative; overflow: hidden;
+        }
+        .login-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+        }
+        .login-logo {
+            width: 56px; height: 56px; margin: 0 auto 1.5rem; display: block; opacity: 0.9;
         }
         .login-card h1 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.5rem; font-weight: 700;
-            margin-bottom: 0.5rem; text-align: center;
+            font-size: 1.6rem; font-weight: 700; text-align: center; letter-spacing: 0.08em;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-bright));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
         .login-card .subtitle {
             color: var(--text-muted); text-align: center;
-            margin-bottom: 2rem; font-size: 0.875rem;
+            margin-bottom: 2.5rem; font-size: 0.85rem; letter-spacing: 0.02em;
         }
         .login-error {
-            background: rgba(231, 111, 81, 0.15);
-            border: 1px solid rgba(231, 111, 81, 0.3);
+            background: rgba(231, 111, 81, 0.08);
+            border: 1px solid rgba(231, 111, 81, 0.2);
             color: var(--red); border-radius: var(--radius-sm);
-            padding: 0.75rem 1rem; margin-bottom: 1rem;
-            font-size: 0.875rem; text-align: center;
+            padding: 0.75rem 1rem; margin-bottom: 1.25rem;
+            font-size: 0.85rem; text-align: center;
         }
 
-        /* ===== FORM ELEMENTS ===== */
+        /* ===== FORM ===== */
         .form-group { margin-bottom: 1.25rem; }
         .form-label {
-            display: block; font-size: 0.8rem; font-weight: 600;
-            color: var(--text-secondary); margin-bottom: 0.4rem;
-            text-transform: uppercase; letter-spacing: 0.05em;
+            display: block; font-size: 0.7rem; font-weight: 600;
+            color: var(--text-muted); margin-bottom: 0.5rem;
+            text-transform: uppercase; letter-spacing: 0.1em;
         }
-        .form-input, .form-select {
-            width: 100%; padding: 0.7rem 1rem;
-            background: rgba(255, 255, 255, 0.05);
+        .form-input {
+            width: 100%; padding: 0.75rem 1rem;
+            background: var(--bg-input);
             border: 1px solid var(--border-subtle);
             border-radius: var(--radius-sm);
-            color: var(--text-primary); font-size: 0.95rem;
-            font-family: inherit; transition: all 0.2s;
+            color: var(--text-primary); font-size: 0.9rem;
+            font-family: inherit; transition: all 0.25s ease;
         }
-        .form-input:focus, .form-select:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
+        .form-input:focus {
+            outline: none; border-color: var(--accent);
+            background: rgba(42, 157, 143, 0.04);
+            box-shadow: 0 0 0 3px rgba(42, 157, 143, 0.1), 0 0 20px rgba(42, 157, 143, 0.05);
         }
         .form-input::placeholder { color: var(--text-muted); }
         .form-input-small { width: 100px; text-align: center; }
 
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-            padding: 0.7rem 1.5rem; border: none; border-radius: var(--radius-sm);
-            font-family: inherit; font-size: 0.9rem; font-weight: 600;
-            cursor: pointer; transition: all 0.2s;
+            padding: 0.75rem 1.5rem; border: none; border-radius: var(--radius-sm);
+            font-family: inherit; font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: all 0.25s ease; letter-spacing: 0.02em;
         }
         .btn-primary {
-            background: var(--accent); color: white;
+            background: linear-gradient(135deg, var(--accent), #1f7a6f); color: white;
+            box-shadow: 0 4px 15px rgba(42, 157, 143, 0.25);
         }
-        .btn-primary:hover { background: #238b7e; }
+        .btn-primary:hover { box-shadow: 0 6px 25px rgba(42, 157, 143, 0.35); transform: translateY(-1px); }
         .btn-warning {
-            background: var(--orange); color: white;
+            background: linear-gradient(135deg, var(--orange), #d4803a); color: white;
+            box-shadow: 0 4px 15px rgba(244, 162, 97, 0.2);
         }
-        .btn-warning:hover { background: #e08c3a; }
+        .btn-warning:hover { box-shadow: 0 6px 25px rgba(244, 162, 97, 0.3); transform: translateY(-1px); }
         .btn-danger {
-            background: var(--red); color: white;
+            background: rgba(231, 111, 81, 0.15); color: var(--red);
+            border: 1px solid rgba(231, 111, 81, 0.25);
         }
-        .btn-danger:hover { background: #d4573b; }
-        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        .btn-danger:hover { background: rgba(231, 111, 81, 0.25); }
+        .btn-sm { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
         .btn-full { width: 100%; }
 
-        /* ===== DASHBOARD LAYOUT ===== */
+        /* ===== DASHBOARD ===== */
         .dashboard {
             position: relative; z-index: 1;
-            max-width: 1200px; margin: 0 auto;
-            padding: 2rem;
+            max-width: 1200px; margin: 0 auto; padding: 2rem;
         }
         .dash-header {
             display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;
+            margin-bottom: 2.5rem; flex-wrap: wrap; gap: 1rem;
         }
-        .dash-header h1 {
+        .dash-brand { display: flex; align-items: center; gap: 0.75rem; }
+        .dash-brand img { height: 38px; opacity: 0.9; }
+        .dash-brand h1 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.5rem; font-weight: 700;
-            display: flex; align-items: center; gap: 0.75rem;
+            font-size: 1.4rem; font-weight: 700; letter-spacing: 0.06em;
         }
-        .dash-header h1 img { height: 36px; }
+        .dash-brand .badge {
+            background: linear-gradient(135deg, var(--accent), #1f7a6f);
+            color: white; font-size: 0.6rem; font-weight: 700;
+            padding: 0.2rem 0.6rem; border-radius: 20px;
+            letter-spacing: 0.1em; text-transform: uppercase;
+        }
+        .dash-actions { display: flex; gap: 1rem; align-items: center; }
         .back-link {
             color: var(--text-muted); text-decoration: none;
-            font-size: 0.85rem; transition: color 0.2s;
+            font-size: 0.8rem; transition: all 0.2s;
+            display: flex; align-items: center; gap: 0.4rem;
         }
-        .back-link:hover { color: var(--text-primary); }
+        .back-link:hover { color: var(--accent-bright); }
+        .back-link svg { width: 14px; height: 14px; }
 
-        .dash-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-        }
+        /* ===== CARDS ===== */
+        .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
         .card {
-            background: var(--bg-card);
+            background: linear-gradient(160deg, rgba(42, 157, 143, 0.04), rgba(15, 25, 35, 0.6));
             border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-lg);
-            padding: 1.5rem;
+            border-radius: var(--radius-lg); padding: 1.75rem;
             backdrop-filter: blur(20px);
+            position: relative; overflow: hidden; transition: border-color 0.3s;
+        }
+        .card:hover { border-color: var(--border-medium); }
+        .card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border-medium), transparent);
+            opacity: 0.5;
         }
         .card-full { grid-column: 1 / -1; }
         .card-title {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.1rem; font-weight: 700;
-            margin-bottom: 1.25rem;
-            padding-bottom: 0.75rem;
+            font-size: 0.95rem; font-weight: 700;
+            margin-bottom: 1.5rem; padding-bottom: 0.85rem;
             border-bottom: 1px solid var(--border-subtle);
-            display: flex; align-items: center; gap: 0.5rem;
+            display: flex; align-items: center; gap: 0.6rem;
+            letter-spacing: 0.03em; color: var(--text-secondary);
         }
         .card-title .icon {
-            width: 20px; height: 20px;
-            color: var(--accent);
+            width: 18px; height: 18px; color: var(--accent);
+            filter: drop-shadow(0 0 4px var(--accent-glow));
         }
 
-        /* ===== POOLS TABLE ===== */
+        /* ===== POOLS ===== */
         .pool-grid {
-            display: grid; grid-template-columns: 1fr 1fr 1fr auto;
-            gap: 0.75rem; align-items: end;
+            display: grid; grid-template-columns: 100px 1fr 100px;
+            gap: 0.75rem 1rem; align-items: center;
         }
-        .pool-row {
-            display: contents;
+        .pool-label-header {
+            font-size: 0.65rem; font-weight: 600; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 0.3rem;
         }
-        .pool-label {
-            font-size: 0.8rem; font-weight: 600;
-            color: var(--text-muted); text-transform: uppercase;
-            letter-spacing: 0.05em; padding-bottom: 0.5rem;
+        .pool-name {
+            font-weight: 600; font-size: 0.9rem; color: var(--text-secondary);
+            display: flex; align-items: center; gap: 0.5rem;
         }
+        .pool-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);
+        }
+        .pool-dot.gold { background: var(--gold); box-shadow: 0 0 8px var(--gold-glow); }
 
         /* ===== PLAYER POINTS ===== */
         .player-search-row {
@@ -192,88 +234,102 @@
         .player-search-row .form-group { flex: 1; min-width: 180px; margin-bottom: 0; }
         .player-search-row .form-group.small { flex: 0 0 120px; min-width: 120px; }
 
-        /* ===== AUTOCOMPLETE ===== */
         .autocomplete-wrapper { position: relative; }
         .autocomplete-list {
-            position: absolute; top: 100%; left: 0; right: 0;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-medium);
-            border-radius: var(--radius-sm);
-            max-height: 200px; overflow-y: auto;
-            z-index: 100; display: none;
+            position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+            background: var(--bg-primary); border: 1px solid var(--border-medium);
+            border-radius: var(--radius-sm); max-height: 200px; overflow-y: auto;
+            z-index: 100; display: none; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         }
         .autocomplete-list.show { display: block; }
         .autocomplete-item {
-            padding: 0.5rem 1rem; cursor: pointer;
-            font-size: 0.9rem; transition: background 0.15s;
+            padding: 0.55rem 1rem; cursor: pointer;
+            font-size: 0.85rem; transition: all 0.15s; color: var(--text-secondary);
         }
-        .autocomplete-item:hover { background: var(--bg-card-hover); }
+        .autocomplete-item:hover { background: var(--accent-glow); color: var(--text-primary); }
 
         /* ===== NUGGETS TABLE ===== */
-        .nuggets-table {
-            width: 100%; border-collapse: collapse;
-        }
+        .nuggets-table { width: 100%; border-collapse: collapse; }
         .nuggets-table thead th {
             text-align: left; padding: 0.6rem 0.75rem;
-            font-size: 0.75rem; font-weight: 600;
-            color: var(--text-muted); text-transform: uppercase;
-            letter-spacing: 0.05em;
+            font-size: 0.65rem; font-weight: 600; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.1em;
             border-bottom: 1px solid var(--border-subtle);
         }
         .nuggets-table tbody td {
-            padding: 0.6rem 0.75rem;
-            font-size: 0.9rem;
-            border-bottom: 1px solid rgba(255,255,255,0.04);
+            padding: 0.65rem 0.75rem; font-size: 0.875rem;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
         }
+        .nuggets-table tbody tr { transition: background 0.15s; }
         .nuggets-table tbody tr:hover { background: var(--bg-card-hover); }
-        .nuggets-rank {
-            font-weight: 700; color: var(--text-muted);
-            width: 40px;
-        }
+        .nuggets-rank { font-weight: 700; color: var(--text-muted); width: 40px; font-size: 0.8rem; }
+        .nuggets-rank-1 { color: var(--gold); }
+        .nuggets-rank-2 { color: var(--accent-bright); }
+        .nuggets-rank-3 { color: var(--orange); }
         .nuggets-name { font-weight: 500; }
-        .nuggets-amount {
-            font-weight: 700; color: var(--gold);
-            text-align: right;
-        }
+        .nuggets-amount { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+        .nuggets-amount-gold { color: var(--gold); text-shadow: 0 0 12px var(--gold-glow); }
         .nuggets-total-row td {
-            font-weight: 700; color: var(--accent);
-            border-top: 2px solid var(--border-medium);
-            padding-top: 0.75rem;
+            font-weight: 700; color: var(--accent-bright);
+            border-top: 1px solid var(--border-medium); padding-top: 0.85rem;
         }
-        .empty-state {
-            text-align: center; padding: 2rem;
-            color: var(--text-muted); font-size: 0.9rem;
-        }
+        .empty-state { text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.85rem; }
 
         /* ===== TOAST ===== */
         .toast {
             position: fixed; bottom: 2rem; right: 2rem;
-            padding: 0.75rem 1.5rem; border-radius: var(--radius-sm);
-            font-size: 0.9rem; font-weight: 500;
+            padding: 0.85rem 1.75rem; border-radius: var(--radius-md);
+            font-size: 0.85rem; font-weight: 600;
             transform: translateY(100px); opacity: 0;
-            transition: all 0.3s ease; z-index: 1000;
+            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 1000; backdrop-filter: blur(20px);
         }
         .toast.show { transform: translateY(0); opacity: 1; }
-        .toast.success { background: var(--accent); color: white; }
-        .toast.error { background: var(--red); color: white; }
+        .toast.success {
+            background: rgba(42, 157, 143, 0.15); border: 1px solid rgba(42, 157, 143, 0.3);
+            color: var(--accent-bright); box-shadow: 0 8px 32px rgba(42, 157, 143, 0.15);
+        }
+        .toast.error {
+            background: rgba(231, 111, 81, 0.15); border: 1px solid rgba(231, 111, 81, 0.3);
+            color: var(--red); box-shadow: 0 8px 32px rgba(231, 111, 81, 0.1);
+        }
 
-        /* ===== RESPONSIVE ===== */
+        /* ===== ANIMATIONS ===== */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .card { animation: fadeUp 0.5s ease both; }
+        .card:nth-child(1) { animation-delay: 0.05s; }
+        .card:nth-child(2) { animation-delay: 0.12s; }
+        .card:nth-child(3) { animation-delay: 0.19s; }
+        .login-card { animation: fadeUp 0.6s ease both; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
         @media (max-width: 768px) {
             .dash-grid { grid-template-columns: 1fr; }
-            .pool-grid { grid-template-columns: 1fr; }
-            .pool-label { display: none; }
+            .pool-grid { grid-template-columns: 80px 1fr 80px; }
             .player-search-row { flex-direction: column; }
             .player-search-row .form-group.small { flex: 1; min-width: 100%; }
+            .dashboard { padding: 1rem; }
         }
     </style>
 </head>
 <body>
-    <div class="bg-grid"></div>
+    <div class="bg-container">
+        <div class="bg-gradient"></div>
+        <div class="bg-grid"></div>
+        <div class="bg-noise"></div>
+    </div>
 
     <% if (!authenticated) { %>
-    <!-- ===== LOGIN ===== -->
     <div class="login-wrapper">
         <div class="login-card">
+            <img src="/web/assets/logo_ogre.png" alt="Logo" class="login-logo" />
             <h1>OGRE ADMIN</h1>
             <p class="subtitle">Panneau d'administration</p>
             <% if (error) { %>
@@ -282,7 +338,7 @@
             <form method="POST" action="/admin/login">
                 <div class="form-group">
                     <label class="form-label">Mot de passe</label>
-                    <input type="password" name="password" class="form-input" placeholder="Mot de passe admin" autofocus required />
+                    <input type="password" name="password" class="form-input" placeholder="Mot de passe" autofocus required />
                 </div>
                 <button type="submit" class="btn btn-primary btn-full">Connexion</button>
             </form>
@@ -290,15 +346,18 @@
     </div>
 
     <% } else { %>
-    <!-- ===== DASHBOARD ===== -->
     <div class="dashboard">
         <div class="dash-header">
-            <h1>
+            <div class="dash-brand">
                 <img src="/web/assets/logo_ogre.png" alt="Logo" />
-                ADMIN
-            </h1>
-            <div style="display:flex; gap:1rem; align-items:center;">
-                <a href="/" class="back-link">Retour au site</a>
+                <h1>OGRE</h1>
+                <span class="badge">Admin</span>
+            </div>
+            <div class="dash-actions">
+                <a href="/" class="back-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+                    Retour au site
+                </a>
                 <form method="POST" action="/admin/logout" style="margin:0;">
                     <button type="submit" class="btn btn-danger btn-sm">Deconnexion</button>
                 </form>
@@ -306,7 +365,7 @@
         </div>
 
         <div class="dash-grid">
-            <!-- ===== CARD : POOLS ===== -->
+            <!-- POOLS -->
             <div class="card">
                 <div class="card-title">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -316,32 +375,25 @@
                 </div>
                 <form id="poolForm">
                     <div class="pool-grid">
-                        <span class="pool-label">Pool</span>
-                        <span class="pool-label">Nom affiché</span>
-                        <span class="pool-label">Bonus pts</span>
-                        <span class="pool-label"></span>
+                        <span class="pool-label-header"></span>
+                        <span class="pool-label-header">Nom</span>
+                        <span class="pool-label-header">Bonus</span>
 
-                        <div class="pool-row">
-                            <div style="display:flex;align-items:center;font-weight:600;font-size:0.9rem;">Pool 1</div>
-                        </div>
-                        <div><input type="text" name="pool_1_name" value="<%= settings.pool_1_name %>" class="form-input" /></div>
-                        <div><input type="number" name="pool_1_bonus" value="<%= settings.pool_1_bonus %>" class="form-input form-input-small" /></div>
-                        <div></div>
+                        <div class="pool-name"><div class="pool-dot"></div> Pool 1</div>
+                        <input type="text" name="pool_1_name" value="<%= settings.pool_1_name %>" class="form-input" />
+                        <input type="number" name="pool_1_bonus" value="<%= settings.pool_1_bonus %>" class="form-input form-input-small" />
 
-                        <div class="pool-row">
-                            <div style="display:flex;align-items:center;font-weight:600;font-size:0.9rem;">Pool 2</div>
-                        </div>
-                        <div><input type="text" name="pool_2_name" value="<%= settings.pool_2_name %>" class="form-input" /></div>
-                        <div><input type="number" name="pool_2_bonus" value="<%= settings.pool_2_bonus %>" class="form-input form-input-small" /></div>
-                        <div></div>
+                        <div class="pool-name"><div class="pool-dot gold"></div> Pool 2</div>
+                        <input type="text" name="pool_2_name" value="<%= settings.pool_2_name %>" class="form-input" />
+                        <input type="number" name="pool_2_bonus" value="<%= settings.pool_2_bonus %>" class="form-input form-input-small" />
                     </div>
-                    <div style="margin-top:1.25rem; text-align:right;">
+                    <div style="margin-top:1.5rem; text-align:right;">
                         <button type="submit" class="btn btn-primary">Sauvegarder</button>
                     </div>
                 </form>
             </div>
 
-            <!-- ===== CARD : PLAYER POINTS ===== -->
+            <!-- PLAYER POINTS -->
             <div class="card">
                 <div class="card-title">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -360,26 +412,25 @@
                         </div>
                         <div class="form-group small">
                             <label class="form-label">Points (+/-)</label>
-                            <input type="number" name="points" class="form-input" placeholder="Ex: 5" required />
+                            <input type="number" name="points" class="form-input" placeholder="0" required />
                         </div>
                         <div style="padding-bottom:1px;">
                             <button type="submit" class="btn btn-warning">Appliquer</button>
                         </div>
                     </div>
                 </form>
-                <div id="pointsResult" style="margin-top:1rem;"></div>
             </div>
 
-            <!-- ===== CARD : PEPITES ===== -->
+            <!-- PEPITES -->
             <div class="card card-full">
                 <div class="card-title">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/>
+                        <path d="M6 3h12l4 6-10 13L2 9z"/>
                     </svg>
                     Classement Pepites
                     <% if (nuggets.length > 0) { %>
-                        <span style="margin-left:auto;font-size:0.8rem;color:var(--gold);font-weight:500;">
-                            Total : <%= nuggets.reduce((s, n) => s + n.bank_nuggets, 0).toLocaleString() %>
+                        <span style="margin-left:auto;font-size:0.8rem;color:var(--gold);font-weight:600;text-shadow:0 0 12px var(--gold-glow);">
+                            Total : <%= nuggets.reduce((s, n) => s + parseInt(n.bank_nuggets), 0).toLocaleString() %>
                         </span>
                     <% } %>
                 </div>
@@ -387,25 +438,19 @@
                     <div class="empty-state">Aucune pepite en banque.</div>
                 <% } else { %>
                     <table class="nuggets-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Joueur</th>
-                                <th style="text-align:right;">Pepites</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead>
                         <tbody>
                             <% nuggets.forEach((n, i) => { %>
                             <tr>
-                                <td class="nuggets-rank"><%= i + 1 %></td>
+                                <td class="nuggets-rank <%= i < 3 ? 'nuggets-rank-' + (i+1) : '' %>"><%= i + 1 %></td>
                                 <td class="nuggets-name"><%= n.name %></td>
-                                <td class="nuggets-amount"><%= n.bank_nuggets.toLocaleString() %></td>
+                                <td class="nuggets-amount <%= i === 0 ? 'nuggets-amount-gold' : '' %>"><%= parseInt(n.bank_nuggets).toLocaleString() %></td>
                             </tr>
                             <% }); %>
                             <tr class="nuggets-total-row">
                                 <td></td>
                                 <td>Total alliance</td>
-                                <td style="text-align:right;"><%= nuggets.reduce((s, n) => s + n.bank_nuggets, 0).toLocaleString() %></td>
+                                <td style="text-align:right;"><%= nuggets.reduce((s, n) => s + parseInt(n.bank_nuggets), 0).toLocaleString() %></td>
                             </tr>
                         </tbody>
                     </table>
@@ -414,19 +459,16 @@
         </div>
     </div>
 
-    <!-- Toast -->
     <div class="toast" id="toast"></div>
 
     <script>
-        // ===== TOAST =====
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');
             t.textContent = msg;
             t.className = `toast ${type} show`;
-            setTimeout(() => t.classList.remove('show'), 3000);
+            setTimeout(() => t.classList.remove('show'), 3500);
         }
 
-        // ===== POOLS FORM =====
         document.getElementById('poolForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
@@ -443,15 +485,13 @@
             } catch { showToast('Erreur reseau.', 'error'); }
         });
 
-        // ===== AUTOCOMPLETE =====
         let allPlayerNames = [];
-        async function loadPlayers() {
+        (async () => {
             try {
                 const res = await fetch('/admin/api/players');
                 allPlayerNames = await res.json();
             } catch {}
-        }
-        loadPlayers();
+        })();
 
         const searchInput = document.getElementById('playerSearch');
         const acList = document.getElementById('autocompleteList');
@@ -461,7 +501,11 @@
             if (val.length < 1) { acList.classList.remove('show'); return; }
             const matches = allPlayerNames.filter(n => n.toLowerCase().includes(val)).slice(0, 10);
             if (matches.length === 0) { acList.classList.remove('show'); return; }
-            acList.innerHTML = matches.map(m => `<div class="autocomplete-item">${m}</div>`).join('');
+            acList.innerHTML = matches.map(m => {
+                const d = document.createElement('div');
+                d.textContent = m;
+                return `<div class="autocomplete-item">${d.innerHTML}</div>`;
+            }).join('');
             acList.classList.add('show');
             acList.querySelectorAll('.autocomplete-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -474,7 +518,6 @@
             if (!e.target.closest('.autocomplete-wrapper')) acList.classList.remove('show');
         });
 
-        // ===== POINTS FORM =====
         document.getElementById('pointsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);

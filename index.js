@@ -132,6 +132,7 @@ async function parseNuggetsWithAI(imageUrl) {
 // 3. SERVEUR WEB (SITE)
 // ============================================
 const app = express();
+app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', __dirname);
 app.use(express.json());
@@ -300,8 +301,13 @@ app.get('/admin', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.render('admin', { authenticated: false, error: null });
     try {
         const nuggetsRes = await pool.query(`
-            SELECT COALESCE(discord_nickname, dofus_pseudo) as name, bank_nuggets 
-            FROM players WHERE bank_nuggets > 0 ORDER BY bank_nuggets DESC
+            SELECT 
+                COALESCE(MAX(discord_nickname), MAX(dofus_pseudo)) as name, 
+                SUM(bank_nuggets) as bank_nuggets 
+            FROM players 
+            WHERE bank_nuggets > 0 
+            GROUP BY COALESCE(discord_id, dofus_pseudo)
+            ORDER BY bank_nuggets DESC
         `);
         res.render('admin', { 
             authenticated: true, error: null,
@@ -314,14 +320,38 @@ app.get('/admin', adminAuth, async (req, res) => {
     }
 });
 
+// --- ADMIN RATE LIMIT ---
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkRateLimit(ip) {
+    const entry = loginAttempts.get(ip);
+    if (!entry) return true;
+    if (Date.now() - entry.first > LOCKOUT_MS) { loginAttempts.delete(ip); return true; }
+    return entry.count < MAX_ATTEMPTS;
+}
+
+function recordFailedLogin(ip) {
+    const entry = loginAttempts.get(ip);
+    if (!entry) { loginAttempts.set(ip, { count: 1, first: Date.now() }); return; }
+    entry.count++;
+}
+
 app.post('/admin/login', (req, res) => {
+    const ip = req.ip;
+    if (!checkRateLimit(ip)) {
+        return res.render('admin', { authenticated: false, error: 'Trop de tentatives. Réessayez dans 15 minutes.' });
+    }
     const pwd = req.body.password;
     if (pwd === process.env.ADMIN_PASSWORD) {
+        loginAttempts.delete(ip);
         const token = crypto.randomBytes(32).toString('hex');
         adminTokens.add(token);
         res.setHeader('Set-Cookie', `admin_token=${token}; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=86400`);
         return res.redirect('/admin');
     }
+    recordFailedLogin(ip);
     res.render('admin', { authenticated: false, error: 'Mot de passe incorrect.' });
 });
 
@@ -423,9 +453,12 @@ client.on('messageCreate', async message => {
 
         try {
             const res = await pool.query(`
-                SELECT COALESCE(discord_nickname, dofus_pseudo) as name, bank_nuggets 
+                SELECT 
+                    COALESCE(MAX(discord_nickname), MAX(dofus_pseudo)) as name, 
+                    SUM(bank_nuggets) as bank_nuggets 
                 FROM players 
                 WHERE bank_nuggets > 0 
+                GROUP BY COALESCE(discord_id, dofus_pseudo)
                 ORDER BY bank_nuggets DESC 
             `);
 
