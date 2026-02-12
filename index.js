@@ -378,11 +378,12 @@ client.on('messageCreate', async message => {
                 const mentionedMember = message.mentions.members?.first();
                 const recipientId = mentionedMember ? mentionedMember.id : message.author.id;
                 const recipientName = mentionedMember ? mentionedMember.displayName : (message.member?.displayName || message.author.username);
+                const displayName = recipientName.toLowerCase() === 'duma' ? 'Gros orteils' : recipientName;
                 
                 await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
                 await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, recipientId]);
 
-                await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${recipientName}.`);
+                await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${displayName}.`);
             }
         } catch (e) { 
             console.error(e);
