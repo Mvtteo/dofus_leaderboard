@@ -64,11 +64,14 @@ async function parseScreenWithAI(imageUrl) {
             `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
              Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
              
+             IMPORTANT : Le screenshot peut ne montrer QU'UNE SEULE section (soit GAGNANTS, soit PERDANTS).
+             Dans ce cas, remplis la section visible et laisse l'autre vide [].
+             
              Regles STRICTES :
              - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
              - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
-             - EXCLURE absolument : Percepteur, Prisme, tout ce qui contient "Do'", "Dofus", "Gardien", "Protecteur"
+             - EXCLURE absolument : Percepteur, Prisme, Prisme d'alliance, tout ce qui contient "Do'", "Dofus", "Gardien", "Protecteur"
              - EXCLURE les monstres, invocations, et PNJ
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
@@ -79,11 +82,17 @@ async function parseScreenWithAI(imageUrl) {
         
         const text = result.response.text();
         const clean = text.replace(/```json\n?|```\n?/g, '').trim();
+        console.log('[Gemini] Reponse brute:', clean);
         const parsed = JSON.parse(clean);
 
         // Nettoyage automatique des accents
         if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
         if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
+
+        // Filtre code : exclure les noms parasites (Prisme, Percepteur, etc.)
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus/i;
+        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n));
+        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n));
 
         // Cap a 5 joueurs par equipe (AvA = 5v5 max)
         if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
@@ -561,13 +570,58 @@ client.on('messageCreate', async message => {
     const msgRef = await message.reply(`Analyse PvP en cours...`);
 
     try {
+        // Construire un seul appel Gemini avec toutes les images
+        const imagesParts = [];
         for (const [id, attachment] of attachments) {
-            const parsed = await parseScreenWithAI(attachment.url);
-            if (parsed) {
-                if (parsed.winners) userSession.winners = [...new Set([...userSession.winners, ...parsed.winners])];
-                if (parsed.losers) userSession.losers = [...new Set([...userSession.losers, ...parsed.losers])];
-            }
+            const response = await fetch(attachment.url);
+            const buffer = await response.arrayBuffer();
+            const base64 = Buffer.from(buffer).toString('base64');
+            imagesParts.push({ inlineData: { data: base64, mimeType: attachment.contentType || "image/png" } });
         }
+
+        // Un seul appel Gemini avec toutes les images
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        const geminiResult = await model.generateContent([
+            ...imagesParts,
+            `Analyse ces screenshots de fin de combat Dofus (Alliance vs Alliance).
+             Il peut y avoir 1 ou plusieurs images. Si plusieurs, elles montrent le MEME combat (ex: une image pour GAGNANTS, une autre pour PERDANTS).
+             Extrait UNIQUEMENT les pseudos des joueurs HUMAINS en combinant toutes les images.
+             
+             Regles STRICTES :
+             - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
+             - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
+             - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
+             - EXCLURE absolument : Percepteur, Prisme, Prisme d'alliance, tout ce qui contient "Do'", "Dofus", "Gardien", "Protecteur"
+             - EXCLURE les monstres, invocations, et PNJ
+             - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
+             - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
+             - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
+             
+             Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
+        ]);
+
+        const text = geminiResult.response.text();
+        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
+        console.log('[Gemini] Reponse brute:', clean);
+        const parsed = JSON.parse(clean);
+
+        // Nettoyage accents
+        if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
+        if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
+
+        // Filtre code : exclure les noms parasites
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus/i;
+        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n));
+        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n));
+
+        // Cap 5v5
+        if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
+        if (parsed.losers && parsed.losers.length > 5) parsed.losers = parsed.losers.slice(0, 5);
+
+        // Merge avec la session existante (cas ou le joueur envoie en plusieurs messages)
+        if (parsed.winners) userSession.winners = [...new Set([...userSession.winners, ...parsed.winners])];
+        if (parsed.losers) userSession.losers = [...new Set([...userSession.losers, ...parsed.losers])];
+
         activeSessions.set(message.author.id, userSession);
 
         if (userSession.winners.length > 0 && userSession.losers.length > 0) {
