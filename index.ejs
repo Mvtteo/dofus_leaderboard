@@ -162,7 +162,7 @@
                 </div>
                 <div class="season-selector">
                     <select class="season-dropdown" id="seasonSelect">
-                        <% seasons.forEach(function(season) { %>
+                        <% [...seasons].reverse().forEach(function(season) { %>
                             <option value="<%= season.id %>" <%= season.id === currentSeason ? 'selected' : '' %>>
                                 <%= season.label %>
                             </option>
