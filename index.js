@@ -47,6 +47,23 @@ const client = new Client({
 });
 
 const activeSessions = new Map();
+const sessionTimeouts = new Map();
+const SESSION_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+
+function setSessionTimeout(userId, msgRef) {
+    clearSessionTimeout(userId);
+    const timer = setTimeout(async () => {
+        activeSessions.delete(userId);
+        sessionTimeouts.delete(userId);
+        try { await msgRef.edit({ content: '[EXPIRÉ] Session annulée (inactivité 2 min).', components: [] }); } catch {}
+    }, SESSION_TIMEOUT_MS);
+    sessionTimeouts.set(userId, timer);
+}
+
+function clearSessionTimeout(userId) {
+    const existing = sessionTimeouts.get(userId);
+    if (existing) { clearTimeout(existing); sessionTimeouts.delete(userId); }
+}
 
 // ============================================
 // 1. IA : LECTURE DES SCREENS PVP
@@ -733,8 +750,10 @@ client.on('messageCreate', async message => {
                 new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
             await msgRef.edit({ content: `[COMPLET]\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
+            setSessionTimeout(message.author.id, msgRef);
         } else {
             await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
+            setSessionTimeout(message.author.id, msgRef);
         }
     } catch (error) { msgRef.edit("Erreur d'analyse."); }
 });
@@ -766,6 +785,8 @@ client.on('interactionCreate', async interaction => {
                         new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
                     );
                     await interaction.reply({ content: `[CORRIGÉ]\nGagnants: ${w.join(', ')}\nPerdants: ${l.join(', ')}`, components: [row] });
+                    const replyMsg = await interaction.fetchReply();
+                    setSessionTimeout(interaction.user.id, replyMsg);
                 }
                 return;
             }
@@ -795,7 +816,7 @@ client.on('interactionCreate', async interaction => {
         const session = activeSessions.get(interaction.user.id);
         if (!session && ['attack','defense','result_win','result_lose'].includes(interaction.customId)) return interaction.reply({ content: "Session expirée.", ephemeral: true });
 
-        if (interaction.customId === 'reset') { activeSessions.delete(interaction.user.id); return interaction.update({ content: "Annulé.", components: [] }); }
+        if (interaction.customId === 'reset') { clearSessionTimeout(interaction.user.id); activeSessions.delete(interaction.user.id); return interaction.update({ content: "Annulé.", components: [] }); }
         
         if (interaction.customId === 'correct') {
             const modal = new ModalBuilder().setCustomId('modal_correct').setTitle('Correction');
@@ -814,6 +835,7 @@ client.on('interactionCreate', async interaction => {
                 new StringSelectMenuOptionBuilder().setLabel(liveConfig.pool_2_name).setValue('pool_2')
             ));
             await interaction.update({ content: `Mode : **${interaction.customId}**. Adversaire ?`, components: [row] });
+            setSessionTimeout(interaction.user.id, interaction.message);
         }
 
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
@@ -824,9 +846,11 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
             );
             await interaction.update({ content: `Adversaire : **${tierName}**. Résultat ?`, components: [row] });
+            setSessionTimeout(interaction.user.id, interaction.message);
         }
 
         else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
+            clearSessionTimeout(interaction.user.id);
             activeSessions.delete(interaction.user.id);
             await interaction.deferUpdate();
 
