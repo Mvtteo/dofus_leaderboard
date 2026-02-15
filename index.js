@@ -163,7 +163,8 @@ const liveConfig = {
     pool_1_name: config.POOL_NAMES?.pool_1 || 'Pool 1',
     pool_1_bonus: config.BONUSES?.pool_1 || 0,
     pool_2_name: config.POOL_NAMES?.pool_2 || 'Pool 2',
-    pool_2_bonus: config.BONUSES?.pool_2 || 0
+    pool_2_bonus: config.BONUSES?.pool_2 || 0,
+    season_end_override: null
 };
 
 async function loadSettings() {
@@ -172,7 +173,9 @@ async function loadSettings() {
         const res = await pool.query('SELECT key, value FROM settings');
         for (const row of res.rows) {
             if (row.key in liveConfig) {
-                liveConfig[row.key] = row.key.includes('bonus') ? parseInt(row.value) || 0 : row.value;
+                if (row.key.includes('bonus')) liveConfig[row.key] = parseInt(row.value) || 0;
+                else if (row.key === 'season_end_override') liveConfig[row.key] = row.value || null;
+                else liveConfig[row.key] = row.value;
             }
         }
         console.log('[Settings] Chargés depuis la DB:', liveConfig);
@@ -195,35 +198,51 @@ function getSeasons() {
     let loopDate = new Date(INITIAL_DATE);
     let id = 1;
     let currentSeasonId = 1;
+    let overrideApplied = false;
 
     while (true) {
         const start = new Date(loopDate);
         if (start > now) break;
-        const end = new Date(start);
+        let end = new Date(start);
         end.setDate(end.getDate() + DAYS_PER_SEASON);
         end.setMilliseconds(-1); 
+
+        // Override de fin de saison : s'applique a la saison qui contient "now"
+        if (!overrideApplied && liveConfig.season_end_override) {
+            const ov = new Date(liveConfig.season_end_override);
+            ov.setHours(23, 59, 59, 999);
+            if (now >= start && now <= ov) {
+                end = ov;
+                overrideApplied = true;
+            }
+        }
 
         const isCurrent = (now >= start && now <= end);
         if (isCurrent) currentSeasonId = id;
 
         const startStr = start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         const endStr = end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-        seasons.push({ id, label: `Saison ${id} (${startStr} - ${endStr})`, start, end, isCurrent });
+        const endRaw = end.toISOString().split('T')[0]; // YYYY-MM-DD pour l'input admin
+        seasons.push({ id, label: `Saison ${id} (${startStr} - ${endStr})`, start, end, endRaw, isCurrent });
         
-        loopDate.setDate(loopDate.getDate() + DAYS_PER_SEASON);
+        // La saison suivante demarre le lendemain de la fin
+        loopDate = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1);
         id++;
         if (id > 1000) break;
     }
     if (seasons.length === 0) {
         const end = new Date(INITIAL_DATE);
         end.setDate(end.getDate() + DAYS_PER_SEASON);
-        seasons.push({ id: 1, label: `Saison 1 (Bientot)`, start: INITIAL_DATE, end, isCurrent: true });
+        seasons.push({ id: 1, label: `Saison 1 (Bientot)`, start: INITIAL_DATE, end, endRaw: end.toISOString().split('T')[0], isCurrent: true });
     }
     return { seasons, currentSeason: currentSeasonId };
 }
 
 app.get('/', async (req, res) => {
     try {
+        const { seasons, currentSeason } = getSeasons();
+        const seasonId = await ensureCurrentSeason();
+
         const query = `
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
@@ -233,11 +252,12 @@ app.get('/', async (req, res) => {
                 MIN(ss.previous_rank) as previous_rank
             FROM players p
             JOIN season_stats ss ON ss.player_id = p.id
+            WHERE ss.season_id = $1
             GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
             HAVING SUM(ss.wins) + SUM(ss.losses) > 0
             ORDER BY total_points DESC
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, [seasonId]);
         const players = result.rows.map((p, index) => {
             const wins = Number(p.wins) || 0;
             const losses = Number(p.losses) || 0;
@@ -255,8 +275,7 @@ app.get('/', async (req, res) => {
             };
         });
 
-        const countRes = await pool.query('SELECT COUNT(*) as c FROM matches');
-        const { seasons, currentSeason } = getSeasons();
+        const countRes = await pool.query('SELECT COUNT(*) as c FROM matches WHERE season_id = $1', [seasonId]);
 
         res.render('index', { 
             players, seasons, currentSeason, 
@@ -309,23 +328,34 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
 app.get('/admin', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.render('admin', { authenticated: false, error: null });
     try {
+        const { seasons, currentSeason } = getSeasons();
+        const curSeason = seasons.find(s => s.id === currentSeason);
+        const seasonId = await ensureCurrentSeason();
+
         const nuggetsRes = await pool.query(`
             SELECT 
-                COALESCE(MAX(discord_nickname), MAX(dofus_pseudo)) as name, 
-                SUM(bank_nuggets) as bank_nuggets 
-            FROM players 
-            WHERE bank_nuggets > 0 
-            GROUP BY COALESCE(discord_id, dofus_pseudo)
-            ORDER BY bank_nuggets DESC
-        `);
+                COALESCE(MAX(p.discord_nickname), MAX(p.dofus_pseudo)) as name, 
+                SUM(ss.nuggets) as nuggets 
+            FROM season_stats ss
+            JOIN players p ON p.id = ss.player_id
+            WHERE ss.season_id = $1 AND ss.nuggets > 0 
+            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+            ORDER BY nuggets DESC
+        `, [seasonId]);
+
         res.render('admin', { 
             authenticated: true, error: null,
             settings: liveConfig,
-            nuggets: nuggetsRes.rows
+            nuggets: nuggetsRes.rows,
+            seasons,
+            currentSeason,
+            curSeason
         });
     } catch (e) { 
         console.error(e);
-        res.render('admin', { authenticated: true, error: null, settings: liveConfig, nuggets: [] });
+        const { seasons, currentSeason } = getSeasons();
+        const curSeason = seasons.find(s => s.id === currentSeason);
+        res.render('admin', { authenticated: true, error: null, settings: liveConfig, nuggets: [], seasons, currentSeason, curSeason });
     }
 });
 
@@ -412,10 +442,69 @@ app.post('/admin/api/player-points', adminAuth, async (req, res) => {
         await updateSeasonStats(playerId, seasonId, { points: pts, wins: 0, losses: 0 });
 
         // Recalculer le total
-        const totalRes = await pool.query('SELECT SUM(points) as total FROM season_stats WHERE player_id = $1', [playerId]);
+        const totalRes = await pool.query('SELECT SUM(points) as total FROM season_stats WHERE player_id = $1 AND season_id = $2', [playerId, seasonId]);
         const newTotal = parseInt(totalRes.rows[0].total) || 0;
 
         res.json({ ok: true, pseudo: playerName, delta: pts, newTotal });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+// --- Pepites par saison ---
+app.get('/admin/api/nuggets/:seasonId', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json([]);
+    try {
+        const seasonId = parseInt(req.params.seasonId);
+        const r = await pool.query(`
+            SELECT 
+                COALESCE(MAX(p.discord_nickname), MAX(p.dofus_pseudo)) as name, 
+                SUM(ss.nuggets) as nuggets 
+            FROM season_stats ss
+            JOIN players p ON p.id = ss.player_id
+            WHERE ss.season_id = $1 AND ss.nuggets > 0 
+            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+            ORDER BY nuggets DESC
+        `, [seasonId]);
+        res.json(r.rows);
+    } catch (e) { console.error(e); res.json([]); }
+});
+
+// --- Reset pepites (saison en cours) ---
+app.post('/admin/api/reset-nuggets', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const seasonId = await ensureCurrentSeason();
+        await pool.query('UPDATE season_stats SET nuggets = 0 WHERE season_id = $1 AND nuggets > 0', [seasonId]);
+        res.json({ ok: true, seasonId });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+// --- Modifier fin de saison ---
+app.post('/admin/api/season-end', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { end_date } = req.body;
+        if (!end_date) {
+            // Reset l'override
+            liveConfig.season_end_override = null;
+            await saveSetting('season_end_override', '');
+            return res.json({ ok: true, cleared: true });
+        }
+        const d = new Date(end_date);
+        if (isNaN(d.getTime())) return res.status(400).json({ error: 'Date invalide.' });
+        
+        liveConfig.season_end_override = end_date;
+        await saveSetting('season_end_override', end_date);
+        
+        // Recalculer les saisons avec le nouvel override
+        const { seasons, currentSeason } = getSeasons();
+        const curSeason = seasons.find(s => s.id === currentSeason);
+        
+        // Mettre a jour la saison en DB aussi
+        if (curSeason) {
+            await pool.query('UPDATE seasons SET end_date = $1 WHERE id = $2', [curSeason.end, curSeason.id]);
+        }
+        
+        res.json({ ok: true, curSeason });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -430,6 +519,7 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`CREATE TABLE IF NOT EXISTS nuggets (id SERIAL PRIMARY KEY, discord_id TEXT, amount INT, image_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
         await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS previous_rank INTEGER DEFAULT NULL`);
+        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS nuggets INTEGER DEFAULT 0`);
         console.log('[Startup] DB verifiee.');
     } catch (e) { console.error(e); }
 });
@@ -461,21 +551,23 @@ client.on('messageCreate', async message => {
         }
 
         try {
+            const seasonId = await ensureCurrentSeason();
             const res = await pool.query(`
                 SELECT 
-                    COALESCE(MAX(discord_nickname), MAX(dofus_pseudo)) as name, 
-                    SUM(bank_nuggets) as bank_nuggets 
-                FROM players 
-                WHERE bank_nuggets > 0 
-                GROUP BY COALESCE(discord_id, dofus_pseudo)
-                ORDER BY bank_nuggets DESC 
-            `);
+                    COALESCE(MAX(p.discord_nickname), MAX(p.dofus_pseudo)) as name, 
+                    SUM(ss.nuggets) as nuggets 
+                FROM season_stats ss
+                JOIN players p ON p.id = ss.player_id
+                WHERE ss.season_id = $1 AND ss.nuggets > 0 
+                GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+                ORDER BY nuggets DESC 
+            `, [seasonId]);
 
-            if (res.rows.length === 0) return message.reply("Aucune pépite en banque.");
+            if (res.rows.length === 0) return message.reply("Aucune pépite en banque pour cette saison.");
 
             const lines = res.rows.map((p, i) => {
                 let rank = `${i + 1}.`;
-                return `${rank} **${p.name}** : ${p.bank_nuggets}`;
+                return `${rank} **${p.name}** : ${p.nuggets}`;
             });
 
             // On coupe le message si trop long (Discord limite à 4096 caractères)
@@ -502,9 +594,9 @@ client.on('messageCreate', async message => {
             return message.reply("[REFUS] Cette commande est réservée au STAFF.");
         }
         try {
-            await pool.query('UPDATE players SET bank_nuggets = 0 WHERE bank_nuggets > 0');
-            await pool.query('DELETE FROM nuggets');
-            return message.reply("[OK] Toutes les pépites ont été remises à zéro.");
+            const seasonId = await ensureCurrentSeason();
+            await pool.query('UPDATE season_stats SET nuggets = 0 WHERE season_id = $1 AND nuggets > 0', [seasonId]);
+            return message.reply(`[OK] Pépites remises à zéro pour la saison ${seasonId}.`);
         } catch (e) {
             console.error(e);
             return message.reply("Erreur reset pépites.");
@@ -549,8 +641,17 @@ client.on('messageCreate', async message => {
                 const recipientName = mentionedMember ? mentionedMember.displayName : (message.member?.displayName || message.author.username);
                 const displayName = recipientName.toLowerCase() === 'duma' ? 'Gros orteils' : recipientName;
                 
+                // Trouver le player_id pour ce discord_id
+                const playerRes = await pool.query('SELECT id FROM players WHERE discord_id = $1 LIMIT 1', [recipientId]);
+                if (playerRes.rows.length === 0) {
+                    await msgRef.edit(`Joueur non lié. Utilisez d'abord le panneau de liaison.`);
+                    return;
+                }
+                const playerId = playerRes.rows[0].id;
+                const seasonId = await ensureCurrentSeason();
+
                 await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
-                await pool.query('UPDATE players SET bank_nuggets = COALESCE(bank_nuggets, 0) + $1 WHERE discord_id = $2', [playerShare, recipientId]);
+                await updateSeasonStats(playerId, seasonId, { nuggets: playerShare });
 
                 await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${displayName}.`);
             }
@@ -865,14 +966,15 @@ async function snapshotRanks(seasonId) {
     `, [seasonId]);
 }
 
-async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0 }) {
+async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0, nuggets=0 }) {
     await pool.query(`
-        INSERT INTO season_stats (player_id, season_id, points, wins, losses) VALUES ($1,$2,$3,$4,$5)
+        INSERT INTO season_stats (player_id, season_id, points, wins, losses, nuggets) VALUES ($1,$2,$3,$4,$5,$6)
         ON CONFLICT (player_id, season_id) DO UPDATE SET 
         points = season_stats.points + EXCLUDED.points,
         wins = season_stats.wins + EXCLUDED.wins,
-        losses = season_stats.losses + EXCLUDED.losses
-    `, [pid, sid, points, wins, losses]);
+        losses = season_stats.losses + EXCLUDED.losses,
+        nuggets = season_stats.nuggets + EXCLUDED.nuggets
+    `, [pid, sid, points, wins, losses, nuggets]);
 }
 
 client.login(process.env.DISCORD_TOKEN);
