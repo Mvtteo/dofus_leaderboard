@@ -2,6 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+
+// --- CRASH HANDLERS (avant tout le reste) ---
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[CRASH] Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (error) => {
+    console.error('[CRASH] Uncaught Exception:', error);
+});
 const { 
     Client, 
     GatewayIntentBits, 
@@ -645,6 +653,7 @@ client.on('messageCreate', async message => {
 
     // --- LOGIQUE PEPITES ---
     if (config.NUGGETS_CHANNEL_ID && message.channel.id === config.NUGGETS_CHANNEL_ID) {
+        console.log('[Pepites] Upload detecté de', message.author.username);
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
         const msgRef = await message.reply('Analyse pépites...');
@@ -697,8 +706,10 @@ client.on('messageCreate', async message => {
     const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
     if (attachments.size === 0) return;
 
+    console.log('[PvP] Upload detecté de', message.author.username, '-', attachments.size, 'image(s)');
     let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null };
     const msgRef = await message.reply(`Analyse PvP en cours...`);
+    console.log('[PvP] Message reply envoyé, debut analyse Gemini...');
 
     try {
         // Construire un seul appel Gemini avec toutes les images
@@ -779,7 +790,7 @@ client.on('messageCreate', async message => {
             await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
             setSessionTimeout(message.author.id, msgRef);
         }
-    } catch (error) { msgRef.edit("Erreur d'analyse."); }
+    } catch (error) { console.error('[PvP] Erreur:', error); try { await msgRef.edit("Erreur d'analyse."); } catch {} }
 });
 
 // ============================================
