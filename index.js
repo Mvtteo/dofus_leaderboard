@@ -100,7 +100,20 @@ async function parseScreenWithAI(imageUrl) {
         const text = result.response.text();
         const clean = text.replace(/```json\n?|```\n?/g, '').trim();
         console.log('[Gemini] Reponse brute:', clean);
-        const parsed = JSON.parse(clean);
+        
+        let parsed;
+        try {
+            parsed = JSON.parse(clean);
+        } catch (jsonErr) {
+            // Fallback : extraire les pseudos meme si le JSON est casse
+            console.log('[Gemini] JSON invalide, tentative repair...');
+            // Capturer tout entre "winners": et "losers": puis entre "losers": et la fin
+            const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
+            const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
+            const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
+            parsed = { winners: extract(wSection), losers: extract(lSection) };
+            console.log('[Gemini] Repair result:', JSON.stringify(parsed));
+        }
 
         // Nettoyage automatique des accents
         if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
@@ -721,7 +734,18 @@ client.on('messageCreate', async message => {
         const text = geminiResult.response.text();
         const clean = text.replace(/```json\n?|```\n?/g, '').trim();
         console.log('[Gemini] Reponse brute:', clean);
-        const parsed = JSON.parse(clean);
+        
+        let parsed;
+        try {
+            parsed = JSON.parse(clean);
+        } catch (jsonErr) {
+            console.log('[Gemini] JSON invalide, tentative repair...');
+            const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
+            const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
+            const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
+            parsed = { winners: extract(wSection), losers: extract(lSection) };
+            console.log('[Gemini] Repair result:', JSON.stringify(parsed));
+        }
 
         // Nettoyage accents
         if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
