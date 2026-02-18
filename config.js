@@ -4,6 +4,7 @@ module.exports = {
     CHANNEL_ID: process.env.CHANNEL_ID, // Leaderboard
     LEADERBOARD_CHANNEL_ID: process.env.LEADERBOARD_CHANNEL_ID || process.env.CHANNEL_ID,
     PROFILE_CHANNEL_ID: process.env.PROFILE_CHANNEL_ID || process.env.CHANNEL_ID,
+    OWNER_ID: process.env.OWNER_ID,
     
     NUGGETS_CHANNEL_ID: process.env.NUGGETS_CHANNEL_ID, 
 
