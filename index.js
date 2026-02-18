@@ -604,6 +604,20 @@ client.on('messageCreate', async message => {
             return message.reply(`[OK] Joueur ${cleanArg} ajouté.`);
         } catch (err) { return message.reply("Erreur d'ajout."); }
     }
+    if (message.content.startsWith('!deleteplayer') && (message.member.permissions.has('Administrator') || message.author.id === config.OWNER_ID)) {
+        const args = message.content.split(' ');
+        if (args.length < 2) return message.reply("Usage : `!deleteplayer <PseudoExact>`");
+        try {
+            const cleanArg = removeAccents(args[1]);
+            const found = await pool.query('SELECT id FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [cleanArg]);
+            if (found.rows.length === 0) return message.reply(`Joueur "${cleanArg}" introuvable.`);
+            const playerId = found.rows[0].id;
+            await pool.query('DELETE FROM match_participants WHERE player_id = $1', [playerId]);
+            await pool.query('DELETE FROM season_stats WHERE player_id = $1', [playerId]);
+            await pool.query('DELETE FROM players WHERE id = $1', [playerId]);
+            return message.reply(`[OK] Joueur ${cleanArg} supprimé.`);
+        } catch (err) { console.error(err); return message.reply("Erreur suppression."); }
+    }
     // --- CLASSEMENT PEPITES (STAFF) ---
     if (message.content === '!pepites') {
         if (!hasStaffRole(message.member)) {
