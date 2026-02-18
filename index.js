@@ -32,6 +32,31 @@ const config = require('./config');
 
 // --- GEMINI AI ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_TIMEOUT_MS = 30000;
+const GEMINI_MAX_RETRIES = 3;
+
+async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const result = await Promise.race([
+                model.generateContent(parts),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini timeout (30s)')), GEMINI_TIMEOUT_MS))
+            ]);
+            return result;
+        } catch (err) {
+            const isRetryable = err.status === 503 || err.status === 429 || err.message?.includes('timeout') || err.message?.includes('fetch failed') || err.message?.includes('ECONNRESET') || err.message?.includes('ETIMEDOUT') || err.type === 'system';
+            console.log(`[Gemini] Tentative ${attempt}/${retries} echouee: ${err.message || err.status}`);
+            if (attempt < retries && isRetryable) {
+                const delay = attempt * 3000; // 3s, 6s, 9s
+                console.log(`[Gemini] Retry dans ${delay/1000}s...`);
+                await new Promise(r => setTimeout(r, delay));
+            } else {
+                throw err;
+            }
+        }
+    }
+}
 
 // --- FONCTION UTILITAIRE : SUPPRESSION ACCENTS ---
 function removeAccents(str) {
@@ -78,13 +103,11 @@ function clearSessionTimeout(userId) {
 // ============================================
 async function parseScreenWithAI(imageUrl) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-        
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
         
-        const result = await model.generateContent([
+        const result = await callGemini([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
              Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
@@ -148,12 +171,11 @@ async function parseScreenWithAI(imageUrl) {
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
         const response = await fetch(imageUrl);
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
-        const result = await model.generateContent([
+        const result = await callGemini([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
         ]);
@@ -680,11 +702,16 @@ client.on('messageCreate', async message => {
                 const recipientName = mentionedMember ? mentionedMember.displayName : (message.member?.displayName || message.author.username);
                 const displayName = recipientName.toLowerCase() === 'duma' ? 'Gros orteils' : recipientName;
                 
-                // Trouver le player_id pour ce discord_id
-                const playerRes = await pool.query('SELECT id FROM players WHERE discord_id = $1 LIMIT 1', [recipientId]);
+                // Trouver ou créer le player pour ce discord_id
+                let playerRes = await pool.query('SELECT id FROM players WHERE discord_id = $1 LIMIT 1', [recipientId]);
                 if (playerRes.rows.length === 0) {
-                    await msgRef.edit(`Joueur non lié. Utilisez d'abord le panneau de liaison.`);
-                    return;
+                    // Auto-créer avec le pseudo Discord comme dofus_pseudo
+                    const cleanName = removeAccents(recipientName);
+                    await pool.query(
+                        'INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4) ON CONFLICT (dofus_pseudo) DO UPDATE SET discord_id = $2, discord_nickname = $4',
+                        [cleanName, recipientId, recipientName, cleanName]
+                    );
+                    playerRes = await pool.query('SELECT id FROM players WHERE discord_id = $1 LIMIT 1', [recipientId]);
                 }
                 const playerId = playerRes.rows[0].id;
                 const seasonId = await ensureCurrentSeason();
@@ -722,8 +749,7 @@ client.on('messageCreate', async message => {
         }
 
         // Un seul appel Gemini avec toutes les images
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-        const geminiResult = await model.generateContent([
+        const geminiResult = await callGemini([
             ...imagesParts,
             `Analyse ces screenshots de fin de combat Dofus (Alliance vs Alliance).
              Il peut y avoir 1 ou plusieurs images. Si plusieurs, elles montrent le MEME combat (ex: une image pour GAGNANTS, une autre pour PERDANTS).
@@ -790,7 +816,12 @@ client.on('messageCreate', async message => {
             await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
             setSessionTimeout(message.author.id, msgRef);
         }
-    } catch (error) { console.error('[PvP] Erreur:', error); try { await msgRef.edit("Erreur d'analyse."); } catch {} }
+    } catch (error) {
+        console.error('[PvP] Erreur:', error);
+        const isGemini = error.status === 503 || error.message?.includes('timeout') || error.message?.includes('fetch failed');
+        const msg = isGemini ? "Gemini indisponible, réessayez dans quelques secondes." : "Erreur d'analyse.";
+        try { await msgRef.edit(msg); } catch {}
+    }
 });
 
 // ============================================
