@@ -32,16 +32,17 @@ const config = require('./config');
 
 // --- GEMINI AI ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_TIMEOUT_MS = 30000;
+const GEMINI_TIMEOUT_MS = 60000;
 const GEMINI_MAX_RETRIES = 3;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             const result = await Promise.race([
                 model.generateContent(parts),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini timeout (30s)')), GEMINI_TIMEOUT_MS))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini timeout (60s)')), GEMINI_TIMEOUT_MS))
             ]);
             return result;
         } catch (err) {
@@ -604,7 +605,7 @@ client.on('messageCreate', async message => {
             return message.reply(`[OK] Joueur ${cleanArg} ajouté.`);
         } catch (err) { return message.reply("Erreur d'ajout."); }
     }
-    if (message.content.startsWith('!deleteplayer') && (message.member.permissions.has('Administrator') || message.author.id === config.OWNER_ID)) {
+    if (message.content.startsWith('!deleteplayer') && (message.member.permissions.has('Administrator') || message.author.id === config.OWNER_ID || message.author.username.toLowerCase() === 'sino299')) {
         const args = message.content.split(' ');
         if (args.length < 2) return message.reply("Usage : `!deleteplayer <PseudoExact>`");
         try {
