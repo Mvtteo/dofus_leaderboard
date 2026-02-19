@@ -9,7 +9,7 @@ module.exports = {
     NUGGETS_CHANNEL_ID: process.env.NUGGETS_CHANNEL_ID, 
 
     POOL_NAMES: {
-        pool_1: "CXO",
+        pool_1: "CXO / Dawnfall",
         pool_2: "Captain / ABBA / Tenebris",
     },
     BONUSES: {
