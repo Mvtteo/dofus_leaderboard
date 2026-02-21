@@ -34,297 +34,193 @@
         }
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: var(--bg-deep);
-            color: var(--text-primary);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-deep); color: var(--text-primary);
+            font-family: 'Inter', -apple-system, sans-serif;
             line-height: 1.6; min-height: 100vh; overflow-x: hidden;
         }
-
-        /* ===== BACKGROUND ===== */
         .bg-container { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
         .bg-gradient {
             position: absolute; inset: 0;
             background: 
-                radial-gradient(ellipse 800px 600px at 20% 20%, rgba(42, 157, 143, 0.08) 0%, transparent 60%),
-                radial-gradient(ellipse 600px 800px at 80% 80%, rgba(233, 196, 106, 0.04) 0%, transparent 60%),
-                radial-gradient(ellipse 400px 400px at 50% 50%, rgba(42, 157, 143, 0.03) 0%, transparent 60%);
+                radial-gradient(ellipse 800px 600px at 20% 20%, rgba(42,157,143,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 600px 800px at 80% 80%, rgba(233,196,106,0.04) 0%, transparent 60%);
         }
         .bg-grid {
             position: absolute; inset: 0;
-            background-image: 
-                linear-gradient(rgba(42, 157, 143, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(42, 157, 143, 0.03) 1px, transparent 1px);
+            background-image: linear-gradient(rgba(42,157,143,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(42,157,143,0.03) 1px, transparent 1px);
             background-size: 50px 50px;
         }
-        .bg-noise {
-            position: absolute; inset: 0; opacity: 0.015;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-            background-size: 256px;
-        }
 
-        /* ===== LOGIN ===== */
-        .login-wrapper {
-            display: flex; align-items: center; justify-content: center;
-            min-height: 100vh; padding: 2rem; position: relative; z-index: 1;
-        }
+        /* LOGIN */
+        .login-wrapper { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; position: relative; z-index: 1; }
         .login-card {
-            background: linear-gradient(145deg, rgba(42, 157, 143, 0.06), rgba(15, 25, 35, 0.95));
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-xl);
-            padding: 3rem 2.5rem;
-            width: 100%; max-width: 420px;
-            backdrop-filter: blur(40px);
-            box-shadow: 0 0 80px rgba(42, 157, 143, 0.06), 0 25px 50px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(145deg, rgba(42,157,143,0.06), rgba(15,25,35,0.95));
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-xl);
+            padding: 3rem 2.5rem; width: 100%; max-width: 420px;
+            backdrop-filter: blur(40px); box-shadow: 0 0 80px rgba(42,157,143,0.06), 0 25px 50px rgba(0,0,0,0.4);
             position: relative; overflow: hidden;
         }
-        .login-card::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
-        }
-        .login-logo {
-            width: 56px; height: 56px; margin: 0 auto 1.5rem; display: block; opacity: 0.9;
-        }
+        .login-card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--accent-glow),transparent); }
+        .login-logo { width:56px; height:56px; margin:0 auto 1.5rem; display:block; opacity:0.9; }
         .login-card h1 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.6rem; font-weight: 700; text-align: center; letter-spacing: 0.08em;
-            background: linear-gradient(135deg, var(--text-primary), var(--accent-bright));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-family:'Space Grotesk',sans-serif; font-size:1.6rem; font-weight:700; text-align:center; letter-spacing:0.08em;
+            background:linear-gradient(135deg,var(--text-primary),var(--accent-bright)); -webkit-background-clip:text; -webkit-text-fill-color:transparent;
         }
-        .login-card .subtitle {
-            color: var(--text-muted); text-align: center;
-            margin-bottom: 2.5rem; font-size: 0.85rem; letter-spacing: 0.02em;
-        }
-        .login-error {
-            background: rgba(231, 111, 81, 0.08);
-            border: 1px solid rgba(231, 111, 81, 0.2);
-            color: var(--red); border-radius: var(--radius-sm);
-            padding: 0.75rem 1rem; margin-bottom: 1.25rem;
-            font-size: 0.85rem; text-align: center;
-        }
+        .login-card .subtitle { color:var(--text-muted); text-align:center; margin-bottom:2.5rem; font-size:0.85rem; }
+        .login-error { background:rgba(231,111,81,0.08); border:1px solid rgba(231,111,81,0.2); color:var(--red); border-radius:var(--radius-sm); padding:0.75rem 1rem; margin-bottom:1.25rem; font-size:0.85rem; text-align:center; }
 
-        /* ===== FORM ===== */
+        /* FORM */
         .form-group { margin-bottom: 1.25rem; }
-        .form-label {
-            display: block; font-size: 0.7rem; font-weight: 600;
-            color: var(--text-muted); margin-bottom: 0.5rem;
-            text-transform: uppercase; letter-spacing: 0.1em;
+        .form-label { display:block; font-size:0.7rem; font-weight:600; color:var(--text-muted); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:0.1em; }
+        .form-input, .form-select {
+            width:100%; padding:0.75rem 1rem; background:var(--bg-input); border:1px solid var(--border-subtle);
+            border-radius:var(--radius-sm); color:var(--text-primary); font-size:0.9rem; font-family:inherit; transition:all 0.25s ease;
         }
-        .form-input {
-            width: 100%; padding: 0.75rem 1rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary); font-size: 0.9rem;
-            font-family: inherit; transition: all 0.25s ease;
-        }
-        .form-input:focus {
-            outline: none; border-color: var(--accent);
-            background: rgba(42, 157, 143, 0.04);
-            box-shadow: 0 0 0 3px rgba(42, 157, 143, 0.1), 0 0 20px rgba(42, 157, 143, 0.05);
-        }
-        .form-input::placeholder { color: var(--text-muted); }
-        .form-input-small { width: 100px; text-align: center; }
+        .form-select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%232a9d8f' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:36px; cursor:pointer; }
+        .form-select option { background:var(--bg-primary); color:var(--text-primary); }
+        .form-input:focus, .form-select:focus { outline:none; border-color:var(--accent); background:rgba(42,157,143,0.04); box-shadow:0 0 0 3px rgba(42,157,143,0.1); }
+        .form-input::placeholder { color:var(--text-muted); }
+        .form-input-small { width:100px; text-align:center; }
 
         .btn {
-            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-            padding: 0.75rem 1.5rem; border: none; border-radius: var(--radius-sm);
-            font-family: inherit; font-size: 0.85rem; font-weight: 600;
-            cursor: pointer; transition: all 0.25s ease; letter-spacing: 0.02em;
+            display:inline-flex; align-items:center; justify-content:center; gap:0.5rem;
+            padding:0.75rem 1.5rem; border:none; border-radius:var(--radius-sm);
+            font-family:inherit; font-size:0.85rem; font-weight:600; cursor:pointer; transition:all 0.25s ease;
         }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent), #1f7a6f); color: white;
-            box-shadow: 0 4px 15px rgba(42, 157, 143, 0.25);
-        }
-        .btn-primary:hover { box-shadow: 0 6px 25px rgba(42, 157, 143, 0.35); transform: translateY(-1px); }
-        .btn-warning {
-            background: linear-gradient(135deg, var(--orange), #d4803a); color: white;
-            box-shadow: 0 4px 15px rgba(244, 162, 97, 0.2);
-        }
-        .btn-warning:hover { box-shadow: 0 6px 25px rgba(244, 162, 97, 0.3); transform: translateY(-1px); }
-        .btn-danger {
-            background: rgba(231, 111, 81, 0.15); color: var(--red);
-            border: 1px solid rgba(231, 111, 81, 0.25);
-        }
-        .btn-danger:hover { background: rgba(231, 111, 81, 0.25); }
-        .btn-sm { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
-        .btn-full { width: 100%; }
+        .btn-primary { background:linear-gradient(135deg,var(--accent),#1f7a6f); color:white; box-shadow:0 4px 15px rgba(42,157,143,0.25); }
+        .btn-primary:hover { box-shadow:0 6px 25px rgba(42,157,143,0.35); transform:translateY(-1px); }
+        .btn-warning { background:linear-gradient(135deg,var(--orange),#d4803a); color:white; box-shadow:0 4px 15px rgba(244,162,97,0.2); }
+        .btn-warning:hover { box-shadow:0 6px 25px rgba(244,162,97,0.3); transform:translateY(-1px); }
+        .btn-danger { background:rgba(231,111,81,0.15); color:var(--red); border:1px solid rgba(231,111,81,0.25); }
+        .btn-danger:hover { background:rgba(231,111,81,0.25); }
+        .btn-sm { padding:0.4rem 0.9rem; font-size:0.75rem; }
+        .btn-full { width:100%; }
 
-        /* ===== DASHBOARD ===== */
-        .dashboard {
-            position: relative; z-index: 1;
-            max-width: 1200px; margin: 0 auto; padding: 2rem;
-        }
-        .dash-header {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 2.5rem; flex-wrap: wrap; gap: 1rem;
-        }
-        .dash-brand { display: flex; align-items: center; gap: 0.75rem; }
-        .dash-brand img { height: 38px; opacity: 0.9; }
-        .dash-brand h1 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.4rem; font-weight: 700; letter-spacing: 0.06em;
-        }
-        .dash-brand .badge {
-            background: linear-gradient(135deg, var(--accent), #1f7a6f);
-            color: white; font-size: 0.6rem; font-weight: 700;
-            padding: 0.2rem 0.6rem; border-radius: 20px;
-            letter-spacing: 0.1em; text-transform: uppercase;
-        }
-        .dash-actions { display: flex; gap: 1rem; align-items: center; }
-        .back-link {
-            color: var(--text-muted); text-decoration: none;
-            font-size: 0.8rem; transition: all 0.2s;
-            display: flex; align-items: center; gap: 0.4rem;
-        }
-        .back-link:hover { color: var(--accent-bright); }
-        .back-link svg { width: 14px; height: 14px; }
+        /* DASHBOARD */
+        .dashboard { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:2rem; }
+        .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2.5rem; flex-wrap:wrap; gap:1rem; }
+        .dash-brand { display:flex; align-items:center; gap:0.75rem; }
+        .dash-brand img { height:38px; opacity:0.9; }
+        .dash-brand h1 { font-family:'Space Grotesk',sans-serif; font-size:1.4rem; font-weight:700; letter-spacing:0.06em; }
+        .dash-brand .badge { background:linear-gradient(135deg,var(--accent),#1f7a6f); color:white; font-size:0.6rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:20px; letter-spacing:0.1em; text-transform:uppercase; }
+        .dash-actions { display:flex; gap:1rem; align-items:center; }
+        .back-link { color:var(--text-muted); text-decoration:none; font-size:0.8rem; transition:all 0.2s; display:flex; align-items:center; gap:0.4rem; }
+        .back-link:hover { color:var(--accent-bright); }
+        .back-link svg { width:14px; height:14px; }
 
-        /* ===== CARDS ===== */
-        .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        /* CARDS */
+        .dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
         .card {
-            background: linear-gradient(160deg, rgba(42, 157, 143, 0.04), rgba(15, 25, 35, 0.6));
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-lg); padding: 1.75rem;
-            backdrop-filter: blur(20px);
-            position: relative; overflow: hidden; transition: border-color 0.3s;
+            background:linear-gradient(160deg,rgba(42,157,143,0.04),rgba(15,25,35,0.6));
+            border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:1.75rem;
+            backdrop-filter:blur(20px); position:relative; overflow:hidden; transition:border-color 0.3s;
         }
-        .card:hover { border-color: var(--border-medium); }
-        .card::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, var(--border-medium), transparent);
-            opacity: 0.5;
-        }
-        .card-full { grid-column: 1 / -1; }
+        .card:hover { border-color:var(--border-medium); }
+        .card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--border-medium),transparent); opacity:0.5; }
+        .card-full { grid-column:1/-1; }
         .card-title {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.95rem; font-weight: 700;
-            margin-bottom: 1.5rem; padding-bottom: 0.85rem;
-            border-bottom: 1px solid var(--border-subtle);
-            display: flex; align-items: center; gap: 0.6rem;
-            letter-spacing: 0.03em; color: var(--text-secondary);
+            font-family:'Space Grotesk',sans-serif; font-size:0.95rem; font-weight:700;
+            margin-bottom:1.5rem; padding-bottom:0.85rem; border-bottom:1px solid var(--border-subtle);
+            display:flex; align-items:center; gap:0.6rem; letter-spacing:0.03em; color:var(--text-secondary);
         }
-        .card-title .icon {
-            width: 18px; height: 18px; color: var(--accent);
-            filter: drop-shadow(0 0 4px var(--accent-glow));
-        }
+        .card-title .icon { width:18px; height:18px; color:var(--accent); filter:drop-shadow(0 0 4px var(--accent-glow)); }
 
-        /* ===== POOLS ===== */
-        .pool-grid {
-            display: grid; grid-template-columns: 100px 1fr 100px;
-            gap: 0.75rem 1rem; align-items: center;
-        }
-        .pool-label-header {
-            font-size: 0.65rem; font-weight: 600; color: var(--text-muted);
-            text-transform: uppercase; letter-spacing: 0.1em; padding-bottom: 0.3rem;
-        }
-        .pool-name {
-            font-weight: 600; font-size: 0.9rem; color: var(--text-secondary);
-            display: flex; align-items: center; gap: 0.5rem;
-        }
-        .pool-dot {
-            width: 6px; height: 6px; border-radius: 50%;
-            background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);
-        }
-        .pool-dot.gold { background: var(--gold); box-shadow: 0 0 8px var(--gold-glow); }
+        /* SEASON INFO */
+        .season-info { display:flex; gap:2rem; align-items:end; flex-wrap:wrap; }
+        .season-stat { display:flex; flex-direction:column; gap:0.25rem; }
+        .season-stat-label { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-muted); font-weight:600; }
+        .season-stat-value { font-size:1.1rem; font-weight:700; color:var(--accent-bright); font-variant-numeric:tabular-nums; }
+        .season-stat-value.gold { color:var(--gold); }
+        .season-form { display:flex; gap:0.75rem; align-items:end; flex:1; min-width:280px; }
+        .season-form .form-group { flex:1; margin-bottom:0; }
 
-        /* ===== PLAYER POINTS ===== */
-        .player-search-row {
-            display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap;
-        }
-        .player-search-row .form-group { flex: 1; min-width: 180px; margin-bottom: 0; }
-        .player-search-row .form-group.small { flex: 0 0 120px; min-width: 120px; }
+        /* POOLS */
+        .pool-grid { display:grid; grid-template-columns:100px 1fr 100px; gap:0.75rem 1rem; align-items:center; }
+        .pool-label-header { font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; }
+        .pool-name { font-weight:600; font-size:0.9rem; color:var(--text-secondary); display:flex; align-items:center; gap:0.5rem; }
+        .pool-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent-glow); }
+        .pool-dot.gold { background:var(--gold); box-shadow:0 0 8px var(--gold-glow); }
 
-        .autocomplete-wrapper { position: relative; }
+        /* PLAYER POINTS */
+        .player-search-row { display:flex; gap:0.75rem; align-items:end; flex-wrap:wrap; }
+        .player-search-row .form-group { flex:1; min-width:180px; margin-bottom:0; }
+        .player-search-row .form-group.small { flex:0 0 120px; min-width:120px; }
+
+        .autocomplete-wrapper { position:relative; }
         .autocomplete-list {
-            position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-            background: var(--bg-primary); border: 1px solid var(--border-medium);
-            border-radius: var(--radius-sm); max-height: 200px; overflow-y: auto;
-            z-index: 100; display: none; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--bg-primary);
+            border:1px solid var(--border-medium); border-radius:var(--radius-sm); max-height:200px; overflow-y:auto;
+            z-index:100; display:none; box-shadow:0 10px 40px rgba(0,0,0,0.5);
         }
-        .autocomplete-list.show { display: block; }
-        .autocomplete-item {
-            padding: 0.55rem 1rem; cursor: pointer;
-            font-size: 0.85rem; transition: all 0.15s; color: var(--text-secondary);
-        }
-        .autocomplete-item:hover { background: var(--accent-glow); color: var(--text-primary); }
+        .autocomplete-list.show { display:block; }
+        .autocomplete-item { padding:0.55rem 1rem; cursor:pointer; font-size:0.85rem; transition:all 0.15s; color:var(--text-secondary); }
+        .autocomplete-item:hover { background:var(--accent-glow); color:var(--text-primary); }
 
-        /* ===== NUGGETS TABLE ===== */
-        .nuggets-table { width: 100%; border-collapse: collapse; }
-        .nuggets-table thead th {
-            text-align: left; padding: 0.6rem 0.75rem;
-            font-size: 0.65rem; font-weight: 600; color: var(--text-muted);
-            text-transform: uppercase; letter-spacing: 0.1em;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-        .nuggets-table tbody td {
-            padding: 0.65rem 0.75rem; font-size: 0.875rem;
-            border-bottom: 1px solid rgba(255,255,255,0.02);
-        }
-        .nuggets-table tbody tr { transition: background 0.15s; }
-        .nuggets-table tbody tr:hover { background: var(--bg-card-hover); }
-        .nuggets-rank { font-weight: 700; color: var(--text-muted); width: 40px; font-size: 0.8rem; }
-        .nuggets-rank-1 { color: var(--gold); }
-        .nuggets-rank-2 { color: var(--accent-bright); }
-        .nuggets-rank-3 { color: var(--orange); }
-        .nuggets-name { font-weight: 500; }
-        .nuggets-amount { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
-        .nuggets-amount-gold { color: var(--gold); text-shadow: 0 0 12px var(--gold-glow); }
-        .nuggets-total-row td {
-            font-weight: 700; color: var(--accent-bright);
-            border-top: 1px solid var(--border-medium); padding-top: 0.85rem;
-        }
-        .empty-state { text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.85rem; }
+        /* NUGGETS */
+        .nuggets-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; flex-wrap:wrap; }
+        .nuggets-header-left { display:flex; align-items:center; gap:0.75rem; }
+        .nuggets-header-left .form-select { width:auto; min-width:200px; padding:0.5rem 2.5rem 0.5rem 0.75rem; font-size:0.8rem; }
+        .nuggets-table { width:100%; border-collapse:collapse; }
+        .nuggets-table thead th { text-align:left; padding:0.6rem 0.75rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
+        .nuggets-table tbody td { padding:0.65rem 0.75rem; font-size:0.875rem; border-bottom:1px solid rgba(255,255,255,0.02); }
+        .nuggets-table tbody tr { transition:background 0.15s; }
+        .nuggets-table tbody tr:hover { background:var(--bg-card-hover); }
+        .nuggets-rank { font-weight:700; color:var(--text-muted); width:40px; font-size:0.8rem; }
+        .nuggets-rank-1 { color:var(--gold); }
+        .nuggets-rank-2 { color:var(--accent-bright); }
+        .nuggets-rank-3 { color:var(--orange); }
+        .nuggets-name { font-weight:500; }
+        .nuggets-amount { font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+        .nuggets-amount-gold { color:var(--gold); text-shadow:0 0 12px var(--gold-glow); }
+        .nuggets-total-row td { font-weight:700; color:var(--accent-bright); border-top:1px solid var(--border-medium); padding-top:0.85rem; }
+        .empty-state { text-align:center; padding:2.5rem; color:var(--text-muted); font-size:0.85rem; }
 
-        /* ===== TOAST ===== */
+        /* CONFIRM DIALOG */
+        .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:500; display:none; align-items:center; justify-content:center; }
+        .confirm-overlay.show { display:flex; }
+        .confirm-box {
+            background:var(--bg-primary); border:1px solid var(--border-medium); border-radius:var(--radius-lg);
+            padding:2rem; max-width:380px; width:90%; text-align:center;
+            box-shadow:0 20px 60px rgba(0,0,0,0.5);
+        }
+        .confirm-box p { margin-bottom:1.5rem; font-size:0.9rem; color:var(--text-secondary); }
+        .confirm-box .confirm-actions { display:flex; gap:0.75rem; justify-content:center; }
+
+        /* TOAST */
         .toast {
-            position: fixed; bottom: 2rem; right: 2rem;
-            padding: 0.85rem 1.75rem; border-radius: var(--radius-md);
-            font-size: 0.85rem; font-weight: 600;
-            transform: translateY(100px); opacity: 0;
-            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 1000; backdrop-filter: blur(20px);
+            position:fixed; bottom:2rem; right:2rem; padding:0.85rem 1.75rem; border-radius:var(--radius-md);
+            font-size:0.85rem; font-weight:600; transform:translateY(100px); opacity:0;
+            transition:all 0.35s cubic-bezier(0.16,1,0.3,1); z-index:1000; backdrop-filter:blur(20px);
         }
-        .toast.show { transform: translateY(0); opacity: 1; }
-        .toast.success {
-            background: rgba(42, 157, 143, 0.15); border: 1px solid rgba(42, 157, 143, 0.3);
-            color: var(--accent-bright); box-shadow: 0 8px 32px rgba(42, 157, 143, 0.15);
-        }
-        .toast.error {
-            background: rgba(231, 111, 81, 0.15); border: 1px solid rgba(231, 111, 81, 0.3);
-            color: var(--red); box-shadow: 0 8px 32px rgba(231, 111, 81, 0.1);
-        }
+        .toast.show { transform:translateY(0); opacity:1; }
+        .toast.success { background:rgba(42,157,143,0.15); border:1px solid rgba(42,157,143,0.3); color:var(--accent-bright); }
+        .toast.error { background:rgba(231,111,81,0.15); border:1px solid rgba(231,111,81,0.3); color:var(--red); }
 
-        /* ===== ANIMATIONS ===== */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .card { animation: fadeUp 0.5s ease both; }
-        .card:nth-child(1) { animation-delay: 0.05s; }
-        .card:nth-child(2) { animation-delay: 0.12s; }
-        .card:nth-child(3) { animation-delay: 0.19s; }
-        .login-card { animation: fadeUp 0.6s ease both; }
+        /* ANIMATIONS */
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        .card { animation:fadeUp 0.5s ease both; }
+        .card:nth-child(1) { animation-delay:0.05s; }
+        .card:nth-child(2) { animation-delay:0.1s; }
+        .card:nth-child(3) { animation-delay:0.15s; }
+        .card:nth-child(4) { animation-delay:0.2s; }
+        .login-card { animation:fadeUp 0.6s ease both; }
 
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:var(--border-medium); border-radius:3px; }
 
-        @media (max-width: 768px) {
-            .dash-grid { grid-template-columns: 1fr; }
-            .pool-grid { grid-template-columns: 80px 1fr 80px; }
-            .player-search-row { flex-direction: column; }
-            .player-search-row .form-group.small { flex: 1; min-width: 100%; }
-            .dashboard { padding: 1rem; }
+        @media (max-width:768px) {
+            .dash-grid { grid-template-columns:1fr; }
+            .pool-grid { grid-template-columns:80px 1fr 80px; }
+            .player-search-row, .season-info, .season-form { flex-direction:column; }
+            .player-search-row .form-group.small { flex:1; min-width:100%; }
+            .dashboard { padding:1rem; }
+            .nuggets-header { flex-direction:column; align-items:stretch; }
         }
     </style>
 </head>
 <body>
-    <div class="bg-container">
-        <div class="bg-gradient"></div>
-        <div class="bg-grid"></div>
-        <div class="bg-noise"></div>
-    </div>
+    <div class="bg-container"><div class="bg-gradient"></div><div class="bg-grid"></div></div>
 
     <% if (!authenticated) { %>
     <div class="login-wrapper">
@@ -332,9 +228,7 @@
             <img src="/web/assets/logo_ogre.png" alt="Logo" class="login-logo" />
             <h1>OGRE ADMIN</h1>
             <p class="subtitle">Panneau d'administration</p>
-            <% if (error) { %>
-                <div class="login-error"><%= error %></div>
-            <% } %>
+            <% if (error) { %><div class="login-error"><%= error %></div><% } %>
             <form method="POST" action="/admin/login">
                 <div class="form-group">
                     <label class="form-label">Mot de passe</label>
@@ -344,8 +238,8 @@
             </form>
         </div>
     </div>
-
     <% } else { %>
+
     <div class="dashboard">
         <div class="dash-header">
             <div class="dash-brand">
@@ -365,7 +259,41 @@
         </div>
 
         <div class="dash-grid">
-            <!-- POOLS -->
+            <!-- ===== SAISON ===== -->
+            <div class="card card-full">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    Saison en cours
+                </div>
+                <div class="season-info">
+                    <div class="season-stat">
+                        <span class="season-stat-label">Saison</span>
+                        <span class="season-stat-value gold" id="seasonNumber"><%= currentSeason %></span>
+                    </div>
+                    <div class="season-stat">
+                        <span class="season-stat-label">Debut</span>
+                        <span class="season-stat-value" id="seasonStart"><%= curSeason ? curSeason.start.toLocaleDateString('fr-FR') : '-' %></span>
+                    </div>
+                    <div class="season-stat">
+                        <span class="season-stat-label">Fin actuelle</span>
+                        <span class="season-stat-value" id="seasonEnd"><%= curSeason ? curSeason.end.toLocaleDateString('fr-FR') : '-' %></span>
+                    </div>
+                    <div class="season-form">
+                        <div class="form-group">
+                            <label class="form-label">Modifier la date de fin</label>
+                            <input type="date" id="seasonEndInput" class="form-input" value="<%= curSeason ? curSeason.endRaw : '' %>" />
+                        </div>
+                        <button class="btn btn-primary" onclick="updateSeasonEnd()">Appliquer</button>
+                        <button class="btn btn-danger btn-sm" onclick="resetSeasonEnd()" title="Remettre la date par defaut" style="padding:0.75rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== POOLS ===== -->
             <div class="card">
                 <div class="card-title">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -378,11 +306,9 @@
                         <span class="pool-label-header"></span>
                         <span class="pool-label-header">Nom</span>
                         <span class="pool-label-header">Bonus</span>
-
                         <div class="pool-name"><div class="pool-dot"></div> Pool 1</div>
                         <input type="text" name="pool_1_name" value="<%= settings.pool_1_name %>" class="form-input" />
                         <input type="number" name="pool_1_bonus" value="<%= settings.pool_1_bonus %>" class="form-input form-input-small" />
-
                         <div class="pool-name"><div class="pool-dot gold"></div> Pool 2</div>
                         <input type="text" name="pool_2_name" value="<%= settings.pool_2_name %>" class="form-input" />
                         <input type="number" name="pool_2_bonus" value="<%= settings.pool_2_bonus %>" class="form-input form-input-small" />
@@ -393,12 +319,11 @@
                 </form>
             </div>
 
-            <!-- PLAYER POINTS -->
+            <!-- ===== POINTS JOUEUR ===== -->
             <div class="card">
                 <div class="card-title">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                     </svg>
                     Points joueur
@@ -421,40 +346,68 @@
                 </form>
             </div>
 
-            <!-- PEPITES -->
+            <!-- ===== PEPITES ===== -->
             <div class="card card-full">
                 <div class="card-title">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 3h12l4 6-10 13L2 9z"/>
                     </svg>
                     Classement Pepites
-                    <% if (nuggets.length > 0) { %>
-                        <span style="margin-left:auto;font-size:0.8rem;color:var(--gold);font-weight:600;text-shadow:0 0 12px var(--gold-glow);">
-                            Total : <%= nuggets.reduce((s, n) => s + parseInt(n.bank_nuggets), 0).toLocaleString() %>
-                        </span>
+                    <span id="nuggetsTotal" style="margin-left:auto;font-size:0.8rem;color:var(--gold);font-weight:600;text-shadow:0 0 12px var(--gold-glow);">
+                        <% if (nuggets.length > 0) { %>
+                            Total : <%= nuggets.reduce((s, n) => s + (parseInt(n.nuggets) || 0), 0).toLocaleString() %>
+                        <% } %>
+                    </span>
+                </div>
+
+                <div class="nuggets-header">
+                    <div class="nuggets-header-left">
+                        <select class="form-select" id="nuggetsSeason" onchange="loadNuggets(this.value)">
+                            <% seasons.forEach(s => { %>
+                                <option value="<%= s.id %>" <%= s.id === currentSeason ? 'selected' : '' %>><%= s.label %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="confirmResetNuggets()">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Reset pepites (saison en cours)
+                    </button>
+                </div>
+
+                <div id="nuggetsTableContainer">
+                    <% if (nuggets.length === 0) { %>
+                        <div class="empty-state">Aucune pepite pour cette saison.</div>
+                    <% } else { %>
+                        <table class="nuggets-table">
+                            <thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead>
+                            <tbody>
+                                <% nuggets.forEach((n, i) => { %>
+                                <tr>
+                                    <td class="nuggets-rank <%= i < 3 ? 'nuggets-rank-' + (i+1) : '' %>"><%= i + 1 %></td>
+                                    <td class="nuggets-name"><%= n.name %></td>
+                                    <td class="nuggets-amount <%= i === 0 ? 'nuggets-amount-gold' : '' %>"><%= (parseInt(n.nuggets) || 0).toLocaleString() %></td>
+                                </tr>
+                                <% }); %>
+                                <tr class="nuggets-total-row">
+                                    <td></td>
+                                    <td>Total alliance</td>
+                                    <td style="text-align:right;"><%= nuggets.reduce((s, n) => s + (parseInt(n.nuggets) || 0), 0).toLocaleString() %></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     <% } %>
                 </div>
-                <% if (nuggets.length === 0) { %>
-                    <div class="empty-state">Aucune pepite en banque.</div>
-                <% } else { %>
-                    <table class="nuggets-table">
-                        <thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead>
-                        <tbody>
-                            <% nuggets.forEach((n, i) => { %>
-                            <tr>
-                                <td class="nuggets-rank <%= i < 3 ? 'nuggets-rank-' + (i+1) : '' %>"><%= i + 1 %></td>
-                                <td class="nuggets-name"><%= n.name %></td>
-                                <td class="nuggets-amount <%= i === 0 ? 'nuggets-amount-gold' : '' %>"><%= parseInt(n.bank_nuggets).toLocaleString() %></td>
-                            </tr>
-                            <% }); %>
-                            <tr class="nuggets-total-row">
-                                <td></td>
-                                <td>Total alliance</td>
-                                <td style="text-align:right;"><%= nuggets.reduce((s, n) => s + parseInt(n.bank_nuggets), 0).toLocaleString() %></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONFIRM DIALOG -->
+    <div class="confirm-overlay" id="confirmOverlay">
+        <div class="confirm-box">
+            <p id="confirmMsg">Confirmer ?</p>
+            <div class="confirm-actions">
+                <button class="btn btn-danger" id="confirmYes">Confirmer</button>
+                <button class="btn btn-sm" onclick="closeConfirm()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border-subtle);">Annuler</button>
             </div>
         </div>
     </div>
@@ -469,74 +422,155 @@
             setTimeout(() => t.classList.remove('show'), 3500);
         }
 
+        function escapeHTML(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        // ===== CONFIRM DIALOG =====
+        let confirmCallback = null;
+        function openConfirm(msg, cb) {
+            document.getElementById('confirmMsg').textContent = msg;
+            confirmCallback = cb;
+            document.getElementById('confirmOverlay').classList.add('show');
+        }
+        function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('show'); confirmCallback = null; }
+        document.getElementById('confirmYes').addEventListener('click', () => {
+            if (confirmCallback) confirmCallback();
+            closeConfirm();
+        });
+
+        // ===== SAISON =====
+        async function updateSeasonEnd() {
+            const val = document.getElementById('seasonEndInput').value;
+            if (!val) return showToast('Saisissez une date.', 'error');
+            try {
+                const res = await fetch('/admin/api/season-end', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ end_date: val })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast('Date de fin mise a jour.');
+                    if (data.curSeason) {
+                        document.getElementById('seasonEnd').textContent = new Date(data.curSeason.end).toLocaleDateString('fr-FR');
+                    }
+                } else showToast(data.error || 'Erreur.', 'error');
+            } catch { showToast('Erreur reseau.', 'error'); }
+        }
+
+        async function resetSeasonEnd() {
+            try {
+                const res = await fetch('/admin/api/season-end', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ end_date: '' })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast('Date remise par defaut.');
+                    setTimeout(() => location.reload(), 500);
+                }
+            } catch { showToast('Erreur reseau.', 'error'); }
+        }
+
+        // ===== POOLS =====
         document.getElementById('poolForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
             const body = Object.fromEntries(fd.entries());
             try {
-                const res = await fetch('/admin/api/pools', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
+                const res = await fetch('/admin/api/pools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 const data = await res.json();
                 if (data.ok) showToast('Pools mis a jour.');
                 else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
         });
 
+        // ===== AUTOCOMPLETE =====
         let allPlayerNames = [];
-        (async () => {
-            try {
-                const res = await fetch('/admin/api/players');
-                allPlayerNames = await res.json();
-            } catch {}
-        })();
+        (async () => { try { const r = await fetch('/admin/api/players'); allPlayerNames = await r.json(); } catch {} })();
 
         const searchInput = document.getElementById('playerSearch');
         const acList = document.getElementById('autocompleteList');
-
         searchInput.addEventListener('input', () => {
             const val = searchInput.value.toLowerCase();
             if (val.length < 1) { acList.classList.remove('show'); return; }
             const matches = allPlayerNames.filter(n => n.toLowerCase().includes(val)).slice(0, 10);
             if (matches.length === 0) { acList.classList.remove('show'); return; }
             acList.innerHTML = matches.map(m => {
-                const d = document.createElement('div');
-                d.textContent = m;
+                const d = document.createElement('div'); d.textContent = m;
                 return `<div class="autocomplete-item">${d.innerHTML}</div>`;
             }).join('');
             acList.classList.add('show');
             acList.querySelectorAll('.autocomplete-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    searchInput.value = item.textContent;
-                    acList.classList.remove('show');
-                });
+                item.addEventListener('click', () => { searchInput.value = item.textContent; acList.classList.remove('show'); });
             });
         });
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.autocomplete-wrapper')) acList.classList.remove('show');
-        });
+        document.addEventListener('click', (e) => { if (!e.target.closest('.autocomplete-wrapper')) acList.classList.remove('show'); });
 
+        // ===== POINTS =====
         document.getElementById('pointsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
             const body = Object.fromEntries(fd.entries());
             try {
-                const res = await fetch('/admin/api/player-points', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
+                const res = await fetch('/admin/api/player-points', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 const data = await res.json();
                 if (data.ok) {
                     showToast(`${data.pseudo} : ${data.newTotal} pts (${data.delta >= 0 ? '+' : ''}${data.delta})`);
                     document.querySelector('[name="points"]').value = '';
-                } else {
-                    showToast(data.error || 'Erreur.', 'error');
-                }
+                } else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
         });
+
+        // ===== NUGGETS =====
+        async function loadNuggets(seasonId) {
+            const container = document.getElementById('nuggetsTableContainer');
+            const totalSpan = document.getElementById('nuggetsTotal');
+            try {
+                const res = await fetch(`/admin/api/nuggets/${seasonId}`);
+                const rows = await res.json();
+
+                if (rows.length === 0) {
+                    container.innerHTML = '<div class="empty-state">Aucune pepite pour cette saison.</div>';
+                    totalSpan.textContent = '';
+                    return;
+                }
+
+                const total = rows.reduce((s, r) => s + parseInt(r.nuggets), 0);
+                totalSpan.textContent = `Total : ${total.toLocaleString()}`;
+
+                let html = '<table class="nuggets-table"><thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead><tbody>';
+                rows.forEach((r, i) => {
+                    const rankClass = i < 3 ? ` nuggets-rank-${i+1}` : '';
+                    const amountClass = i === 0 ? ' nuggets-amount-gold' : '';
+                    html += `<tr>
+                        <td class="nuggets-rank${rankClass}">${i+1}</td>
+                        <td class="nuggets-name">${escapeHTML(r.name)}</td>
+                        <td class="nuggets-amount${amountClass}">${parseInt(r.nuggets).toLocaleString()}</td>
+                    </tr>`;
+                });
+                html += `<tr class="nuggets-total-row"><td></td><td>Total alliance</td><td style="text-align:right;">${total.toLocaleString()}</td></tr>`;
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
+        }
+
+        function confirmResetNuggets() {
+            openConfirm('Remettre toutes les pepites a zero pour la saison en cours ?', async () => {
+                try {
+                    const res = await fetch('/admin/api/reset-nuggets', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                    const data = await res.json();
+                    if (data.ok) {
+                        showToast(`Pepites remises a zero (saison ${data.seasonId}).`);
+                        // Recharger le tableau sur la saison en cours
+                        document.getElementById('nuggetsSeason').value = data.seasonId;
+                        loadNuggets(data.seasonId);
+                    } else showToast(data.error || 'Erreur.', 'error');
+                } catch { showToast('Erreur reseau.', 'error'); }
+            });
+        }
     </script>
     <% } %>
 </body>

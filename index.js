@@ -477,7 +477,12 @@ app.post('/admin/api/pools', adminAuth, async (req, res) => {
 app.get('/admin/api/players', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json([]);
     try {
-        const r = await pool.query(`SELECT COALESCE(discord_nickname, dofus_pseudo) as name FROM players ORDER BY name`);
+        const r = await pool.query(`
+            SELECT COALESCE(MAX(discord_nickname), MAX(dofus_pseudo)) as name 
+            FROM players 
+            GROUP BY COALESCE(discord_id, dofus_pseudo)
+            ORDER BY name
+        `);
         res.json(r.rows.map(p => p.name));
     } catch { res.json([]); }
 });
@@ -581,6 +586,26 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
         await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS previous_rank INTEGER DEFAULT NULL`);
         await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS nuggets INTEGER DEFAULT 0`);
+        
+        // Migration : reporter les anciennes bank_nuggets dans season_stats si pas deja fait
+        const migCheck = await pool.query("SELECT value FROM settings WHERE key = 'nuggets_migrated'");
+        if (migCheck.rows.length === 0) {
+            console.log('[Migration] Report bank_nuggets vers season_stats...');
+            const playersWithNuggets = await pool.query('SELECT id, bank_nuggets FROM players WHERE bank_nuggets > 0');
+            if (playersWithNuggets.rows.length > 0) {
+                const seasonId = await ensureCurrentSeason();
+                for (const p of playersWithNuggets.rows) {
+                    await pool.query(`
+                        INSERT INTO season_stats (player_id, season_id, points, wins, losses, nuggets) 
+                        VALUES ($1, $2, 0, 0, 0, $3)
+                        ON CONFLICT (player_id, season_id) DO UPDATE SET nuggets = season_stats.nuggets + $3
+                    `, [p.id, seasonId, p.bank_nuggets]);
+                }
+                console.log(`[Migration] ${playersWithNuggets.rows.length} joueurs migrés.`);
+            }
+            await pool.query("INSERT INTO settings (key, value) VALUES ('nuggets_migrated', '1') ON CONFLICT (key) DO NOTHING");
+        }
+        
         console.log('[Startup] DB verifiee.');
     } catch (e) { console.error(e); }
 });
