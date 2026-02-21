@@ -13,7 +13,7 @@ module.exports = {
         pool_2: "Captain / ABBA / Tenebris",
     },
     BONUSES: {
-        pool_1: 4,
+        pool_1: 8,
         pool_2: 1,
         standard: 0
     },
