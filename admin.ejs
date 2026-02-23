@@ -142,9 +142,27 @@
         .pool-dot.gold { background:var(--gold); box-shadow:0 0 8px var(--gold-glow); }
 
         /* PLAYER POINTS */
-        .player-search-row { display:flex; gap:0.75rem; align-items:end; flex-wrap:wrap; }
-        .player-search-row .form-group { flex:1; min-width:180px; margin-bottom:0; }
-        .player-search-row .form-group.small { flex:0 0 120px; min-width:120px; }
+        .btn-pts {
+            width:44px; height:40px; border:1px solid var(--border-medium); border-radius:var(--radius-sm);
+            background:rgba(231,111,81,0.08); color:var(--red); font-weight:700; font-size:0.85rem;
+            cursor:pointer; transition:all 0.15s; font-family:inherit; display:inline-flex; align-items:center; justify-content:center;
+        }
+        .btn-pts:hover { background:rgba(231,111,81,0.18); transform:translateY(-1px); }
+        .btn-pts:active { transform:translateY(0); }
+        .btn-pts-plus { background:rgba(42,157,143,0.08); color:var(--accent-bright); border-color:var(--border-medium); }
+        .btn-pts-plus:hover { background:rgba(42,157,143,0.18); }
+        .btn-pts-reset {
+            padding:0.4rem 0.75rem; border:1px solid var(--border-subtle); border-radius:var(--radius-sm);
+            background:transparent; color:var(--text-muted); font-size:0.7rem; font-weight:600;
+            cursor:pointer; transition:all 0.15s; font-family:inherit; text-transform:uppercase; letter-spacing:0.05em;
+        }
+        .btn-pts-reset:hover { color:var(--text-secondary); border-color:var(--border-medium); }
+        .pts-delta {
+            min-width:60px; text-align:center; font-size:1.1rem; font-weight:700; font-variant-numeric:tabular-nums;
+            color:var(--text-muted); padding:0.5rem 0; transition:color 0.2s;
+        }
+        .pts-delta.positive { color:var(--accent-bright); }
+        .pts-delta.negative { color:var(--red); }
 
         .autocomplete-wrapper { position:relative; }
         .autocomplete-list {
@@ -174,6 +192,25 @@
         .nuggets-amount-gold { color:var(--gold); text-shadow:0 0 12px var(--gold-glow); }
         .nuggets-total-row td { font-weight:700; color:var(--accent-bright); border-top:1px solid var(--border-medium); padding-top:0.85rem; }
         .empty-state { text-align:center; padding:2.5rem; color:var(--text-muted); font-size:0.85rem; }
+
+        /* GRIDS */
+        .grid-table { width:100%; border-collapse:collapse; }
+        .grid-table thead th {
+            padding:0.5rem 0.4rem; font-size:0.65rem; font-weight:700; color:var(--accent-bright);
+            text-align:center; border-bottom:1px solid var(--border-medium);
+        }
+        .grid-corner { text-align:left !important; color:var(--text-muted) !important; font-size:0.6rem !important; font-weight:600 !important; }
+        .grid-row-header {
+            font-size:0.75rem; font-weight:700; color:var(--accent-bright);
+            padding:0.4rem 0.5rem; text-align:center; width:60px;
+        }
+        .grid-input {
+            width:100%; padding:0.4rem 0.25rem; background:var(--bg-input); border:1px solid var(--border-subtle);
+            border-radius:4px; color:var(--text-primary); font-size:0.85rem; font-weight:600;
+            text-align:center; font-family:inherit; font-variant-numeric:tabular-nums; transition:all 0.2s;
+        }
+        .grid-input:focus { outline:none; border-color:var(--accent); background:rgba(42,157,143,0.06); box-shadow:0 0 0 2px rgba(42,157,143,0.1); }
+        .grid-input::-webkit-inner-spin-button { -webkit-appearance:none; }
 
         /* CONFIRM DIALOG */
         .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:500; display:none; align-items:center; justify-content:center; }
@@ -212,10 +249,10 @@
         @media (max-width:768px) {
             .dash-grid { grid-template-columns:1fr; }
             .pool-grid { grid-template-columns:80px 1fr 80px; }
-            .player-search-row, .season-info, .season-form { flex-direction:column; }
-            .player-search-row .form-group.small { flex:1; min-width:100%; }
+            .season-info, .season-form { flex-direction:column; }
             .dashboard { padding:1rem; }
             .nuggets-header { flex-direction:column; align-items:stretch; }
+            [style*="grid-template-columns:1fr 1fr"] { grid-template-columns:1fr !important; }
         }
     </style>
 </head>
@@ -329,21 +366,91 @@
                     Points joueur
                 </div>
                 <form id="pointsForm">
-                    <div class="player-search-row">
-                        <div class="form-group autocomplete-wrapper">
-                            <label class="form-label">Joueur</label>
-                            <input type="text" id="playerSearch" name="pseudo" class="form-input" placeholder="Rechercher un joueur..." autocomplete="off" required />
-                            <div class="autocomplete-list" id="autocompleteList"></div>
+                    <div class="form-group autocomplete-wrapper" style="margin-bottom:1.25rem;">
+                        <label class="form-label">Joueur</label>
+                        <input type="text" id="playerSearch" name="pseudo" class="form-input" placeholder="Rechercher un joueur..." autocomplete="off" required />
+                        <div class="autocomplete-list" id="autocompleteList"></div>
+                    </div>
+
+                    <div id="pointsEditor" style="display:none;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+                            <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Actuel :</span>
+                            <span id="ptsCurrentDisplay" style="font-size:1rem;font-weight:700;color:var(--text-secondary);font-variant-numeric:tabular-nums;">-</span>
                         </div>
-                        <div class="form-group small">
-                            <label class="form-label">Points (+/-)</label>
-                            <input type="number" name="points" class="form-input" placeholder="0" required />
+
+                        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                            <button type="button" class="btn-pts" onclick="adjustPts(-5)">-5</button>
+                            <button type="button" class="btn-pts" onclick="adjustPts(-1)">-1</button>
+                            <div id="ptsDeltaDisplay" class="pts-delta">0</div>
+                            <button type="button" class="btn-pts btn-pts-plus" onclick="adjustPts(+1)">+1</button>
+                            <button type="button" class="btn-pts btn-pts-plus" onclick="adjustPts(+5)">+5</button>
+                            <div style="flex:1;"></div>
+                            <button type="button" class="btn-pts-reset" onclick="resetPts()">Reset</button>
                         </div>
-                        <div style="padding-bottom:1px;">
-                            <button type="submit" class="btn btn-warning">Appliquer</button>
+
+                        <input type="hidden" name="points" id="ptsHiddenInput" value="0" />
+
+                        <div style="margin-top:1.25rem;display:flex;align-items:center;justify-content:space-between;">
+                            <div style="display:flex;align-items:center;gap:0.6rem;">
+                                <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Prevision :</span>
+                                <span id="ptsPreviewDisplay" style="font-size:1.2rem;font-weight:700;color:var(--accent-bright);font-variant-numeric:tabular-nums;transition:all 0.2s;">-</span>
+                            </div>
+                            <button type="submit" class="btn btn-warning" id="ptsSubmitBtn" disabled>Appliquer</button>
                         </div>
                     </div>
                 </form>
+            </div>
+
+            <!-- ===== GRILLES DE POINTS ===== -->
+            <div class="card card-full">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                    Bareme de points
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
+                        <table class="grid-table" id="gridWin">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsWin[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
+                        <table class="grid-table" id="gridLose">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsLose[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div style="margin-top:1.25rem;text-align:right;">
+                    <button class="btn btn-primary" onclick="saveGrids()">Sauvegarder le bareme</button>
+                </div>
             </div>
 
             <!-- ===== PEPITES ===== -->
@@ -491,8 +598,18 @@
         let allPlayerNames = [];
         (async () => { try { const r = await fetch('/admin/api/players'); allPlayerNames = await r.json(); } catch {} })();
 
+        let ptsCurrent = 0;
+        let ptsDelta = 0;
+
         const searchInput = document.getElementById('playerSearch');
         const acList = document.getElementById('autocompleteList');
+        const ptsEditor = document.getElementById('pointsEditor');
+        const ptsCurrentEl = document.getElementById('ptsCurrentDisplay');
+        const ptsDeltaEl = document.getElementById('ptsDeltaDisplay');
+        const ptsPreviewEl = document.getElementById('ptsPreviewDisplay');
+        const ptsHidden = document.getElementById('ptsHiddenInput');
+        const ptsSubmitBtn = document.getElementById('ptsSubmitBtn');
+
         searchInput.addEventListener('input', () => {
             const val = searchInput.value.toLowerCase();
             if (val.length < 1) { acList.classList.remove('show'); return; }
@@ -504,25 +621,90 @@
             }).join('');
             acList.classList.add('show');
             acList.querySelectorAll('.autocomplete-item').forEach(item => {
-                item.addEventListener('click', () => { searchInput.value = item.textContent; acList.classList.remove('show'); });
+                item.addEventListener('click', () => {
+                    searchInput.value = item.textContent;
+                    acList.classList.remove('show');
+                    loadPlayerPoints(item.textContent);
+                });
             });
         });
         document.addEventListener('click', (e) => { if (!e.target.closest('.autocomplete-wrapper')) acList.classList.remove('show'); });
+
+        async function loadPlayerPoints(pseudo) {
+            try {
+                const res = await fetch(`/admin/api/player-stats/${encodeURIComponent(pseudo)}`);
+                const data = await res.json();
+                ptsCurrent = data.points || 0;
+                ptsDelta = 0;
+                updatePtsDisplay();
+                ptsEditor.style.display = 'block';
+            } catch { ptsCurrent = 0; ptsDelta = 0; updatePtsDisplay(); ptsEditor.style.display = 'block'; }
+        }
+
+        function adjustPts(n) {
+            ptsDelta += n;
+            updatePtsDisplay();
+        }
+
+        function resetPts() {
+            ptsDelta = 0;
+            updatePtsDisplay();
+        }
+
+        function updatePtsDisplay() {
+            ptsCurrentEl.textContent = ptsCurrent;
+            ptsDeltaEl.textContent = ptsDelta === 0 ? '0' : (ptsDelta > 0 ? '+' + ptsDelta : ptsDelta);
+            ptsDeltaEl.className = 'pts-delta' + (ptsDelta > 0 ? ' positive' : ptsDelta < 0 ? ' negative' : '');
+            const preview = ptsCurrent + ptsDelta;
+            ptsPreviewEl.textContent = preview;
+            ptsPreviewEl.style.color = ptsDelta > 0 ? 'var(--accent-bright)' : ptsDelta < 0 ? 'var(--red)' : 'var(--text-secondary)';
+            ptsHidden.value = ptsDelta;
+            ptsSubmitBtn.disabled = ptsDelta === 0;
+        }
 
         // ===== POINTS =====
         document.getElementById('pointsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
             const body = Object.fromEntries(fd.entries());
+            if (parseInt(body.points) === 0) return;
             try {
                 const res = await fetch('/admin/api/player-points', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 const data = await res.json();
                 if (data.ok) {
                     showToast(`${data.pseudo} : ${data.newTotal} pts (${data.delta >= 0 ? '+' : ''}${data.delta})`);
-                    document.querySelector('[name="points"]').value = '';
+                    ptsCurrent = data.newTotal;
+                    ptsDelta = 0;
+                    updatePtsDisplay();
                 } else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
         });
+
+        // ===== GRILLES DE POINTS =====
+        async function saveGrids() {
+            const readGrid = (name) => {
+                const grid = [];
+                for (let r = 0; r < 5; r++) {
+                    const row = [];
+                    for (let c = 0; c < 5; c++) {
+                        const input = document.querySelector(`input[data-grid="${name}"][data-r="${r}"][data-c="${c}"]`);
+                        row.push(parseInt(input.value) || 0);
+                    }
+                    grid.push(row);
+                }
+                return grid;
+            };
+            try {
+                const res = await fetch('/admin/api/points-grid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pts_win: readGrid('win'), pts_lose: readGrid('lose') })
+                });
+                const data = await res.json();
+                if (data.ok) showToast('Bareme sauvegarde.');
+                else showToast(data.error || 'Erreur.', 'error');
+            } catch { showToast('Erreur reseau.', 'error'); }
+        }
 
         // ===== NUGGETS =====
         async function loadNuggets(seasonId) {

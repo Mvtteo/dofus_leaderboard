@@ -225,7 +225,9 @@ const liveConfig = {
     pool_1_bonus: config.BONUSES?.pool_1 || 0,
     pool_2_name: config.POOL_NAMES?.pool_2 || 'Pool 2',
     pool_2_bonus: config.BONUSES?.pool_2 || 0,
-    season_end_override: null
+    season_end_override: null,
+    pts_win: [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
+    pts_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
 };
 
 async function loadSettings() {
@@ -236,6 +238,9 @@ async function loadSettings() {
             if (row.key in liveConfig) {
                 if (row.key.includes('bonus')) liveConfig[row.key] = parseInt(row.value) || 0;
                 else if (row.key === 'season_end_override') liveConfig[row.key] = row.value || null;
+                else if (row.key === 'pts_win' || row.key === 'pts_lose') {
+                    try { liveConfig[row.key] = JSON.parse(row.value); } catch {}
+                }
                 else liveConfig[row.key] = row.value;
             }
         }
@@ -245,7 +250,9 @@ async function loadSettings() {
 
 async function saveSetting(key, value) {
     await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, String(value)]);
-    liveConfig[key] = key.includes('bonus') ? parseInt(value) || 0 : value;
+    if (key.includes('bonus')) liveConfig[key] = parseInt(value) || 0;
+    else if (key === 'pts_win' || key === 'pts_lose') { try { liveConfig[key] = JSON.parse(value); } catch {} }
+    else liveConfig[key] = value;
 }
 
 // Charger les settings au demarrage
@@ -410,13 +417,15 @@ app.get('/admin', adminAuth, async (req, res) => {
             nuggets: nuggetsRes.rows,
             seasons,
             currentSeason,
-            curSeason
+            curSeason,
+            ptsWin: liveConfig.pts_win,
+            ptsLose: liveConfig.pts_lose
         });
     } catch (e) { 
         console.error(e);
         const { seasons, currentSeason } = getSeasons();
         const curSeason = seasons.find(s => s.id === currentSeason);
-        res.render('admin', { authenticated: true, error: null, settings: liveConfig, nuggets: [], seasons, currentSeason, curSeason });
+        res.render('admin', { authenticated: true, error: null, settings: liveConfig, nuggets: [], seasons, currentSeason, curSeason, ptsWin: liveConfig.pts_win, ptsLose: liveConfig.pts_lose });
     }
 });
 
@@ -484,6 +493,21 @@ app.get('/admin/api/players', adminAuth, async (req, res) => {
         `);
         res.json(r.rows.map(p => p.name));
     } catch { res.json([]); }
+});
+
+app.get('/admin/api/player-stats/:pseudo', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const pseudo = req.params.pseudo;
+        const seasonId = await ensureCurrentSeason();
+        const r = await pool.query(`
+            SELECT COALESCE(SUM(ss.points), 0) as points
+            FROM players p
+            LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season_id = $2
+            WHERE LOWER(COALESCE(p.discord_nickname, p.dofus_pseudo)) = LOWER($1)
+        `, [pseudo, seasonId]);
+        res.json({ points: parseInt(r.rows[0]?.points) || 0 });
+    } catch { res.json({ points: 0 }); }
 });
 
 app.post('/admin/api/player-points', adminAuth, async (req, res) => {
@@ -570,6 +594,27 @@ app.post('/admin/api/season-end', adminAuth, async (req, res) => {
         }
         
         res.json({ ok: true, curSeason });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+// --- Modifier grilles de points ---
+app.post('/admin/api/points-grid', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { pts_win, pts_lose } = req.body;
+        // Validation : 5x5, que des nombres
+        for (const grid of [pts_win, pts_lose]) {
+            if (!Array.isArray(grid) || grid.length !== 5) return res.status(400).json({ error: 'Grille invalide (5 lignes attendues).' });
+            for (const row of grid) {
+                if (!Array.isArray(row) || row.length !== 5) return res.status(400).json({ error: 'Grille invalide (5 colonnes attendues).' });
+                if (row.some(v => typeof v !== 'number' || isNaN(v))) return res.status(400).json({ error: 'Valeurs invalides.' });
+            }
+        }
+        await saveSetting('pts_win', JSON.stringify(pts_win));
+        await saveSetting('pts_lose', JSON.stringify(pts_lose));
+        liveConfig.pts_win = pts_win;
+        liveConfig.pts_lose = pts_lose;
+        res.json({ ok: true });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -971,12 +1016,8 @@ client.on('interactionCreate', async interaction => {
             const myC = Math.min(Math.max(myTeam.length, 1), 5); 
             const enC = Math.min(Math.max(enTeam.length, 1), 5);
             
-            // Calcul Points
-            const PTS = {
-                WIN: [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
-                LOSE: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
-            };
-            let pts = hasWon ? PTS.WIN[myC-1][enC-1] : PTS.LOSE[myC-1][enC-1];
+            // Calcul Points (grilles depuis la DB)
+            let pts = hasWon ? liveConfig.pts_win[myC-1][enC-1] : liveConfig.pts_lose[myC-1][enC-1];
             if (session.allianceTier === 'pool_1') pts += liveConfig.pool_1_bonus;
             if (session.allianceTier === 'pool_2') pts += liveConfig.pool_2_bonus;
 
@@ -1025,7 +1066,7 @@ client.on('interactionCreate', async interaction => {
                             if (isWinner) {
                                 pointsToAdd = pts;
                             } else {
-                                pointsToAdd = session.context === 'defense' ? pts : 0;
+                                pointsToAdd = pts;
                             }
                             const winsToAdd = isWinner ? 1 : 0;
                             const lossesToAdd = isWinner ? 0 : 1;
@@ -1050,15 +1091,14 @@ client.on('interactionCreate', async interaction => {
             await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
 
             const allCredited = [...paid, ...defeated];
-            const defPts = session.context === 'defense' ? pts : 0;
             
             let msg;
             if (paid.length > 0 && defeated.length > 0) {
-                msg = `**+${pts} pts** : ${paid.join(', ')}\n**+${defPts} pts** (défaite) : ${defeated.join(', ')}`;
+                msg = `**+${pts} pts** : ${paid.join(', ')}\n**+${pts} pts** (défaite) : ${defeated.join(', ')}`;
             } else if (paid.length > 0) {
                 msg = `**+${pts} pts** : ${paid.join(', ')}`;
             } else if (defeated.length > 0) {
-                msg = `**+${defPts} pts** : ${defeated.join(', ')}`;
+                msg = `**+${pts} pts** : ${defeated.join(', ')}`;
             } else {
                 msg = `Aucun joueur crédité.`;
             }
