@@ -478,9 +478,8 @@ app.get('/admin/api/players', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json([]);
     try {
         const r = await pool.query(`
-            SELECT COALESCE(MAX(discord_nickname), MAX(dofus_pseudo)) as name 
+            SELECT DISTINCT COALESCE(discord_nickname, dofus_pseudo) as name 
             FROM players 
-            GROUP BY COALESCE(discord_id, dofus_pseudo)
             ORDER BY name
         `);
         res.json(r.rows.map(p => p.name));
