@@ -221,38 +221,81 @@ function adminAuth(req, res, next) {
 
 // --- LIVE SETTINGS (pool bonuses en DB) ---
 const liveConfig = {
-    pool_1_name: config.POOL_NAMES?.pool_1 || 'Pool 1',
-    pool_1_bonus: config.BONUSES?.pool_1 || 0,
-    pool_2_name: config.POOL_NAMES?.pool_2 || 'Pool 2',
-    pool_2_bonus: config.BONUSES?.pool_2 || 0,
+    pools: JSON.parse(JSON.stringify(config.DEFAULT_POOLS || [
+        { id: "pool_1", name: "Pool 1", bonus: 0 },
+        { id: "pool_2", name: "Pool 2", bonus: 0 }
+    ])),
     season_end_override: null,
-    pts_win: [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
-    pts_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
+    pts_atk_win:  [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
+    pts_atk_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]],
+    pts_def_win:  [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
+    pts_def_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
 };
 
 async function loadSettings() {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
         const res = await pool.query('SELECT key, value FROM settings');
-        for (const row of res.rows) {
-            if (row.key in liveConfig) {
-                if (row.key.includes('bonus')) liveConfig[row.key] = parseInt(row.value) || 0;
-                else if (row.key === 'season_end_override') liveConfig[row.key] = row.value || null;
-                else if (row.key === 'pts_win' || row.key === 'pts_lose') {
-                    try { liveConfig[row.key] = JSON.parse(row.value); } catch {}
-                }
-                else liveConfig[row.key] = row.value;
+        const dbKeys = {};
+        for (const row of res.rows) dbKeys[row.key] = row.value;
+
+        // Load pools (JSON array)
+        if (dbKeys.pools) {
+            try { liveConfig.pools = JSON.parse(dbKeys.pools); } catch {}
+        } else if (dbKeys.pool_1_name) {
+            // Migration from old format
+            liveConfig.pools = [
+                { id: 'pool_1', name: dbKeys.pool_1_name || 'Pool 1', bonus: parseInt(dbKeys.pool_1_bonus) || 0 },
+                { id: 'pool_2', name: dbKeys.pool_2_name || 'Pool 2', bonus: parseInt(dbKeys.pool_2_bonus) || 0 }
+            ];
+            await saveSetting('pools', JSON.stringify(liveConfig.pools));
+            console.log('[Settings] Migration pools ancien format -> nouveau format OK');
+        }
+
+        // Load 4 grids (with migration from old 2-grid format)
+        const gridKeys = ['pts_atk_win', 'pts_atk_lose', 'pts_def_win', 'pts_def_lose'];
+        for (const gk of gridKeys) {
+            if (dbKeys[gk]) {
+                try { liveConfig[gk] = JSON.parse(dbKeys[gk]); } catch {}
             }
         }
-        console.log('[Settings] Chargés depuis la DB:', liveConfig);
+        // Migration: if new keys don't exist but old ones do
+        if (!dbKeys.pts_atk_win && dbKeys.pts_win) {
+            try {
+                const oldWin = JSON.parse(dbKeys.pts_win);
+                const oldLose = JSON.parse(dbKeys.pts_lose);
+                liveConfig.pts_atk_win = oldWin;
+                liveConfig.pts_def_win = oldWin;
+                liveConfig.pts_atk_lose = oldLose;
+                liveConfig.pts_def_lose = oldLose;
+                await saveSetting('pts_atk_win', JSON.stringify(oldWin));
+                await saveSetting('pts_atk_lose', JSON.stringify(oldLose));
+                await saveSetting('pts_def_win', JSON.stringify(oldWin));
+                await saveSetting('pts_def_lose', JSON.stringify(oldLose));
+                console.log('[Settings] Migration grilles ancien format -> 4 grilles OK');
+            } catch {}
+        }
+
+        // Load season override
+        if (dbKeys.season_end_override !== undefined) {
+            liveConfig.season_end_override = dbKeys.season_end_override || null;
+        }
+
+        console.log('[Settings] Charges depuis la DB:', JSON.stringify(liveConfig, null, 2));
     } catch (e) { console.error('[Settings] Fallback config.js:', e.message); }
 }
 
 async function saveSetting(key, value) {
     await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, String(value)]);
-    if (key.includes('bonus')) liveConfig[key] = parseInt(value) || 0;
-    else if (key === 'pts_win' || key === 'pts_lose') { try { liveConfig[key] = JSON.parse(value); } catch {} }
-    else liveConfig[key] = value;
+    if (key === 'pools') {
+        try { liveConfig.pools = JSON.parse(value); } catch {}
+    } else if (key.startsWith('pts_')) {
+        try { liveConfig[key] = JSON.parse(value); } catch {}
+    } else if (key === 'season_end_override') {
+        liveConfig[key] = value || null;
+    } else {
+        liveConfig[key] = value;
+    }
 }
 
 // Charger les settings au demarrage
@@ -414,18 +457,22 @@ app.get('/admin', adminAuth, async (req, res) => {
         res.render('admin', { 
             authenticated: true, error: null,
             settings: liveConfig,
+            pools: liveConfig.pools,
+            maxPools: config.MAX_POOLS || 5,
             nuggets: nuggetsRes.rows,
             seasons,
             currentSeason,
             curSeason,
-            ptsWin: liveConfig.pts_win,
-            ptsLose: liveConfig.pts_lose
+            ptsAtkWin: liveConfig.pts_atk_win,
+            ptsAtkLose: liveConfig.pts_atk_lose,
+            ptsDefWin: liveConfig.pts_def_win,
+            ptsDefLose: liveConfig.pts_def_lose
         });
     } catch (e) { 
         console.error(e);
         const { seasons, currentSeason } = getSeasons();
         const curSeason = seasons.find(s => s.id === currentSeason);
-        res.render('admin', { authenticated: true, error: null, settings: liveConfig, nuggets: [], seasons, currentSeason, curSeason, ptsWin: liveConfig.pts_win, ptsLose: liveConfig.pts_lose });
+        res.render('admin', { authenticated: true, error: null, settings: liveConfig, pools: liveConfig.pools, maxPools: config.MAX_POOLS || 5, nuggets: [], seasons, currentSeason, curSeason, ptsAtkWin: liveConfig.pts_atk_win, ptsAtkLose: liveConfig.pts_atk_lose, ptsDefWin: liveConfig.pts_def_win, ptsDefLose: liveConfig.pts_def_lose });
     }
 });
 
@@ -474,12 +521,15 @@ app.post('/admin/logout', (req, res) => {
 app.post('/admin/api/pools', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
     try {
-        const { pool_1_name, pool_1_bonus, pool_2_name, pool_2_bonus } = req.body;
-        await saveSetting('pool_1_name', pool_1_name);
-        await saveSetting('pool_1_bonus', pool_1_bonus);
-        await saveSetting('pool_2_name', pool_2_name);
-        await saveSetting('pool_2_bonus', pool_2_bonus);
-        res.json({ ok: true });
+        const { pools: newPools } = req.body;
+        if (!Array.isArray(newPools)) return res.status(400).json({ error: 'Format invalide.' });
+        if (newPools.length > (config.MAX_POOLS || 5)) return res.status(400).json({ error: `Maximum ${config.MAX_POOLS || 5} pools.` });
+        // Validate each pool
+        for (const p of newPools) {
+            if (!p.id || !p.name || typeof p.bonus !== 'number') return res.status(400).json({ error: 'Pool invalide.' });
+        }
+        await saveSetting('pools', JSON.stringify(newPools));
+        res.json({ ok: true, pools: liveConfig.pools });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -601,19 +651,19 @@ app.post('/admin/api/season-end', adminAuth, async (req, res) => {
 app.post('/admin/api/points-grid', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
     try {
-        const { pts_win, pts_lose } = req.body;
+        const { pts_atk_win, pts_atk_lose, pts_def_win, pts_def_lose } = req.body;
         // Validation : 5x5, que des nombres
-        for (const grid of [pts_win, pts_lose]) {
-            if (!Array.isArray(grid) || grid.length !== 5) return res.status(400).json({ error: 'Grille invalide (5 lignes attendues).' });
+        for (const [name, grid] of Object.entries({ pts_atk_win, pts_atk_lose, pts_def_win, pts_def_lose })) {
+            if (!Array.isArray(grid) || grid.length !== 5) return res.status(400).json({ error: `Grille ${name} invalide (5 lignes attendues).` });
             for (const row of grid) {
-                if (!Array.isArray(row) || row.length !== 5) return res.status(400).json({ error: 'Grille invalide (5 colonnes attendues).' });
-                if (row.some(v => typeof v !== 'number' || isNaN(v))) return res.status(400).json({ error: 'Valeurs invalides.' });
+                if (!Array.isArray(row) || row.length !== 5) return res.status(400).json({ error: `Grille ${name} invalide (5 colonnes attendues).` });
+                if (row.some(v => typeof v !== 'number' || isNaN(v))) return res.status(400).json({ error: `Valeurs invalides dans ${name}.` });
             }
         }
-        await saveSetting('pts_win', JSON.stringify(pts_win));
-        await saveSetting('pts_lose', JSON.stringify(pts_lose));
-        liveConfig.pts_win = pts_win;
-        liveConfig.pts_lose = pts_lose;
+        await saveSetting('pts_atk_win', JSON.stringify(pts_atk_win));
+        await saveSetting('pts_atk_lose', JSON.stringify(pts_atk_lose));
+        await saveSetting('pts_def_win', JSON.stringify(pts_def_win));
+        await saveSetting('pts_def_lose', JSON.stringify(pts_def_lose));
         res.json({ ok: true });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
@@ -979,18 +1029,19 @@ client.on('interactionCreate', async interaction => {
 
         if (interaction.customId === 'attack' || interaction.customId === 'defense') {
             session.context = interaction.customId;
-            const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(
+            const poolOptions = [
                 new StringSelectMenuOptionBuilder().setLabel('Standard').setValue('standard'),
-                new StringSelectMenuOptionBuilder().setLabel(liveConfig.pool_1_name).setValue('pool_1'),
-                new StringSelectMenuOptionBuilder().setLabel(liveConfig.pool_2_name).setValue('pool_2')
-            ));
+                ...liveConfig.pools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id))
+            ];
+            const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(poolOptions));
             await interaction.update({ content: `Mode : **${interaction.customId}**. Adversaire ?`, components: [row] });
             setSessionTimeout(interaction.user.id, interaction.message);
         }
 
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
             session.allianceTier = interaction.values[0];
-            const tierName = session.allianceTier === 'standard' ? 'Standard' : (liveConfig[session.allianceTier + '_name'] || session.allianceTier);
+            const poolObj = liveConfig.pools.find(p => p.id === session.allianceTier);
+            const tierName = session.allianceTier === 'standard' ? 'Standard' : (poolObj ? poolObj.name : session.allianceTier);
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
@@ -1016,10 +1067,12 @@ client.on('interactionCreate', async interaction => {
             const myC = Math.min(Math.max(myTeam.length, 1), 5); 
             const enC = Math.min(Math.max(enTeam.length, 1), 5);
             
-            // Calcul Points (grilles depuis la DB)
-            let pts = hasWon ? liveConfig.pts_win[myC-1][enC-1] : liveConfig.pts_lose[myC-1][enC-1];
-            if (session.allianceTier === 'pool_1') pts += liveConfig.pool_1_bonus;
-            if (session.allianceTier === 'pool_2') pts += liveConfig.pool_2_bonus;
+            // Calcul Points (grilles depuis la DB, selon contexte attaque/defense)
+            const gridWin = session.context === 'defense' ? liveConfig.pts_def_win : liveConfig.pts_atk_win;
+            const gridLose = session.context === 'defense' ? liveConfig.pts_def_lose : liveConfig.pts_atk_lose;
+            let pts = hasWon ? gridWin[myC-1][enC-1] : gridLose[myC-1][enC-1];
+            const poolObj = liveConfig.pools.find(p => p.id === session.allianceTier);
+            if (poolObj) pts += poolObj.bonus;
 
             const seasonId = await ensureCurrentSeason();
             await snapshotRanks(seasonId); // Snapshot des rangs avant modification

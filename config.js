@@ -8,15 +8,13 @@ module.exports = {
     
     NUGGETS_CHANNEL_ID: process.env.NUGGETS_CHANNEL_ID, 
 
-    POOL_NAMES: {
-        pool_1: "CXO / Dawnfall / Razia",
-        pool_2: "Captain / ABBA / Tenebris",
-    },
-    BONUSES: {
-        pool_1: 8,
-        pool_2: 1,
-        standard: 0
-    },
+    // Pools dynamiques (max 5) - valeurs par defaut si rien en DB
+    DEFAULT_POOLS: [
+        { id: "pool_1", name: "CXO / Dawnfall / Razia", bonus: 8 },
+        { id: "pool_2", name: "Captain / ABBA / Tenebris", bonus: 1 }
+    ],
+    MAX_POOLS: 5,
+
     BASE_SCORES: {
         attack: 5, 
         defense: 5

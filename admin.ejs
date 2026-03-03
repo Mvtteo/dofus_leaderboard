@@ -140,6 +140,7 @@
         .pool-name { font-weight:600; font-size:0.9rem; color:var(--text-secondary); display:flex; align-items:center; gap:0.5rem; }
         .pool-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent-glow); }
         .pool-dot.gold { background:var(--gold); box-shadow:0 0 8px var(--gold-glow); }
+        .pool-row { animation:fadeUp 0.3s ease both; transition:opacity 0.2s; }
 
         /* PLAYER POINTS */
         .btn-pts {
@@ -337,23 +338,34 @@
                         <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
                     </svg>
                     Bonus Pools
+                    <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:500;" id="poolCount"><%= pools.length %>/<%= maxPools %></span>
                 </div>
-                <form id="poolForm">
-                    <div class="pool-grid">
-                        <span class="pool-label-header"></span>
+                <div id="poolContainer">
+                    <div class="pool-grid" style="grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;">
                         <span class="pool-label-header">Nom</span>
                         <span class="pool-label-header">Bonus</span>
-                        <div class="pool-name"><div class="pool-dot"></div> Pool 1</div>
-                        <input type="text" name="pool_1_name" value="<%= settings.pool_1_name %>" class="form-input" />
-                        <input type="number" name="pool_1_bonus" value="<%= settings.pool_1_bonus %>" class="form-input form-input-small" />
-                        <div class="pool-name"><div class="pool-dot gold"></div> Pool 2</div>
-                        <input type="text" name="pool_2_name" value="<%= settings.pool_2_name %>" class="form-input" />
-                        <input type="number" name="pool_2_bonus" value="<%= settings.pool_2_bonus %>" class="form-input form-input-small" />
+                        <span class="pool-label-header"></span>
                     </div>
-                    <div style="margin-top:1.5rem; text-align:right;">
-                        <button type="submit" class="btn btn-primary">Sauvegarder</button>
+                    <% pools.forEach((p, i) => { %>
+                    <div class="pool-row pool-grid" style="grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;" data-pool-id="<%= p.id %>">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <div class="pool-dot" style="flex-shrink:0;"></div>
+                            <input type="text" class="form-input pool-name-input" value="<%= p.name %>" />
+                        </div>
+                        <input type="number" class="form-input form-input-small pool-bonus-input" value="<%= p.bonus %>" style="width:100%;" />
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removePool(this)" style="padding:0.35rem 0.5rem;min-width:0;" title="Supprimer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        </button>
                     </div>
-                </form>
+                    <% }); %>
+                </div>
+                <div style="margin-top:1rem;display:flex;gap:0.75rem;justify-content:space-between;align-items:center;">
+                    <button type="button" class="btn btn-sm" id="addPoolBtn" onclick="addPool()" style="background:rgba(42,157,143,0.1);color:var(--accent-bright);border:1px solid var(--border-medium);<%= pools.length >= maxPools ? 'opacity:0.4;pointer-events:none;' : '' %>">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                        Ajouter
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="savePools()">Sauvegarder</button>
+                </div>
             </div>
 
             <!-- ===== POINTS JOUEUR ===== -->
@@ -410,10 +422,15 @@
                     Bareme de points
                 </div>
 
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
+                <!-- ATTAQUE -->
+                <div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
+                    Attaque
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;">
                     <div>
                         <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
-                        <table class="grid-table" id="gridWin">
+                        <table class="grid-table" id="gridAtkWin">
                             <thead>
                                 <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
                             </thead>
@@ -422,7 +439,7 @@
                                 <tr>
                                     <td class="grid-row-header"><%= r + 1 %></td>
                                     <% for (let c = 0; c < 5; c++) { %>
-                                    <td><input type="number" class="grid-input" data-grid="win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsWin[r][c] %>" /></td>
+                                    <td><input type="number" class="grid-input" data-grid="atk_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkWin[r][c] %>" /></td>
                                     <% } %>
                                 </tr>
                                 <% } %>
@@ -431,7 +448,7 @@
                     </div>
                     <div>
                         <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
-                        <table class="grid-table" id="gridLose">
+                        <table class="grid-table" id="gridAtkLose">
                             <thead>
                                 <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
                             </thead>
@@ -440,7 +457,51 @@
                                 <tr>
                                     <td class="grid-row-header"><%= r + 1 %></td>
                                     <% for (let c = 0; c < 5; c++) { %>
-                                    <td><input type="number" class="grid-input" data-grid="lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsLose[r][c] %>" /></td>
+                                    <td><input type="number" class="grid-input" data-grid="atk_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkLose[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- DEFENSE -->
+                <div style="font-size:0.8rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;padding-top:1rem;border-top:1px solid var(--border-subtle);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Defense
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
+                        <table class="grid-table" id="gridDefWin">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="def_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefWin[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
+                        <table class="grid-table" id="gridDefLose">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="def_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefLose[r][c] %>" /></td>
                                     <% } %>
                                 </tr>
                                 <% } %>
@@ -582,17 +643,66 @@
         }
 
         // ===== POOLS =====
-        document.getElementById('poolForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            const body = Object.fromEntries(fd.entries());
+        const MAX_POOLS = <%= maxPools %>;
+        let poolCounter = <%= pools.length %>;
+
+        function addPool() {
+            const container = document.getElementById('poolContainer');
+            const rows = container.querySelectorAll('.pool-row');
+            if (rows.length >= MAX_POOLS) return;
+            poolCounter++;
+            const id = 'pool_' + poolCounter;
+            const div = document.createElement('div');
+            div.className = 'pool-row pool-grid';
+            div.style.cssText = 'grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;';
+            div.dataset.poolId = id;
+            div.innerHTML = `
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <div class="pool-dot" style="flex-shrink:0;"></div>
+                    <input type="text" class="form-input pool-name-input" value="" placeholder="Nom de la pool" />
+                </div>
+                <input type="number" class="form-input form-input-small pool-bonus-input" value="0" style="width:100%;" />
+                <button type="button" class="btn btn-danger btn-sm" onclick="removePool(this)" style="padding:0.35rem 0.5rem;min-width:0;" title="Supprimer">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>`;
+            container.appendChild(div);
+            updatePoolCount();
+        }
+
+        function removePool(btn) {
+            const row = btn.closest('.pool-row');
+            const container = document.getElementById('poolContainer');
+            const rows = container.querySelectorAll('.pool-row');
+            if (rows.length <= 1) return showToast('Il faut au moins 1 pool.', 'error');
+            row.remove();
+            updatePoolCount();
+        }
+
+        function updatePoolCount() {
+            const count = document.querySelectorAll('.pool-row').length;
+            document.getElementById('poolCount').textContent = count + '/' + MAX_POOLS;
+            const addBtn = document.getElementById('addPoolBtn');
+            if (count >= MAX_POOLS) { addBtn.style.opacity = '0.4'; addBtn.style.pointerEvents = 'none'; }
+            else { addBtn.style.opacity = '1'; addBtn.style.pointerEvents = 'auto'; }
+        }
+
+        async function savePools() {
+            const rows = document.querySelectorAll('.pool-row');
+            const pools = [];
+            for (const row of rows) {
+                const name = row.querySelector('.pool-name-input').value.trim();
+                const bonus = parseInt(row.querySelector('.pool-bonus-input').value) || 0;
+                const id = row.dataset.poolId;
+                if (!name) { showToast('Un nom de pool est vide.', 'error'); return; }
+                pools.push({ id, name, bonus });
+            }
             try {
-                const res = await fetch('/admin/api/pools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const res = await fetch('/admin/api/pools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pools }) });
                 const data = await res.json();
-                if (data.ok) showToast('Pools mis a jour.');
+                if (data.ok) showToast('Pools sauvegardees.');
                 else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
-        });
+        }
 
         // ===== AUTOCOMPLETE =====
         let allPlayerNames = [];
@@ -698,7 +808,12 @@
                 const res = await fetch('/admin/api/points-grid', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pts_win: readGrid('win'), pts_lose: readGrid('lose') })
+                    body: JSON.stringify({
+                        pts_atk_win: readGrid('atk_win'),
+                        pts_atk_lose: readGrid('atk_lose'),
+                        pts_def_win: readGrid('def_win'),
+                        pts_def_lose: readGrid('def_lose')
+                    })
                 });
                 const data = await res.json();
                 if (data.ok) showToast('Bareme sauvegarde.');
