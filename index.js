@@ -1029,10 +1029,7 @@ client.on('interactionCreate', async interaction => {
 
         if (interaction.customId === 'attack' || interaction.customId === 'defense') {
             session.context = interaction.customId;
-            const poolOptions = [
-                new StringSelectMenuOptionBuilder().setLabel('Standard').setValue('standard'),
-                ...liveConfig.pools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id))
-            ];
+            const poolOptions = liveConfig.pools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
             const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(poolOptions));
             await interaction.update({ content: `Mode : **${interaction.customId}**. Adversaire ?`, components: [row] });
             setSessionTimeout(interaction.user.id, interaction.message);
@@ -1041,7 +1038,8 @@ client.on('interactionCreate', async interaction => {
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
             session.allianceTier = interaction.values[0];
             const poolObj = liveConfig.pools.find(p => p.id === session.allianceTier);
-            const tierName = session.allianceTier === 'standard' ? 'Standard' : (poolObj ? poolObj.name : session.allianceTier);
+            const tierName = poolObj ? poolObj.name : session.allianceTier;
+            session.allianceName = tierName;
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
@@ -1144,16 +1142,17 @@ client.on('interactionCreate', async interaction => {
             await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
 
             const allCredited = [...paid, ...defeated];
+            const allianceLine = `vs **${session.allianceName || session.allianceTier}**`;
             
             let msg;
             if (paid.length > 0 && defeated.length > 0) {
-                msg = `**+${pts} pts** : ${paid.join(', ')}\n**+${pts} pts** (défaite) : ${defeated.join(', ')}`;
+                msg = `${allianceLine}\n**+${pts} pts** : ${paid.join(', ')}\n**+${pts} pts** (défaite) : ${defeated.join(', ')}`;
             } else if (paid.length > 0) {
-                msg = `**+${pts} pts** : ${paid.join(', ')}`;
+                msg = `${allianceLine}\n**+${pts} pts** : ${paid.join(', ')}`;
             } else if (defeated.length > 0) {
-                msg = `**+${pts} pts** : ${defeated.join(', ')}`;
+                msg = `${allianceLine}\n**+${pts} pts** : ${defeated.join(', ')}`;
             } else {
-                msg = `Aucun joueur crédité.`;
+                msg = `${allianceLine}\nAucun joueur crédité.`;
             }
             
             if (skipped.length > 0) {
