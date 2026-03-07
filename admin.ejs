@@ -416,85 +416,105 @@
                 </form>
             </div>
 
-            <!-- ===== BAREME DE POINTS ===== -->
+            <!-- ===== GRILLES DE POINTS ===== -->
             <div class="card card-full">
                 <div class="card-title">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
                     </svg>
                     Bareme de points
+                    <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:400;">Multiplie par le % du pool</span>
                 </div>
 
-                <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:1.5rem;line-height:1.6;">
-                    Formule : <span style="color:var(--accent-bright);font-weight:600;">floor( max(0, base + (adv - allies) &times; ecart) &times; pool% )</span>
+                <!-- ATTAQUE -->
+                <div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
+                    Attaque
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;">
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="atk_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkWin[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="atk_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkLose[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
+                <!-- DEFENSE -->
+                <div style="font-size:0.8rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;padding-top:1rem;border-top:1px solid var(--border-subtle);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Defense
+                </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
-                    <!-- ATTAQUE -->
                     <div>
-                        <div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.5rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
-                            Attaque
-                        </div>
-                        <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:0.75rem 1rem;align-items:center;">
-                            <span></span>
-                            <span class="pool-label-header" style="text-align:center;">Base</span>
-                            <span class="pool-label-header" style="text-align:center;">Par ecart</span>
-
-                            <span style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);">Victoire</span>
-                            <input type="number" class="form-input" style="text-align:center;" id="atk_win_base" value="<%= scoring.atk_win_base %>" />
-                            <input type="number" class="form-input" style="text-align:center;" id="atk_win_ecart" value="<%= scoring.atk_win_ecart %>" />
-
-                            <span style="font-size:0.75rem;font-weight:700;color:var(--red);">Defaite</span>
-                            <input type="number" class="form-input" style="text-align:center;" id="atk_lose_base" value="<%= scoring.atk_lose_base %>" />
-                            <input type="number" class="form-input" style="text-align:center;" id="atk_lose_ecart" value="<%= scoring.atk_lose_ecart %>" />
-                        </div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="def_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefWin[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
                     </div>
-
-                    <!-- DEFENSE -->
                     <div>
-                        <div style="font-size:0.8rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.5rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                            Defense
-                        </div>
-                        <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:0.75rem 1rem;align-items:center;">
-                            <span></span>
-                            <span class="pool-label-header" style="text-align:center;">Base</span>
-                            <span class="pool-label-header" style="text-align:center;">Par ecart</span>
-
-                            <span style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);">Victoire</span>
-                            <input type="number" class="form-input" style="text-align:center;" id="def_win_base" value="<%= scoring.def_win_base %>" />
-                            <input type="number" class="form-input" style="text-align:center;" id="def_win_ecart" value="<%= scoring.def_win_ecart %>" />
-
-                            <span style="font-size:0.75rem;font-weight:700;color:var(--red);">Defaite</span>
-                            <input type="number" class="form-input" style="text-align:center;" id="def_lose_base" value="<%= scoring.def_lose_base %>" />
-                            <input type="number" class="form-input" style="text-align:center;" id="def_lose_ecart" value="<%= scoring.def_lose_ecart %>" />
-                        </div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="def_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefLose[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-
-                <!-- SIMULATEUR -->
-                <div style="margin-top:2rem;padding-top:1.25rem;border-top:1px solid var(--border-subtle);">
-                    <div style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Simulateur</div>
-                    <div style="display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;">
-                        <div class="form-group" style="margin:0;">
-                            <label class="form-label">Allies</label>
-                            <input type="number" class="form-input" style="width:70px;text-align:center;" id="simAllies" value="3" min="1" max="5" oninput="updateSim()" />
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label class="form-label">Adversaires</label>
-                            <input type="number" class="form-input" style="width:70px;text-align:center;" id="simAdv" value="5" min="1" max="5" oninput="updateSim()" />
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label class="form-label">Pool %</label>
-                            <input type="number" class="form-input" style="width:70px;text-align:center;" id="simPool" value="0" oninput="updateSim()" />
-                        </div>
-                        <div id="simResult" style="font-size:0.8rem;color:var(--text-secondary);line-height:1.6;padding-bottom:0.3rem;"></div>
-                    </div>
-                </div>
-
                 <div style="margin-top:1.25rem;text-align:right;">
-                    <button class="btn btn-primary" onclick="saveScoring()">Sauvegarder le bareme</button>
+                    <button class="btn btn-primary" onclick="saveGrids()">Sauvegarder le bareme</button>
                 </div>
             </div>
 
@@ -777,45 +797,30 @@
             } catch { showToast('Erreur reseau.', 'error'); }
         });
 
-        // ===== BAREME DE POINTS =====
-        function calcPoints(base, ecart, allies, adv, poolPct) {
-            const raw = Math.max(0, base + (adv - allies) * ecart);
-            return Math.floor(raw * (1 + poolPct / 100));
-        }
-
-        function updateSim() {
-            const allies = Math.min(5, Math.max(1, parseInt(document.getElementById('simAllies').value) || 3));
-            const adv = Math.min(5, Math.max(1, parseInt(document.getElementById('simAdv').value) || 3));
-            const poolPct = parseInt(document.getElementById('simPool').value) || 0;
-            const aw = calcPoints(parseInt(document.getElementById('atk_win_base').value)||0, parseInt(document.getElementById('atk_win_ecart').value)||0, allies, adv, poolPct);
-            const al = calcPoints(parseInt(document.getElementById('atk_lose_base').value)||0, parseInt(document.getElementById('atk_lose_ecart').value)||0, allies, adv, poolPct);
-            const dw = calcPoints(parseInt(document.getElementById('def_win_base').value)||0, parseInt(document.getElementById('def_win_ecart').value)||0, allies, adv, poolPct);
-            const dl = calcPoints(parseInt(document.getElementById('def_lose_base').value)||0, parseInt(document.getElementById('def_lose_ecart').value)||0, allies, adv, poolPct);
-            document.getElementById('simResult').innerHTML =
-                `<span style="color:var(--gold);">ATK</span> : V=<b>${aw}</b> D=<b>${al}</b> &nbsp; ` +
-                `<span style="color:var(--accent-bright);">DEF</span> : V=<b>${dw}</b> D=<b>${dl}</b>`;
-        }
-        updateSim();
-
-        // Recalculer a chaque changement de valeur dans le bareme
-        document.querySelectorAll('#atk_win_base,#atk_win_ecart,#atk_lose_base,#atk_lose_ecart,#def_win_base,#def_win_ecart,#def_lose_base,#def_lose_ecart').forEach(el => el.addEventListener('input', updateSim));
-
-        async function saveScoring() {
-            const scoring = {
-                atk_win_base: parseInt(document.getElementById('atk_win_base').value) || 0,
-                atk_win_ecart: parseInt(document.getElementById('atk_win_ecart').value) || 0,
-                atk_lose_base: parseInt(document.getElementById('atk_lose_base').value) || 0,
-                atk_lose_ecart: parseInt(document.getElementById('atk_lose_ecart').value) || 0,
-                def_win_base: parseInt(document.getElementById('def_win_base').value) || 0,
-                def_win_ecart: parseInt(document.getElementById('def_win_ecart').value) || 0,
-                def_lose_base: parseInt(document.getElementById('def_lose_base').value) || 0,
-                def_lose_ecart: parseInt(document.getElementById('def_lose_ecart').value) || 0,
+        // ===== GRILLES DE POINTS =====
+        async function saveGrids() {
+            const readGrid = (name) => {
+                const grid = [];
+                for (let r = 0; r < 5; r++) {
+                    const row = [];
+                    for (let c = 0; c < 5; c++) {
+                        const input = document.querySelector(`input[data-grid="${name}"][data-r="${r}"][data-c="${c}"]`);
+                        row.push(parseInt(input.value) || 0);
+                    }
+                    grid.push(row);
+                }
+                return grid;
             };
             try {
-                const res = await fetch('/admin/api/scoring', {
+                const res = await fetch('/admin/api/points-grid', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(scoring)
+                    body: JSON.stringify({
+                        pts_atk_win: readGrid('atk_win'),
+                        pts_atk_lose: readGrid('atk_lose'),
+                        pts_def_win: readGrid('def_win'),
+                        pts_def_lose: readGrid('def_lose')
+                    })
                 });
                 const data = await res.json();
                 if (data.ok) showToast('Bareme sauvegarde.');
