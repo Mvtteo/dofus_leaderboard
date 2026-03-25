@@ -869,7 +869,7 @@ client.on('messageCreate', async message => {
     if (attachments.size === 0) return;
 
     console.log('[PvP] Upload detecté de', message.author.username, '-', attachments.size, 'image(s)');
-    let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null };
+    let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null, percepteurDetected: false };
     const msgRef = await message.reply(`Analyse PvP en cours...`);
     console.log('[PvP] Message reply envoyé, debut analyse Gemini...');
 
@@ -923,10 +923,18 @@ client.on('messageCreate', async message => {
         if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
         if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
 
+        // Compteurs avant filtrage (pour détecter percepteur)
+        const preFilterWinCount = parsed.winners ? parsed.winners.length : 0;
+        const preFilterLoseCount = parsed.losers ? parsed.losers.length : 0;
+
         // Filtre code : exclure les noms parasites
         const excludePattern = /prisme|percepteur|gardien|protecteur|dofus/i;
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n));
         if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n));
+
+        // Détection percepteur : des noms existaient avant filtrage mais plus après
+        if (preFilterLoseCount > 0 && parsed.losers.length === 0) userSession.percepteurDetected = true;
+        if (preFilterWinCount > 0 && parsed.winners.length === 0) userSession.percepteurDetected = true;
 
         // Cap 5v5
         if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
@@ -938,14 +946,19 @@ client.on('messageCreate', async message => {
 
         activeSessions.set(message.author.id, userSession);
 
-        if (userSession.winners.length > 0 && userSession.losers.length > 0) {
+        const bothSides = userSession.winners.length > 0 && userSession.losers.length > 0;
+        const percepteurFight = userSession.percepteurDetected && (userSession.winners.length > 0 || userSession.losers.length > 0);
+
+        if (bothSides || percepteurFight) {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('defense').setLabel('Défense').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
-            await msgRef.edit({ content: `[COMPLET]\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
+            const winnersDisplay = userSession.winners.length > 0 ? userSession.winners.join(', ') : '(Percepteur)';
+            const losersDisplay = userSession.losers.length > 0 ? userSession.losers.join(', ') : '(Percepteur)';
+            await msgRef.edit({ content: `[COMPLET]\nGagnants: ${winnersDisplay}\nPerdants: ${losersDisplay}`, components: [row] });
             setSessionTimeout(message.author.id, msgRef);
         } else {
             await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
@@ -1015,7 +1028,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         const session = activeSessions.get(interaction.user.id);
-        if (!session && ['attack','defense','result_win','result_lose'].includes(interaction.customId)) return interaction.reply({ content: "Session expirée.", ephemeral: true });
+        if (!session && ['attack','defense','result_win','result_lose','select_alliance_bonus'].includes(interaction.customId)) return interaction.reply({ content: "Session expirée.", ephemeral: true });
 
         if (interaction.customId === 'reset') { clearSessionTimeout(interaction.user.id); activeSessions.delete(interaction.user.id); return interaction.update({ content: "Annulé.", components: [] }); }
         
@@ -1028,33 +1041,39 @@ client.on('interactionCreate', async interaction => {
             await interaction.showModal(modal); return;
         }
 
+        // ETAPE 1 : Attaque / Défense → affiche Victoire / Défaite
         if (interaction.customId === 'attack' || interaction.customId === 'defense') {
             session.context = interaction.customId;
-            const poolOptions = liveConfig.pools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
-            const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(poolOptions));
-            await interaction.update({ content: `Mode : **${interaction.customId}**. Adversaire ?`, components: [row] });
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
+            );
+            await interaction.update({ content: `Mode : **${interaction.customId}**. Résultat ?`, components: [row] });
             setSessionTimeout(interaction.user.id, interaction.message);
         }
 
+        // ETAPE 2 : Victoire / Défaite → affiche sélection pool adverse
+        else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
+            session.hasWon = interaction.customId === 'result_win';
+            const resultLabel = session.hasWon ? 'Victoire' : 'Défaite';
+            const poolOptions = liveConfig.pools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
+            const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(poolOptions));
+            await interaction.update({ content: `**${session.context}** — **${resultLabel}**. Adversaire ?`, components: [row] });
+            setSessionTimeout(interaction.user.id, interaction.message);
+        }
+
+        // ETAPE 3 : Sélection pool → calcul final (bonus uniquement en victoire)
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
             session.allianceTier = interaction.values[0];
             const poolObj = liveConfig.pools.find(p => p.id === session.allianceTier);
             const tierName = poolObj ? poolObj.name : session.allianceTier;
             session.allianceName = tierName;
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
-            );
-            await interaction.update({ content: `Adversaire : **${tierName}**. Résultat ?`, components: [row] });
-            setSessionTimeout(interaction.user.id, interaction.message);
-        }
 
-        else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
             clearSessionTimeout(interaction.user.id);
             activeSessions.delete(interaction.user.id);
             await interaction.deferUpdate();
 
-            const hasWon = interaction.customId === 'result_win';
+            const hasWon = session.hasWon;
             
             // 1. NETTOYAGE DES PSEUDOS
             const cleanWinners = session.winners.map(n => removeAccents(n));
@@ -1066,16 +1085,20 @@ client.on('interactionCreate', async interaction => {
             const myC = Math.min(Math.max(myTeam.length, 1), 5); 
             const enC = Math.min(Math.max(enTeam.length, 1), 5);
             
-            // Calcul Points (grilles + multiplicateur pool%)
+            // Calcul Points (grilles + multiplicateur pool% uniquement en victoire)
             const gridWin = session.context === 'defense' ? liveConfig.pts_def_win : liveConfig.pts_atk_win;
             const gridLose = session.context === 'defense' ? liveConfig.pts_def_lose : liveConfig.pts_atk_lose;
             const gridPts = hasWon ? gridWin[myC-1][enC-1] : gridLose[myC-1][enC-1];
-            const poolObj = liveConfig.pools.find(p => p.id === session.allianceTier);
-            const poolPct = poolObj ? (poolObj.bonus || 0) : 0;
+            const poolPct = (hasWon && poolObj) ? (poolObj.bonus || 0) : 0;
             let pts = Math.floor(gridPts * (1 + poolPct / 100));
 
+            // Attaque contre percepteur seul (aucun joueur adverse) = 0 pts
+            if (session.context === 'attack' && enTeam.length === 0) {
+                pts = 0;
+            }
+
             const seasonId = await ensureCurrentSeason();
-            await snapshotRanks(seasonId); // Snapshot des rangs avant modification
+            await snapshotRanks(seasonId);
             const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id", [seasonId, session.allianceTier, pts]);
             const matchId = matchRes.rows[0].id;
             
@@ -1083,7 +1106,6 @@ client.on('interactionCreate', async interaction => {
             const processedDiscordIds = new Set();
             const paid = [], skipped = [], defeated = [];
 
-            // ON AJOUTE LE PARAMETRE 'isAlly'
             const processPlayers = async (pseudos, isWinner, isAlly) => {
                 for (const p of pseudos) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
                 
@@ -1098,29 +1120,21 @@ client.on('interactionCreate', async interaction => {
                     const pData = rows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
                     if (!pData) continue;
 
-                    // On enregistre TOUJOURS la participation (pour l'historique)
                     await pool.query('INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, $3)', [matchId, pData.id, isWinner]);
 
-                    // MAIS on ne met a jour le classement QUE si c'est un ALLIE
                     if (isAlly) {
                         let shouldCountStats = true;
 
                         if (pData.discord_id) {
                             if (processedDiscordIds.has(pData.discord_id)) {
-                                shouldCountStats = false; // Doublon Discord
+                                shouldCountStats = false;
                             } else {
                                 processedDiscordIds.add(pData.discord_id);
                             }
                         }
 
                         if (shouldCountStats) {
-                            // Victoire -> toujours les points. Defaite -> points LOSE en defense, 0 en attaque
-                            let pointsToAdd;
-                            if (isWinner) {
-                                pointsToAdd = pts;
-                            } else {
-                                pointsToAdd = pts;
-                            }
+                            const pointsToAdd = pts;
                             const winsToAdd = isWinner ? 1 : 0;
                             const lossesToAdd = isWinner ? 0 : 1;
                             
@@ -1135,15 +1149,9 @@ client.on('interactionCreate', async interaction => {
                 }
             };
 
-            // APPEL LOGIQUE :
-            // Si j'ai gagné (hasWon=true) -> Les Winners sont mes Alliés (true).
-            // Si j'ai perdu (hasWon=false) -> Les Winners sont mes Ennemis (false).
-            await processPlayers(cleanWinners, true, hasWon); // Traitement des gagnants
-            
-            // Inverse pour les perdants
-            await processPlayers(cleanLosers, false, !hasWon); // Traitement des perdants
+            await processPlayers(cleanWinners, true, hasWon);
+            await processPlayers(cleanLosers, false, !hasWon);
 
-            const allCredited = [...paid, ...defeated];
             const allianceLine = `vs **${session.allianceName || session.allianceTier}**`;
             
             let msg;
