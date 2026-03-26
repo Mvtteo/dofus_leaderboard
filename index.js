@@ -147,14 +147,11 @@ async function parseScreenWithAI(imageUrl) {
             console.log('[Gemini] Repair result:', JSON.stringify(parsed));
         }
 
-        // Nettoyage automatique des accents
-        if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
-        if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
-
-        // Filtre code : exclure les noms parasites (Prisme, Percepteur, etc.)
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|do'/i;
-        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n));
-        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n));
+        // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
+        const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n) && !hasAccents(n));
+        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n) && !hasAccents(n));
 
         // Cap a 5 joueurs par equipe (AvA = 5v5 max)
         if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
@@ -919,18 +916,15 @@ client.on('messageCreate', async message => {
             console.log('[Gemini] Repair result:', JSON.stringify(parsed));
         }
 
-        // Nettoyage accents
-        if (parsed.winners) parsed.winners = parsed.winners.map(name => removeAccents(name));
-        if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
-
         // Compteurs avant filtrage (pour détecter percepteur)
         const preFilterWinCount = parsed.winners ? parsed.winners.length : 0;
         const preFilterLoseCount = parsed.losers ? parsed.losers.length : 0;
 
-        // Filtre code : exclure les noms parasites
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|do'/i;
-        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n));
-        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n));
+        // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
+        const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n) && !hasAccents(n));
+        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n) && !hasAccents(n));
 
         // Détection percepteur : des noms existaient avant filtrage mais plus après
         if (preFilterLoseCount > 0 && parsed.losers.length === 0) userSession.percepteurDetected = true;
@@ -947,18 +941,21 @@ client.on('messageCreate', async message => {
         activeSessions.set(message.author.id, userSession);
 
         const bothSides = userSession.winners.length > 0 && userSession.losers.length > 0;
-        const percepteurFight = userSession.percepteurDetected && (userSession.winners.length > 0 || userSession.losers.length > 0);
+        const percepteurFight = userSession.percepteurDetected && !bothSides && (userSession.winners.length > 0 || userSession.losers.length > 0);
 
-        if (bothSides || percepteurFight) {
+        if (percepteurFight) {
+            // Perco seul en face → 0 pts, on arrête là
+            clearSessionTimeout(message.author.id);
+            activeSessions.delete(message.author.id);
+            await msgRef.edit({ content: `Pas de def, 0 point chef`, components: [] });
+        } else if (bothSides) {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('attack').setLabel('Attaque').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('defense').setLabel('Défense').setStyle(ButtonStyle.Primary),
                 new ButtonBuilder().setCustomId('correct').setLabel('Corriger').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('reset').setLabel('Reset').setStyle(ButtonStyle.Secondary)
             );
-            const winnersDisplay = userSession.winners.length > 0 ? userSession.winners.join(', ') : '(Percepteur)';
-            const losersDisplay = userSession.losers.length > 0 ? userSession.losers.join(', ') : '(Percepteur)';
-            await msgRef.edit({ content: `[COMPLET]\nGagnants: ${winnersDisplay}\nPerdants: ${losersDisplay}`, components: [row] });
+            await msgRef.edit({ content: `[COMPLET]\nGagnants: ${userSession.winners.join(', ')}\nPerdants: ${userSession.losers.join(', ')}`, components: [row] });
             setSessionTimeout(message.author.id, msgRef);
         } else {
             await msgRef.edit(`[PARTIEL] Gagnants ${userSession.winners.length} / Perdants ${userSession.losers.length}. Envoyez la suite.`);
@@ -1076,11 +1073,8 @@ client.on('interactionCreate', async interaction => {
             const hasWon = session.hasWon;
             
             // 1. NETTOYAGE DES PSEUDOS
-            const cleanWinners = session.winners.map(n => removeAccents(n));
-            const cleanLosers = session.losers.map(n => removeAccents(n));
-
-            const myTeam = hasWon ? cleanWinners : cleanLosers;
-            const enTeam = hasWon ? cleanLosers : cleanWinners;
+            const myTeam = hasWon ? session.winners : session.losers;
+            const enTeam = hasWon ? session.losers : session.winners;
             
             const myC = Math.min(Math.max(myTeam.length, 1), 5); 
             const enC = Math.min(Math.max(enTeam.length, 1), 5);
@@ -1149,8 +1143,8 @@ client.on('interactionCreate', async interaction => {
                 }
             };
 
-            await processPlayers(cleanWinners, true, hasWon);
-            await processPlayers(cleanLosers, false, !hasWon);
+            await processPlayers(session.winners, true, hasWon);
+            await processPlayers(session.losers, false, !hasWon);
 
             const allianceLine = `vs **${session.allianceName || session.allianceTier}**`;
             
