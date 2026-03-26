@@ -394,6 +394,38 @@ app.get('/', async (req, res) => {
     } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
 });
 
+app.get('/dev', async (req, res) => {
+    try {
+        const { seasons, currentSeason } = getSeasons();
+        const seasonId = await ensureCurrentSeason();
+        const query = `
+            SELECT 
+                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                SUM(ss.points) as total_points, SUM(ss.wins) as wins, SUM(ss.losses) as losses,
+                MIN(ss.previous_rank) as previous_rank
+            FROM players p
+            JOIN season_stats ss ON ss.player_id = p.id
+            WHERE ss.season_id = $1
+            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
+            ORDER BY total_points DESC
+        `;
+        const result = await pool.query(query, [seasonId]);
+        const players = result.rows.map((p, index) => {
+            const wins = Number(p.wins) || 0;
+            const losses = Number(p.losses) || 0;
+            const totalGames = wins + losses;
+            const currentRank = index + 1;
+            const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
+            let rankChange = 0;
+            if (prevRank !== null) rankChange = prevRank - currentRank;
+            return { dofus_pseudo: p.display_name, total_points: parseInt(p.total_points), wins, losses, winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0, rank_change: rankChange };
+        });
+        const countRes = await pool.query('SELECT COUNT(*) as c FROM matches WHERE season_id = $1', [seasonId]);
+        res.render('dev', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c) });
+    } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
+});
+
 app.get('/api/leaderboard/:seasonId', async (req, res) => {
     try {
         const seasonId = req.params.seasonId;
@@ -430,6 +462,42 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
         });
         res.json(players);
     } catch (error) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+app.get('/api/matches/:seasonId', async (req, res) => {
+    try {
+        const seasonId = req.params.seasonId;
+        const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+        const matchesRes = await pool.query(`
+            SELECT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at,
+                   json_agg(json_build_object(
+                       'name', COALESCE(p.discord_nickname, p.dofus_pseudo),
+                       'is_winner', mp.is_winner
+                   )) as participants
+            FROM matches m
+            LEFT JOIN match_participants mp ON mp.match_id = m.id
+            LEFT JOIN players p ON p.id = mp.player_id
+            WHERE m.season_id = $1
+            GROUP BY m.id
+            ORDER BY m.created_at DESC NULLS LAST, m.id DESC
+            LIMIT $2
+        `, [seasonId, limit]);
+
+        const matches = matchesRes.rows.map(m => {
+            const poolObj = liveConfig.pools.find(p => p.id === m.alliance_tier);
+            return {
+                id: m.id,
+                alliance: poolObj ? poolObj.name : m.alliance_tier,
+                points: m.points_awarded,
+                context: m.context || 'attack',
+                has_won: m.has_won !== false,
+                created_at: m.created_at,
+                winners: (m.participants || []).filter(p => p.is_winner).map(p => p.name),
+                losers: (m.participants || []).filter(p => !p.is_winner).map(p => p.name)
+            };
+        });
+        res.json(matches);
+    } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
 // ============================================
@@ -678,6 +746,9 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
         await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS previous_rank INTEGER DEFAULT NULL`);
         await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS nuggets INTEGER DEFAULT 0`);
+        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
+        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS context TEXT DEFAULT 'attack'`);
+        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS has_won BOOLEAN DEFAULT true`);
         
         // Migration : reporter les anciennes bank_nuggets dans season_stats si pas deja fait
         const migCheck = await pool.query("SELECT value FROM settings WHERE key = 'nuggets_migrated'");
@@ -1093,7 +1164,7 @@ client.on('interactionCreate', async interaction => {
 
             const seasonId = await ensureCurrentSeason();
             await snapshotRanks(seasonId);
-            const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded) VALUES ($1, $2, $3) RETURNING id", [seasonId, session.allianceTier, pts]);
+            const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded, context, has_won) VALUES ($1, $2, $3, $4, $5) RETURNING id", [seasonId, session.allianceTier, pts, session.context, hasWon]);
             const matchId = matchRes.rows[0].id;
             
             // --- LOGIQUE MULTI-COMPTE ---
