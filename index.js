@@ -152,7 +152,7 @@ async function parseScreenWithAI(imageUrl) {
         if (parsed.losers) parsed.losers = parsed.losers.map(name => removeAccents(name));
 
         // Filtre code : exclure les noms parasites (Prisme, Percepteur, etc.)
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus/i;
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|do'/i;
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n));
         if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n));
 
@@ -928,7 +928,7 @@ client.on('messageCreate', async message => {
         const preFilterLoseCount = parsed.losers ? parsed.losers.length : 0;
 
         // Filtre code : exclure les noms parasites
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus/i;
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|do'/i;
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n));
         if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n));
 
@@ -1092,8 +1092,8 @@ client.on('interactionCreate', async interaction => {
             const poolPct = (hasWon && poolObj) ? (poolObj.bonus || 0) : 0;
             let pts = Math.floor(gridPts * (1 + poolPct / 100));
 
-            // Attaque contre percepteur seul (aucun joueur adverse) = 0 pts
-            if (session.context === 'attack' && enTeam.length === 0) {
+            // Percepteur seul en face (aucun joueur adverse après filtrage) = 0 pts
+            if (enTeam.length === 0) {
                 pts = 0;
             }
 
