@@ -120,7 +120,10 @@ async function parseScreenWithAI(imageUrl) {
              - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
              - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
-             - EXCLURE absolument : Percepteur, Prisme, Prisme d'alliance, tout ce qui contient "Do'", "Dofus", "Gardien", "Protecteur"
+             - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
+             - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
+             - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
+             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
              - EXCLURE les monstres, invocations, et PNJ
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
@@ -150,10 +153,9 @@ async function parseScreenWithAI(imageUrl) {
         // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
         const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n) && !hasAccents(n));
-        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n) && !hasAccents(n));
-
-        // Cap a 5 joueurs par equipe (AvA = 5v5 max)
+        const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
+        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
+        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !isNPC(n));
         if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
         if (parsed.losers && parsed.losers.length > 5) parsed.losers = parsed.losers.slice(0, 5);
 
@@ -962,7 +964,10 @@ client.on('messageCreate', async message => {
              - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
              - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
-             - EXCLURE absolument : Percepteur, Prisme, Prisme d'alliance, tout ce qui contient "Do'", "Dofus", "Gardien", "Protecteur"
+             - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
+             - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
+             - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
+             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
              - EXCLURE les monstres, invocations, et PNJ
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
@@ -994,8 +999,9 @@ client.on('messageCreate', async message => {
         // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
         const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !excludePattern.test(n) && !hasAccents(n));
-        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !excludePattern.test(n) && !hasAccents(n));
+        const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
+        if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
+        if (parsed.losers) parsed.losers = parsed.losers.filter(n => !isNPC(n));
 
         // Détection percepteur : des noms existaient avant filtrage mais plus après
         if (preFilterLoseCount > 0 && parsed.losers.length === 0) userSession.percepteurDetected = true;
