@@ -123,7 +123,7 @@ async function parseScreenWithAI(imageUrl) {
              - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
              - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
              - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
-             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
+             - EXCLURE absolument tout nom contenant "Do'", "Do ", ainsi que : Percepteur, Prisme, Gardien, Protecteur
              - EXCLURE les monstres, invocations, et PNJ
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
@@ -151,7 +151,7 @@ async function parseScreenWithAI(imageUrl) {
         }
 
         // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
+        const excludePattern = /Prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
@@ -358,6 +358,7 @@ app.get('/', async (req, res) => {
         const query = `
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                MAX(p.avatar_url) as avatar_url,
                 SUM(ss.points) as total_points,
                 SUM(ss.wins) as wins,
                 SUM(ss.losses) as losses,
@@ -377,9 +378,10 @@ app.get('/', async (req, res) => {
             const currentRank = index + 1;
             const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
             let rankChange = 0;
-            if (prevRank !== null) rankChange = prevRank - currentRank; // positif = monte
+            if (prevRank !== null) rankChange = prevRank - currentRank;
             return {
                 dofus_pseudo: p.display_name,
+                avatar_url: p.avatar_url || null,
                 total_points: parseInt(p.total_points),
                 wins, losses,
                 winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
@@ -403,6 +405,7 @@ app.get('/dev', async (req, res) => {
         const query = `
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                MAX(p.avatar_url) as avatar_url,
                 SUM(ss.points) as total_points, SUM(ss.wins) as wins, SUM(ss.losses) as losses,
                 MIN(ss.previous_rank) as previous_rank
             FROM players p
@@ -421,7 +424,7 @@ app.get('/dev', async (req, res) => {
             const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
             let rankChange = 0;
             if (prevRank !== null) rankChange = prevRank - currentRank;
-            return { dofus_pseudo: p.display_name, total_points: parseInt(p.total_points), wins, losses, winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0, rank_change: rankChange };
+            return { dofus_pseudo: p.display_name, avatar_url: p.avatar_url || null, total_points: parseInt(p.total_points), wins, losses, winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0, rank_change: rankChange };
         });
         const countRes = await pool.query('SELECT COUNT(*) as c FROM matches WHERE season_id = $1', [seasonId]);
         res.render('dev', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c) });
@@ -434,6 +437,7 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
         const query = `
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
+                MAX(p.avatar_url) as avatar_url,
                 SUM(ss.points) as total_points,
                 SUM(ss.wins) as wins,
                 SUM(ss.losses) as losses,
@@ -456,6 +460,7 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
             if (prevRank !== null) rankChange = prevRank - currentRank;
             return {
                 dofus_pseudo: p.dofus_pseudo,
+                avatar_url: p.avatar_url || null,
                 total_points: p.total_points,
                 wins, losses,
                 winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
@@ -850,6 +855,7 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS context TEXT DEFAULT 'attack'`);
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS has_won BOOLEAN DEFAULT true`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL`);
         
         // Migration : reporter les anciennes bank_nuggets dans season_stats si pas deja fait
         const migCheck = await pool.query("SELECT value FROM settings WHERE key = 'nuggets_migrated'");
@@ -881,7 +887,8 @@ client.on('messageCreate', async message => {
         try {
             const rawNickname = message.member ? message.member.displayName : message.author.username;
             const cleanNickname = removeAccents(rawNickname);
-            await pool.query('UPDATE players SET discord_nickname = $1 WHERE discord_id = $2', [cleanNickname, message.author.id]);
+            const avatarUrl = message.author.displayAvatarURL({ size: 128, format: 'webp' });
+            await pool.query('UPDATE players SET discord_nickname = $1, avatar_url = $2 WHERE discord_id = $3', [cleanNickname, avatarUrl, message.author.id]);
         } catch (e) {}
     }
 
