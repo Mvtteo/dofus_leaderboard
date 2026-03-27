@@ -502,6 +502,105 @@ app.get('/api/matches/:seasonId', async (req, res) => {
     } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
+app.get('/api/stats/:seasonId', async (req, res) => {
+    try {
+        const seasonId = req.params.seasonId;
+
+        // 1. Per-pool breakdown
+        const poolStats = await pool.query(`
+            SELECT 
+                m.alliance_tier,
+                COUNT(*) as total,
+                SUM(CASE WHEN m.has_won = true THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN m.has_won = false THEN 1 ELSE 0 END) as losses,
+                SUM(m.points_awarded) as total_points,
+                SUM(CASE WHEN m.context = 'attack' THEN 1 ELSE 0 END) as attacks,
+                SUM(CASE WHEN m.context = 'defense' THEN 1 ELSE 0 END) as defenses,
+                SUM(CASE WHEN m.context = 'attack' AND m.has_won = true THEN 1 ELSE 0 END) as atk_wins,
+                SUM(CASE WHEN m.context = 'defense' AND m.has_won = true THEN 1 ELSE 0 END) as def_wins
+            FROM matches m
+            WHERE m.season_id = $1
+            GROUP BY m.alliance_tier
+        `, [seasonId]);
+
+        // 2. Top players per pool (most wins)
+        const topPlayers = await pool.query(`
+            SELECT 
+                m.alliance_tier,
+                COALESCE(p.discord_nickname, p.dofus_pseudo) as name,
+                COUNT(*) as wins
+            FROM matches m
+            JOIN match_participants mp ON mp.match_id = m.id
+            JOIN players p ON p.id = mp.player_id
+            WHERE m.season_id = $1 AND mp.is_winner = true AND m.has_won = true
+            GROUP BY m.alliance_tier, COALESCE(p.discord_nickname, p.dofus_pseudo)
+            ORDER BY m.alliance_tier, wins DESC
+        `, [seasonId]);
+
+        // 3. Hourly distribution (only matches with created_at)
+        const hourly = await pool.query(`
+            SELECT EXTRACT(HOUR FROM m.created_at) as hour, COUNT(*) as count
+            FROM matches m
+            WHERE m.season_id = $1 AND m.created_at IS NOT NULL
+            GROUP BY hour ORDER BY hour
+        `, [seasonId]);
+
+        // 4. Current streaks (last 20 matches ordered)
+        const recentMatches = await pool.query(`
+            SELECT m.has_won FROM matches m
+            WHERE m.season_id = $1
+            ORDER BY m.created_at DESC NULLS LAST, m.id DESC
+            LIMIT 30
+        `, [seasonId]);
+
+        let currentStreak = { type: null, count: 0 };
+        let bestWinStreak = 0, bestLoseStreak = 0, tmpW = 0, tmpL = 0;
+        for (const m of recentMatches.rows) {
+            if (m.has_won) { tmpW++; tmpL = 0; if (tmpW > bestWinStreak) bestWinStreak = tmpW; }
+            else { tmpL++; tmpW = 0; if (tmpL > bestLoseStreak) bestLoseStreak = tmpL; }
+            if (currentStreak.type === null) { currentStreak.type = m.has_won ? 'win' : 'lose'; currentStreak.count = 1; }
+            else if ((currentStreak.type === 'win' && m.has_won) || (currentStreak.type === 'lose' && !m.has_won)) { currentStreak.count++; }
+        }
+
+        // Build per-pool with top 3 players
+        const poolMap = {};
+        for (const row of poolStats.rows) {
+            const poolObj = liveConfig.pools.find(p => p.id === row.alliance_tier);
+            const key = row.alliance_tier;
+            poolMap[key] = {
+                name: poolObj ? poolObj.name : key,
+                total: parseInt(row.total),
+                wins: parseInt(row.wins),
+                losses: parseInt(row.losses),
+                winrate: parseInt(row.total) > 0 ? Math.round(parseInt(row.wins) / parseInt(row.total) * 100) : 0,
+                total_points: parseInt(row.total_points),
+                attacks: parseInt(row.attacks),
+                defenses: parseInt(row.defenses),
+                atk_winrate: parseInt(row.attacks) > 0 ? Math.round(parseInt(row.atk_wins) / parseInt(row.attacks) * 100) : 0,
+                def_winrate: parseInt(row.defenses) > 0 ? Math.round(parseInt(row.def_wins) / parseInt(row.defenses) * 100) : 0,
+                top_players: []
+            };
+        }
+        for (const row of topPlayers.rows) {
+            if (poolMap[row.alliance_tier] && poolMap[row.alliance_tier].top_players.length < 3) {
+                poolMap[row.alliance_tier].top_players.push({ name: row.name, wins: parseInt(row.wins) });
+            }
+        }
+
+        // Hourly array (0-23)
+        const hours = Array(24).fill(0);
+        for (const row of hourly.rows) { if (row.hour !== null) hours[parseInt(row.hour)] = parseInt(row.count); }
+
+        res.json({
+            pools: Object.values(poolMap),
+            hours,
+            streak: currentStreak,
+            bestWinStreak,
+            bestLoseStreak
+        });
+    } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
 // ============================================
 // 3b. ROUTES ADMIN
 // ============================================
