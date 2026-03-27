@@ -944,53 +944,72 @@ client.on('messageCreate', async message => {
     console.log('[PvP] Message reply envoyé, debut analyse Gemini...');
 
     try {
-        // Construire un seul appel Gemini avec toutes les images
-        const imagesParts = [];
+        // Analyser chaque image SEPAREMENT pour fiabilité, puis merger
+        let allParsedWinners = [];
+        let allParsedLosers = [];
+        const totalImages = attachments.size;
+        let imgIndex = 0;
+
         for (const [id, attachment] of attachments) {
+            imgIndex++;
+            if (totalImages > 1) {
+                try { await msgRef.edit(`Analyse image ${imgIndex}/${totalImages}...`); } catch {}
+            }
             const response = await fetch(attachment.url);
             const buffer = await response.arrayBuffer();
             const base64 = Buffer.from(buffer).toString('base64');
-            imagesParts.push({ inlineData: { data: base64, mimeType: attachment.contentType || "image/png" } });
+
+            const geminiResult = await callGemini([
+                { inlineData: { data: base64, mimeType: attachment.contentType || "image/png" } },
+                `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
+                 Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
+                 
+                 IMPORTANT : Le screenshot peut ne montrer QU'UNE SEULE section (soit GAGNANTS, soit PERDANTS).
+                 Dans ce cas, remplis la section visible et laisse l'autre vide [].
+                 
+                 Regles STRICTES :
+                 - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
+                 - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
+                 - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
+                 - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
+                 - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
+                 - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
+                 - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
+                 - EXCLURE les monstres, invocations, et PNJ
+                 - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
+                 - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
+                 - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
+                 
+                 Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
+            ]);
+
+            const text = geminiResult.response.text();
+            const clean = text.replace(/```json\n?|```\n?/g, '').trim();
+            console.log('[Gemini] Image', id, 'reponse:', clean);
+
+            let parsed;
+            try {
+                parsed = JSON.parse(clean);
+            } catch (jsonErr) {
+                console.log('[Gemini] JSON invalide, tentative repair...');
+                const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
+                const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
+                const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
+                parsed = { winners: extract(wSection), losers: extract(lSection) };
+                console.log('[Gemini] Repair result:', JSON.stringify(parsed));
+            }
+
+            if (parsed.winners) allParsedWinners.push(...parsed.winners);
+            if (parsed.losers) allParsedLosers.push(...parsed.losers);
         }
 
-        // Un seul appel Gemini avec toutes les images
-        const geminiResult = await callGemini([
-            ...imagesParts,
-            `Analyse ces screenshots de fin de combat Dofus (Alliance vs Alliance).
-             Il peut y avoir 1 ou plusieurs images. Si plusieurs, elles montrent le MEME combat (ex: une image pour GAGNANTS, une autre pour PERDANTS).
-             Extrait UNIQUEMENT les pseudos des joueurs HUMAINS en combinant toutes les images.
-             
-             Regles STRICTES :
-             - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
-             - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
-             - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
-             - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
-             - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
-             - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
-             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
-             - EXCLURE les monstres, invocations, et PNJ
-             - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
-             - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
-             - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
-             
-             Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
-        ]);
+        // Dedup
+        const parsed = {
+            winners: [...new Set(allParsedWinners)],
+            losers: [...new Set(allParsedLosers)]
+        };
 
-        const text = geminiResult.response.text();
-        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
-        console.log('[Gemini] Reponse brute:', clean);
-        
-        let parsed;
-        try {
-            parsed = JSON.parse(clean);
-        } catch (jsonErr) {
-            console.log('[Gemini] JSON invalide, tentative repair...');
-            const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
-            const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
-            const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
-            parsed = { winners: extract(wSection), losers: extract(lSection) };
-            console.log('[Gemini] Repair result:', JSON.stringify(parsed));
-        }
+        console.log('[PvP] Merged result:', JSON.stringify(parsed));
 
         // Compteurs avant filtrage (pour détecter percepteur)
         const preFilterWinCount = parsed.winners ? parsed.winners.length : 0;
