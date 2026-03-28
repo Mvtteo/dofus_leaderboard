@@ -550,28 +550,6 @@ app.get('/api/stats/:seasonId', async (req, res) => {
             GROUP BY hour ORDER BY hour
         `, [seasonId]);
 
-        // 4. Current streak (global)
-        const recentMatches = await pool.query(`
-            SELECT m.has_won FROM matches m
-            WHERE m.season_id = $1
-            ORDER BY m.created_at DESC NULLS LAST, m.id DESC
-            LIMIT 30
-        `, [seasonId]);
-
-        let currentStreak = { type: null, count: 0 };
-        for (const m of recentMatches.rows) {
-            if (currentStreak.type === null) { currentStreak.type = m.has_won ? 'win' : 'lose'; currentStreak.count = 1; }
-            else if ((currentStreak.type === 'win' && m.has_won) || (currentStreak.type === 'lose' && !m.has_won)) { currentStreak.count++; }
-            else break;
-        }
-
-        // 5. Best win streak per pool
-        const poolMatches = await pool.query(`
-            SELECT m.alliance_tier, m.has_won FROM matches m
-            WHERE m.season_id = $1
-            ORDER BY m.alliance_tier, m.created_at ASC NULLS LAST, m.id ASC
-        `, [seasonId]);
-
         // Build per-pool with top 3 players
         const poolMap = {};
         for (const row of poolStats.rows) {
@@ -591,17 +569,6 @@ app.get('/api/stats/:seasonId', async (req, res) => {
                 top_players: []
             };
         }
-        // Compute best win streak per pool
-        const poolStreaks = {};
-        for (const row of poolMatches.rows) {
-            const key = row.alliance_tier;
-            if (!poolStreaks[key]) poolStreaks[key] = { best: 0, current: 0 };
-            if (row.has_won) { poolStreaks[key].current++; if (poolStreaks[key].current > poolStreaks[key].best) poolStreaks[key].best = poolStreaks[key].current; }
-            else { poolStreaks[key].current = 0; }
-        }
-        for (const key in poolMap) {
-            poolMap[key].best_win_streak = poolStreaks[key] ? poolStreaks[key].best : 0;
-        }
         for (const row of topPlayers.rows) {
             if (poolMap[row.alliance_tier] && poolMap[row.alliance_tier].top_players.length < 3) {
                 poolMap[row.alliance_tier].top_players.push({ name: row.name, wins: parseInt(row.wins) });
@@ -614,8 +581,7 @@ app.get('/api/stats/:seasonId', async (req, res) => {
 
         res.json({
             pools: Object.values(poolMap),
-            hours,
-            streak: currentStreak
+            hours
         });
     } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
 });
@@ -1261,7 +1227,8 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('result_win').setLabel('VICTOIRE').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('result_lose').setLabel('DÉFAITE').setStyle(ButtonStyle.Danger)
             );
-            await interaction.update({ content: `Mode : **${interaction.customId}**. Résultat ?`, components: [row] });
+            const modeLabel = interaction.customId === 'attack' ? 'Attaque' : 'Défense';
+            await interaction.update({ content: `Mode : **${modeLabel}**. Résultat ?`, components: [row] });
             setSessionTimeout(interaction.user.id, interaction.message);
         }
 
@@ -1271,7 +1238,8 @@ client.on('interactionCreate', async interaction => {
             const resultLabel = session.hasWon ? 'Victoire' : 'Défaite';
             const poolOptions = liveConfig.pools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
             const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(poolOptions));
-            await interaction.update({ content: `**${session.context}** — **${resultLabel}**. Adversaire ?`, components: [row] });
+            const ctxLabel = session.context === 'attack' ? 'Attaque' : 'Défense';
+            await interaction.update({ content: `**${ctxLabel}** — **${resultLabel}**. Adversaire ?`, components: [row] });
             setSessionTimeout(interaction.user.id, interaction.message);
         }
 
@@ -1362,9 +1330,9 @@ client.on('interactionCreate', async interaction => {
             await processPlayers(session.winners, true, hasWon);
             await processPlayers(session.losers, false, !hasWon);
 
-            const resultEmoji = hasWon ? '🟢' : '🔴';
             const resultLabel = hasWon ? 'Victoire' : 'Défaite';
-            const allianceLine = `${resultEmoji} **${resultLabel}** vs **${session.allianceName || session.allianceTier}** (${session.context})`;
+            const contextLabel = session.context === 'attack' ? 'Attaque' : 'Défense';
+            const allianceLine = `**${resultLabel}** vs **${session.allianceName || session.allianceTier}** (${contextLabel})`;
 
             // Detect multi-account groups (same discord_id, multiple pseudos)
             const multiGroups = {};
