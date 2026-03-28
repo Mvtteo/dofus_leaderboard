@@ -122,7 +122,7 @@ body {
 
 /* ===== PODIUM CARDS ===== */
 .podium-section { margin-bottom:32px; }
-.podium-cards { display:grid; grid-template-columns:1fr 1.15fr 1fr; gap:14px; max-width:720px; margin:0 auto; }
+.podium-cards { display:grid; grid-template-columns:0.85fr 1.2fr 0.75fr; gap:14px; max-width:720px; margin:0 auto; }
 .pod-card {
     position:relative; padding:20px 16px; border-radius:16px; text-align:center;
     background:rgba(42,157,143,0.03); border:1px solid rgba(42,157,143,0.1);
@@ -158,15 +158,16 @@ body {
 .pod-card:hover .pod-avatar { transform:scale(1.1); }
 .pod-avatar img { width:100%; height:100%; object-fit:cover; }
 .pod-card.gold .pod-avatar { width:60px; height:60px; font-size:1.5rem; background:var(--gradient-gold); box-shadow:var(--glow-gold); color:var(--color-dark); }
-.pod-card.silver .pod-avatar { background:var(--gradient-silver); box-shadow:var(--glow-silver); color:var(--color-dark); }
-.pod-card.bronze .pod-avatar { background:var(--gradient-bronze); box-shadow:var(--glow-bronze); color:#fff; }
+.pod-card.silver .pod-avatar { width:48px; height:48px; background:var(--gradient-silver); box-shadow:var(--glow-silver); color:var(--color-dark); }
+.pod-card.bronze .pod-avatar { width:44px; height:44px; background:var(--gradient-bronze); box-shadow:var(--glow-bronze); color:#fff; }
 
-.pod-player-name { font-size:15px; font-weight:700; margin-bottom:4px; }
+.pod-player-name { font-size:14px; font-weight:700; margin-bottom:4px; }
 .pod-card.gold .pod-player-name { font-size:17px; }
-.pod-score { font-family:'JetBrains Mono',monospace; font-size:1.1rem; font-weight:700; margin-bottom:10px; }
+.pod-card.bronze .pod-player-name { font-size:13px; }
+.pod-score { font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; margin-bottom:10px; }
 .pod-card.gold .pod-score { color:var(--color-yellow); font-size:1.3rem; }
-.pod-card.silver .pod-score { color:var(--color-teal); }
-.pod-card.bronze .pod-score { color:var(--color-red); }
+.pod-card.silver .pod-score { color:var(--color-teal); font-size:1rem; }
+.pod-card.bronze .pod-score { color:var(--color-red); font-size:0.9rem; }
 
 .pod-stats-row { display:flex; justify-content:center; gap:16px; margin-bottom:8px; }
 .pod-mini-stat { text-align:center; }
@@ -203,7 +204,9 @@ body {
 .leaderboard-table th { padding:16px 24px; font-size:0.65rem; font-weight:700; letter-spacing:0.15em; color:var(--color-teal); text-transform:uppercase; text-align:left; }
 .leaderboard-table th.col-rank { width:80px; text-align:center; }
 .leaderboard-table th.col-winrate { width:180px; }
+.leaderboard-table th.col-perco { width:60px; text-align:center; }
 .leaderboard-table th.col-score { text-align:right; }
+.cell-perco { text-align:center; }
 .player-row { border-bottom:1px solid rgba(255,255,255,0.02); transition:all 0.3s; opacity:0; transform:translateX(-20px); }
 .player-row.visible { opacity:1; transform:translateX(0); }
 .player-row:hover { background:rgba(42,157,143,0.06); }
@@ -325,6 +328,7 @@ body {
     .main-content { padding:24px 16px; }
     .podium-cards { grid-template-columns:1fr; max-width:300px; }
     .col-winrate { display:none; }
+    .col-perco,.cell-perco { display:none; }
     .leaderboard-table th,.leaderboard-table td { padding:10px 12px; }
     .player-avatar { width:32px; height:32px; font-size:0.75rem; }
     .player-name { font-size:0.8rem; }

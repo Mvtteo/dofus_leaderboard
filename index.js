@@ -1362,7 +1362,22 @@ client.on('interactionCreate', async interaction => {
             await processPlayers(session.winners, true, hasWon);
             await processPlayers(session.losers, false, !hasWon);
 
-            const allianceLine = `vs **${session.allianceName || session.allianceTier}**`;
+            const resultEmoji = hasWon ? '🟢' : '🔴';
+            const resultLabel = hasWon ? 'Victoire' : 'Défaite';
+            const allianceLine = `${resultEmoji} **${resultLabel}** vs **${session.allianceName || session.allianceTier}** (${session.context})`;
+
+            // Detect multi-account groups (same discord_id, multiple pseudos)
+            const multiGroups = {};
+            const allAllyPseudos = hasWon ? session.winners : session.losers;
+            const allyRows = await pool.query(`
+                SELECT dofus_pseudo, discord_id FROM players 
+                WHERE LOWER(dofus_pseudo) = ANY($1::text[]) AND discord_id IS NOT NULL
+            `, [allAllyPseudos.map(x=>x.toLowerCase())]);
+            for (const r of allyRows.rows) {
+                if (!multiGroups[r.discord_id]) multiGroups[r.discord_id] = [];
+                multiGroups[r.discord_id].push(r.dofus_pseudo);
+            }
+            const multiAccountLines = Object.values(multiGroups).filter(g => g.length > 1);
             
             let msg;
             if (paid.length > 0 && defeated.length > 0) {
@@ -1376,7 +1391,10 @@ client.on('interactionCreate', async interaction => {
             }
             
             if (skipped.length > 0) {
-                msg += `\n[Ignorés - Multi] : ${skipped.join(', ')}`;
+                msg += `\n⚠️ Multi-comptes ignorés : ${skipped.join(', ')}`;
+            }
+            if (multiAccountLines.length > 0) {
+                msg += `\n🔗 Comptes liés : ${multiAccountLines.map(g => g.join(' = ')).join(' | ')}`;
             }
             
             await interaction.editReply({ content: msg, components: [] });

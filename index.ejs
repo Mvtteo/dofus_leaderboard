@@ -66,7 +66,7 @@
             <section class="leaderboard-section">
                 <div class="table-container">
                     <table class="leaderboard-table">
-                        <thead><tr><th class="col-rank">RANG</th><th class="col-player">JOUEUR</th><th class="col-winrate">WINRATE</th><th class="col-score">SCORE</th></tr></thead>
+                        <thead><tr><th class="col-rank">RANG</th><th class="col-player">JOUEUR</th><th class="col-perco">PERCO</th><th class="col-winrate">WINRATE</th><th class="col-score">SCORE</th></tr></thead>
                         <tbody id="leaderboardBody"></tbody>
                     </table>
                 </div>
@@ -130,21 +130,28 @@ function renderPodium(){
 function displayTable(){
     const tb=document.getElementById('leaderboardBody');tb.innerHTML='';
     const s=(currentPage-1)*rowsPerPage,pg=filteredPlayers.slice(s,s+rowsPerPage);
-    if(!pg.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:40px;color:rgba(255,255,255,0.2)">Aucun joueur trouvé.</td></tr>';document.getElementById('paginationControls').innerHTML='';return;}
+    if(!pg.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:40px;color:rgba(255,255,255,0.2)">Aucun joueur trouvé.</td></tr>';document.getElementById('paginationControls').innerHTML='';return;}
     pg.forEach(player=>{
         const rk=allPlayers.indexOf(player)+1,w=player.winrate||0,pc=perco(parseInt(player.total_points),rk);
         const rowCls=rk<=3?'top-'+rk:'';const cls=wrClass(w);
         let rankHTML=rk<=3?'<div class="rank-medal rank-'+rk+'">'+rk+'</div>':'<span>'+rk+'</span>';
         const row=document.createElement('tr');row.className='player-row '+rowCls+' visible';
         row.innerHTML='<td class="cell-rank"><div class="rank-badge">'+rankHTML+'</div></td>'+
-            '<td class="cell-player"><div class="player-info"><div class="player-avatar">'+av(player)+'</div><span class="player-name">'+player.dofus_pseudo+'</span>'+ringSm(pc)+'</div></td>'+
+            '<td class="cell-player"><div class="player-info"><div class="player-avatar">'+av(player)+'</div><span class="player-name">'+player.dofus_pseudo+'</span></div></td>'+
+            '<td class="cell-perco">'+ringSm(pc)+'</td>'+
             '<td class="cell-winrate"><div class="winrate-container"><div class="winrate-bar"><div class="winrate-fill fill-'+cls+'" style="width:'+w+'%"></div></div><span class="winrate-value text-'+cls+'">'+w+'%</span></div><span class="winrate-detail">'+player.wins+'V / '+player.losses+'D</span></td>'+
             '<td class="cell-score"><span class="score-value">'+parseInt(player.total_points).toLocaleString()+'</span><span class="score-label">pts</span></td>';
         tb.appendChild(row);
     });
     displayPagination();
 }
-function displayPagination(){const div=document.getElementById('paginationControls');div.innerHTML='';const t=Math.ceil(filteredPlayers.length/rowsPerPage);if(t<=1)return;const prev=document.createElement('button');prev.innerHTML='&lsaquo;';prev.className='page-btn';prev.disabled=currentPage===1;prev.onclick=()=>{currentPage--;displayTable();};div.appendChild(prev);for(let i=1;i<=t;i++){const b=document.createElement('button');b.innerText=i;b.className='page-btn'+(i===currentPage?' active':'');b.onclick=()=>{currentPage=i;displayTable();};div.appendChild(b);}const next=document.createElement('button');next.innerHTML='&rsaquo;';next.className='page-btn';next.disabled=currentPage===t;next.onclick=()=>{currentPage++;displayTable();};div.appendChild(next);}
+function displayPagination(){const div=document.getElementById('paginationControls');div.innerHTML='';const t=Math.ceil(filteredPlayers.length/rowsPerPage);if(t<=1)return;
+    const prev=document.createElement('button');prev.innerHTML='&lsaquo;';prev.className='page-btn';prev.disabled=currentPage===1;prev.onclick=()=>{currentPage--;displayTable();};div.appendChild(prev);
+    let a=Math.max(1,currentPage-2),b=Math.min(t,currentPage+2);
+    if(a>1){const b1=document.createElement('button');b1.innerText='1';b1.className='page-btn'+(currentPage===1?' active':'');b1.onclick=()=>{currentPage=1;displayTable();};div.appendChild(b1);if(a>2){const dots=document.createElement('span');dots.textContent='…';dots.style.cssText='color:rgba(255,255,255,0.2);padding:0 4px';div.appendChild(dots);}}
+    for(let i=a;i<=b;i++){const btn=document.createElement('button');btn.innerText=i;btn.className='page-btn'+(i===currentPage?' active':'');btn.onclick=(function(p){return function(){currentPage=p;displayTable();};})(i);div.appendChild(btn);}
+    if(b<t){if(b<t-1){const dots=document.createElement('span');dots.textContent='…';dots.style.cssText='color:rgba(255,255,255,0.2);padding:0 4px';div.appendChild(dots);}const bN=document.createElement('button');bN.innerText=t;bN.className='page-btn'+(currentPage===t?' active':'');bN.onclick=()=>{currentPage=t;displayTable();};div.appendChild(bN);}
+    const next=document.createElement('button');next.innerHTML='&rsaquo;';next.className='page-btn';next.disabled=currentPage===t;next.onclick=()=>{currentPage++;displayTable();};div.appendChild(next);}
 function filterData(r){const q=document.getElementById('searchInput').value.toLowerCase();filteredPlayers=allPlayers.filter(p=>p.dofus_pseudo.toLowerCase().includes(q));if(r)currentPage=1;renderPodium();displayTable();}
 
 function ago(d){if(!d)return'';const s=(Date.now()-new Date(d).getTime())/1000;if(s<60)return"à l'instant";if(s<3600)return Math.floor(s/60)+' min';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'j';}
