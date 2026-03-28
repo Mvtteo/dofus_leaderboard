@@ -580,7 +580,7 @@ app.get('/api/stats/:seasonId', async (req, res) => {
         for (const row of hourly.rows) { if (row.hour !== null) hours[parseInt(row.hour)] = parseInt(row.count); }
 
         res.json({
-            pools: Object.values(poolMap),
+            pools: Object.values(poolMap).filter(p => liveConfig.pools.some(lp => lp.name === p.name)),
             hours
         });
     } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
