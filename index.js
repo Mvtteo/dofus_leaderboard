@@ -123,7 +123,7 @@ async function parseScreenWithAI(imageUrl) {
              - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
              - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
              - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
-             - EXCLURE absolument tout nom contenant "Do'", "Do ", ainsi que : Percepteur, Prisme, Gardien, Protecteur
+             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
              - EXCLURE les monstres, invocations, et PNJ
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
@@ -151,7 +151,7 @@ async function parseScreenWithAI(imageUrl) {
         }
 
         // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
-        const excludePattern = /Prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
@@ -550,7 +550,7 @@ app.get('/api/stats/:seasonId', async (req, res) => {
             GROUP BY hour ORDER BY hour
         `, [seasonId]);
 
-        // 4. Current streaks (last 20 matches ordered)
+        // 4. Current streak (global)
         const recentMatches = await pool.query(`
             SELECT m.has_won FROM matches m
             WHERE m.season_id = $1
@@ -559,13 +559,18 @@ app.get('/api/stats/:seasonId', async (req, res) => {
         `, [seasonId]);
 
         let currentStreak = { type: null, count: 0 };
-        let bestWinStreak = 0, bestLoseStreak = 0, tmpW = 0, tmpL = 0;
         for (const m of recentMatches.rows) {
-            if (m.has_won) { tmpW++; tmpL = 0; if (tmpW > bestWinStreak) bestWinStreak = tmpW; }
-            else { tmpL++; tmpW = 0; if (tmpL > bestLoseStreak) bestLoseStreak = tmpL; }
             if (currentStreak.type === null) { currentStreak.type = m.has_won ? 'win' : 'lose'; currentStreak.count = 1; }
             else if ((currentStreak.type === 'win' && m.has_won) || (currentStreak.type === 'lose' && !m.has_won)) { currentStreak.count++; }
+            else break;
         }
+
+        // 5. Best win streak per pool
+        const poolMatches = await pool.query(`
+            SELECT m.alliance_tier, m.has_won FROM matches m
+            WHERE m.season_id = $1
+            ORDER BY m.alliance_tier, m.created_at ASC NULLS LAST, m.id ASC
+        `, [seasonId]);
 
         // Build per-pool with top 3 players
         const poolMap = {};
@@ -586,6 +591,17 @@ app.get('/api/stats/:seasonId', async (req, res) => {
                 top_players: []
             };
         }
+        // Compute best win streak per pool
+        const poolStreaks = {};
+        for (const row of poolMatches.rows) {
+            const key = row.alliance_tier;
+            if (!poolStreaks[key]) poolStreaks[key] = { best: 0, current: 0 };
+            if (row.has_won) { poolStreaks[key].current++; if (poolStreaks[key].current > poolStreaks[key].best) poolStreaks[key].best = poolStreaks[key].current; }
+            else { poolStreaks[key].current = 0; }
+        }
+        for (const key in poolMap) {
+            poolMap[key].best_win_streak = poolStreaks[key] ? poolStreaks[key].best : 0;
+        }
         for (const row of topPlayers.rows) {
             if (poolMap[row.alliance_tier] && poolMap[row.alliance_tier].top_players.length < 3) {
                 poolMap[row.alliance_tier].top_players.push({ name: row.name, wins: parseInt(row.wins) });
@@ -599,9 +615,7 @@ app.get('/api/stats/:seasonId', async (req, res) => {
         res.json({
             pools: Object.values(poolMap),
             hours,
-            streak: currentStreak,
-            bestWinStreak,
-            bestLoseStreak
+            streak: currentStreak
         });
     } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
 });

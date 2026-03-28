@@ -6,227 +6,47 @@
     <title>Ogre</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css">
     <link rel="icon" type="image/png" href="web/assets/logo_ogre.png">
-    <style>
-        /* Winrate Styles */
-        .col-winrate {
-            width: 180px;
-            text-align: center;
-        }
-        .cell-winrate {
-            padding: 0.5rem;
-        }
-        .winrate-container {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .winrate-bar {
-            flex: 1;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        .winrate-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #e76f51, #e9c46a, #2a9d8f);
-            border-radius: 3px;
-            transition: width 0.5s ease;
-        }
-        .winrate-value {
-            font-weight: 600;
-            font-size: 0.875rem;
-            min-width: 40px;
-            text-align: right;
-        }
-        .winrate-value.positive {
-            color: #2a9d8f;
-        }
-        .winrate-value.negative {
-            color: #e76f51;
-        }
-        .winrate-detail {
-            display: block;
-            font-size: 0.7rem;
-            color: rgba(255, 255, 255, 0.5);
-            margin-top: 2px;
-        }
-        /* Rank Change Arrows */
-        .rank-change {
-            display: inline-flex;
-            align-items: center;
-            gap: 2px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            margin-left: 6px;
-            vertical-align: middle;
-        }
-        .rank-change.up {
-            color: #2a9d8f;
-        }
-        .rank-change.down {
-            color: #e76f51;
-        }
-        .rank-change.same {
-            color: rgba(255, 255, 255, 0.25);
-        }
-        .rank-change svg {
-            width: 12px;
-            height: 12px;
-        }
-
-        /* Percepteur Rights */
-        .percepteur-section {
-            max-width: 520px;
-            margin: 2rem auto 0;
-        }
-        .percepteur-card {
-            background: linear-gradient(160deg, rgba(42, 157, 143, 0.04), rgba(15, 25, 35, 0.6));
-            border: 1px solid rgba(42, 157, 143, 0.12);
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
-            backdrop-filter: blur(20px);
-        }
-        .percepteur-title {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: rgba(232, 237, 242, 0.5);
-            letter-spacing: 0.06em;
-            margin-bottom: 1rem;
-        }
-        .percepteur-title svg {
-            color: #2a9d8f;
-            opacity: 0.7;
-        }
-        .percepteur-tiers {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        .percepteur-tier {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 0.8rem;
-        }
-        .percepteur-pts {
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            color: #3dc4b3;
-            min-width: 65px;
-        }
-        .percepteur-sep {
-            flex: 1;
-            height: 1px;
-            background: rgba(42, 157, 143, 0.12);
-        }
-        .percepteur-reward {
-            color: rgba(232, 237, 242, 0.55);
-            font-weight: 500;
-        }
-        .percepteur-tier.tier-top .percepteur-pts {
-            color: #e9c46a;
-        }
-        .percepteur-tier.tier-top .percepteur-reward {
-            color: #e9c46a;
-            opacity: 0.8;
-        }
-    </style>
 </head>
 <body>
-    <!-- Animated Background - Dofus Theme -->
     <div class="bg-container">
         <div class="bg-gradient"></div>
         <div class="bg-grid"></div>
-        
-        <!-- Runes flottantes -->
-        <div class="floating-runes">
-            <div class="rune rune-1">&#x2726;</div>
-            <div class="rune rune-2">&#x2727;</div>
-            <div class="rune rune-3">&#x2728;</div>
-            <div class="rune rune-4">&#x2726;</div>
-            <div class="rune rune-5">&#x2729;</div>
-            <div class="rune rune-6">&#x2727;</div>
-        </div>
-        
-        <!-- Particules d'energie -->
-        <div class="energy-particles" id="particles"></div>
-        
-        <!-- Brume magique -->
+        <div class="streak" style="top:28%;transform:rotate(-8deg);"></div>
+        <div class="streak2" style="top:35%;transform:rotate(5deg);"></div>
+        <div class="streak" style="top:72%;transform:rotate(6deg);opacity:0.7;"></div>
+        <div class="streak2" style="top:80%;transform:rotate(-4deg);opacity:0.6;"></div>
         <div class="magic-mist"></div>
     </div>
 
-    <!-- Header Compact -->
     <header class="header">
         <div class="header-inner">
-            <!-- Logo + Title -->
             <div class="header-brand">
-                <div class="logo">
-                    <img src="/web/assets/logo_ogre.png" alt="Logo" />
-                </div>
-                <div class="brand-text">
-                    <h1 class="brand-title">OGRE</h1>
-                    <span class="brand-sub">PVP TRACKER</span>
-                </div>
+                <div class="logo"><img src="/web/assets/logo_ogre.png" alt="Logo"/></div>
+                <div class="brand-text"><h1 class="brand-title">OGRE</h1><span class="brand-sub">PVP TRACKER</span></div>
             </div>
-
-            <!-- Stats -->
             <div class="header-stats">
                 <div class="stat-item">
-                    <div class="stat-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                            <circle cx="9" cy="7" r="4"/>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                        </svg>
-                    </div>
-                    <div class="stat-content">
-                        <span class="stat-value" id="playerCount"><%= players.length %></span>
-                        <span class="stat-label">Joueurs</span>
-                    </div>
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                    <div class="stat-content"><span class="stat-value" id="playerCount"><%= players.length %></span><span class="stat-label">Joueurs</span></div>
                 </div>
                 <div class="stat-divider"></div>
                 <div class="stat-item">
-                    <div class="stat-icon gold">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/>
-                            <path d="M13 19l6-6"/>
-                            <path d="M16 16l4 4"/>
-                            <path d="M19 21l2-2"/>
-                        </svg>
-                    </div>
-                    <div class="stat-content">
-                        <span class="stat-value" id="totalCombats"><%= locals.totalCombats || 0 %></span>
-                        <span class="stat-label">Combats</span>
-                    </div>
+                    <div class="stat-icon gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg></div>
+                    <div class="stat-content"><span class="stat-value" id="totalCombats"><%= locals.totalCombats || 0 %></span><span class="stat-label">Combats</span></div>
                 </div>
             </div>
-
-            <!-- Search + Season -->
             <div class="header-actions">
                 <div class="search-container" id="searchContainer">
-                    <button class="search-toggle" id="searchToggle">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"/>
-                            <path d="m21 21-4.35-4.35"/>
-                        </svg>
-                    </button>
-                    <input type="text" id="searchInput" placeholder="Rechercher..." />
+                    <button class="search-toggle" id="searchToggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+                    <input type="text" id="searchInput" placeholder="Rechercher..."/>
                 </div>
                 <div class="season-selector">
                     <select class="season-dropdown" id="seasonSelect">
                         <% [...seasons].reverse().forEach(function(season) { %>
-                            <option value="<%= season.id %>" <%= season.id === currentSeason ? 'selected' : '' %>>
-                                <%= season.label %>
-                            </option>
+                        <option value="<%= season.id %>" <%= season.id === currentSeason ? 'selected' : '' %>><%= season.label %></option>
                         <% }); %>
                     </select>
                 </div>
@@ -234,347 +54,111 @@
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="main-content">
-        <!-- Podium Horizontal -->
-        <section class="podium-section">
-            <% if (players.length >= 3) { %>
-            <div class="podium-container">
-                <!-- 2nd Place - Left -->
-                <div class="podium-item silver" data-rank="2">
-                    <div class="podium-avatar">
-                        <span><%= players[1].dofus_pseudo.charAt(0).toUpperCase() %></span>
-                    </div>
-                    <div class="podium-info">
-                        <div class="podium-name"><%= players[1].dofus_pseudo %></div>
-                        <div class="podium-score"><%= players[1].total_points.toLocaleString() %></div>
-                    </div>
-                    <div class="podium-pedestal">
-                        <div class="pedestal-front"></div>
-                        <div class="pedestal-top"></div>
-                    </div>
-                </div>
+        <div class="tabs-bar">
+            <button class="tab-btn on" data-tab="classement">Classement</button>
+            <button class="tab-btn" data-tab="activite">Activité</button>
+            <button class="tab-btn" data-tab="stats">Stats</button>
+        </div>
 
-                <!-- 1st Place - Center -->
-                <div class="podium-item gold" data-rank="1">
-                    <div class="crown-icon">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
-                            <path d="M19 19H5v2h14v-2z"/>
-                        </svg>
-                    </div>
-                    <div class="podium-avatar">
-                        <span><%= players[0].dofus_pseudo.charAt(0).toUpperCase() %></span>
-                    </div>
-                    <div class="podium-info">
-                        <div class="podium-name"><%= players[0].dofus_pseudo %></div>
-                        <div class="podium-score"><%= players[0].total_points.toLocaleString() %></div>
-                        <div class="champion-tag">CHAMPION OGRE</div>
-                    </div>
-                    <div class="podium-pedestal">
-                        <div class="pedestal-front"></div>
-                        <div class="pedestal-top"></div>
-                    </div>
+        <div class="panel on" id="panel-classement">
+            <section class="podium-section" id="podiumSection"></section>
+            <section class="leaderboard-section">
+                <div class="table-container">
+                    <table class="leaderboard-table">
+                        <thead><tr><th class="col-rank">RANG</th><th class="col-player">JOUEUR</th><th class="col-winrate">WINRATE</th><th class="col-score">SCORE</th></tr></thead>
+                        <tbody id="leaderboardBody"></tbody>
+                    </table>
                 </div>
+                <div id="paginationControls" class="pagination-container"></div>
+            </section>
+        </div>
 
-                <!-- 3rd Place - Right -->
-                <div class="podium-item bronze" data-rank="3">
-                    <div class="podium-avatar">
-                        <span><%= players[2].dofus_pseudo.charAt(0).toUpperCase() %></span>
-                    </div>
-                    <div class="podium-info">
-                        <div class="podium-name"><%= players[2].dofus_pseudo %></div>
-                        <div class="podium-score"><%= players[2].total_points.toLocaleString() %></div>
-                    </div>
-                    <div class="podium-pedestal">
-                        <div class="pedestal-front"></div>
-                        <div class="pedestal-top"></div>
-                    </div>
-                </div>
-            </div>
-            <% } %>
-        </section>
-
-        <!-- Leaderboard Full Width -->
-        <section class="leaderboard-section">
-            <div class="table-container">
-                <table class="leaderboard-table">
-                    <thead>
-                        <tr>
-                            <th class="col-rank">RANG</th>
-                            <th class="col-player">JOUEUR</th>
-                            <th class="col-winrate">WINRATE</th>
-                            <th class="col-score">SCORE</th>
-                        </tr>
-                    </thead>
-                    <tbody id="leaderboardBody"></tbody>
-                </table>
-            </div>
-
-            <div id="paginationControls" class="pagination-container"></div>
-        </section>
-
-        <!-- Droits Percepteurs -->
-        <section class="percepteur-section">
-            <div class="percepteur-card">
-                <div class="percepteur-title">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    Droits Percepteurs
-                </div>
-                <div class="percepteur-tiers">
-                    <div class="percepteur-tier">
-                        <span class="percepteur-pts">75 pts</span>
-                        <span class="percepteur-sep"></span>
-                        <span class="percepteur-reward">1 percepteur</span>
-                    </div>
-                    <div class="percepteur-tier">
-                        <span class="percepteur-pts">125 pts</span>
-                        <span class="percepteur-sep"></span>
-                        <span class="percepteur-reward">2 percepteurs</span>
-                    </div>
-                    <div class="percepteur-tier">
-                        <span class="percepteur-pts">175 pts</span>
-                        <span class="percepteur-sep"></span>
-                        <span class="percepteur-reward">3 percepteurs</span>
-                    </div>
-                    <div class="percepteur-tier tier-top">
-                        <span class="percepteur-pts">TOP 10</span>
-                        <span class="percepteur-sep"></span>
-                        <span class="percepteur-reward">4 percepteurs</span>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <div class="panel" id="panel-activite"><div class="feed" id="feed"><div class="feed-empty">Chargement…</div></div></div>
+        <div class="panel" id="panel-stats"><div id="statsContent"><div class="feed-empty">Chargement…</div></div></div>
     </main>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <span>ALLIANCE PVP TRACKER</span>
-        <span class="footer-dot"></span>
-        <span>Mise à jour : <%= new Date().toLocaleString('fr-FR') %></span>
-    </footer>
+    <footer class="footer"><span>OGRE — ALLIANCE PVP TRACKER</span><span class="footer-dot"></span><span>Mise à jour : <%= new Date().toLocaleString('fr-FR') %></span></footer>
 
-    <script>
-        // 1. INJECTION INITIALE (Données au chargement de la page)
-        // Correction du typo 'et' -> 'const'
-        let allPlayers = <%- JSON.stringify(players) %>;
-        
-        // Configuration
-        let currentPage = 1;
-        const rowsPerPage = 10;
-        let filteredPlayers = [...allPlayers]; 
-        
-        // AUTO-UPDATE : Intervalle en millisecondes (ici 15 secondes)
-        const UPDATE_INTERVAL = 15000; 
+<script>
+let allPlayers=<%- JSON.stringify(players) %>,filteredPlayers=[...allPlayers],currentPage=1;
+const rowsPerPage=10,UPDATE_INTERVAL=15000,C=62.83;
+// Level colors: 1=pale teal, 2=teal, 3=yellow, 4=gold
+const LC=['','#5ec4b6','#2a9d8f','#e9c46a','#e9c46a'];
+const LG=['','rgba(42,157,143,0.1)','rgba(42,157,143,0.2)','rgba(233,196,106,0.15)','rgba(233,196,106,0.25)'];
+const LO=['','0.3','0.5','0.6','0.8'];
 
-        const tableBody = document.getElementById('leaderboardBody');
-        const paginationDiv = document.getElementById('paginationControls');
+function perco(pts,rk){if(rk<=10)return 4;if(pts>=175)return 3;if(pts>=125)return 2;if(pts>=75)return 1;return 0;}
+function av(p){return p.avatar_url?'<img src="'+p.avatar_url+'"/>':p.dofus_pseudo.charAt(0).toUpperCase();}
+function ringBig(pc){if(!pc)return'';const c=LC[pc],o=C*(1-pc/4);return'<div class="lvl"><div class="lvl-glow" style="background:radial-gradient(circle,'+LG[pc]+' 0%,transparent 70%);opacity:'+LO[pc]+'"></div><svg viewBox="0 0 24 24"><circle class="rbg" cx="12" cy="12" r="10"/><circle class="rfg" cx="12" cy="12" r="10" stroke="'+c+'" stroke-dasharray="'+C+'" stroke-dashoffset="'+o+'"/></svg><span class="ln" style="color:'+c+'">'+pc+'</span></div>';}
+function ringSm(pc){if(!pc)return'';const c=LC[pc],o=C*(1-pc/4);return'<div class="lvs"><svg viewBox="0 0 24 24"><circle class="rbg" cx="12" cy="12" r="10"/><circle class="rfg" cx="12" cy="12" r="10" stroke="'+c+'" stroke-dasharray="'+C+'" stroke-dashoffset="'+o+'"/></svg><span class="ln" style="color:'+c+'">'+pc+'</span></div>';}
+function wrColor(w){return w>=60?'#2a9d8f':w>=45?'#e9c46a':'#e76f51';}
+function wrClass(w){return w>=60?'high':w>=45?'mid':'low';}
 
-        // --- FONCTION : AFFICHER LE TABLEAU ---
-        function displayTable() {
-            tableBody.innerHTML = "";
-            const startIndex = (currentPage - 1) * rowsPerPage;
-            const endIndex = startIndex + rowsPerPage;
-            const pageData = filteredPlayers.slice(startIndex, endIndex);
+function renderPodium(){
+    const el=document.getElementById('podiumSection');
+    if(filteredPlayers.length<3){el.innerHTML='';return;}
+    const items=[
+        {d:filteredPlayers[1],cls:'silver',lbl:'2ND'},
+        {d:filteredPlayers[0],cls:'gold',lbl:'1ST'},
+        {d:filteredPlayers[2],cls:'bronze',lbl:'3RD'}
+    ];
+    let html='<div class="podium-cards">';
+    items.forEach((it,i)=>{
+        const p=it.d,rk=allPlayers.indexOf(p)+1,pc=perco(parseInt(p.total_points),rk);
+        const w=p.winrate||0,cls=wrClass(w);
+        const tag=it.cls==='gold'?'<div class="champion-tag">CHAMPION OGRE</div>':'';
+        html+='<div class="pod-card '+it.cls+'" style="transition-delay:'+(i*0.12)+'s">'+
+            '<div class="pod-rank-label">'+it.lbl+'</div>'+
+            '<div class="pod-avatar">'+av(p)+'</div>'+
+            '<div class="pod-player-name">'+p.dofus_pseudo+'</div>'+
+            '<div class="pod-score">'+parseInt(p.total_points).toLocaleString()+' pts</div>'+
+            '<div class="pod-wr-bar"><div class="pod-wr-fill '+cls+'" style="width:'+w+'%"></div></div>'+
+            '<div class="pod-stats-row">'+
+                '<div class="pod-mini-stat"><div class="val" style="color:'+wrColor(w)+'">'+w+'%</div><div class="lbl">Winrate</div></div>'+
+                '<div class="pod-mini-stat"><div class="val">'+p.wins+'</div><div class="lbl">Victoires</div></div>'+
+                '<div class="pod-mini-stat"><div class="val">'+p.losses+'</div><div class="lbl">Défaites</div></div>'+
+            '</div>'+
+            '<div class="pod-lvl">'+ringBig(pc)+'</div>'+
+            tag+'</div>';
+    });
+    html+='</div>';
+    el.innerHTML=html;
+    setTimeout(()=>document.querySelectorAll('.pod-card').forEach((c,i)=>setTimeout(()=>c.classList.add('visible'),100+i*120)),50);
+}
 
-            if (pageData.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:rgba(255,255,255,0.3);">Aucun joueur trouvé.</td></tr>`;
-                paginationDiv.innerHTML = "";
-                return;
-            }
+function displayTable(){
+    const tb=document.getElementById('leaderboardBody');tb.innerHTML='';
+    const s=(currentPage-1)*rowsPerPage,pg=filteredPlayers.slice(s,s+rowsPerPage);
+    if(!pg.length){tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:40px;color:rgba(255,255,255,0.2)">Aucun joueur trouvé.</td></tr>';document.getElementById('paginationControls').innerHTML='';return;}
+    pg.forEach(player=>{
+        const rk=allPlayers.indexOf(player)+1,w=player.winrate||0,pc=perco(parseInt(player.total_points),rk);
+        const rowCls=rk<=3?'top-'+rk:'';const cls=wrClass(w);
+        let rankHTML=rk<=3?'<div class="rank-medal rank-'+rk+'">'+rk+'</div>':'<span>'+rk+'</span>';
+        const row=document.createElement('tr');row.className='player-row '+rowCls+' visible';
+        row.innerHTML='<td class="cell-rank"><div class="rank-badge">'+rankHTML+'</div></td>'+
+            '<td class="cell-player"><div class="player-info"><div class="player-avatar">'+av(player)+'</div><span class="player-name">'+player.dofus_pseudo+'</span>'+ringSm(pc)+'</div></td>'+
+            '<td class="cell-winrate"><div class="winrate-container"><div class="winrate-bar"><div class="winrate-fill fill-'+cls+'" style="width:'+w+'%"></div></div><span class="winrate-value text-'+cls+'">'+w+'%</span></div><span class="winrate-detail">'+player.wins+'V / '+player.losses+'D</span></td>'+
+            '<td class="cell-score"><span class="score-value">'+parseInt(player.total_points).toLocaleString()+'</span><span class="score-label">pts</span></td>';
+        tb.appendChild(row);
+    });
+    displayPagination();
+}
+function displayPagination(){const div=document.getElementById('paginationControls');div.innerHTML='';const t=Math.ceil(filteredPlayers.length/rowsPerPage);if(t<=1)return;const prev=document.createElement('button');prev.innerHTML='&lsaquo;';prev.className='page-btn';prev.disabled=currentPage===1;prev.onclick=()=>{currentPage--;displayTable();};div.appendChild(prev);for(let i=1;i<=t;i++){const b=document.createElement('button');b.innerText=i;b.className='page-btn'+(i===currentPage?' active':'');b.onclick=()=>{currentPage=i;displayTable();};div.appendChild(b);}const next=document.createElement('button');next.innerHTML='&rsaquo;';next.className='page-btn';next.disabled=currentPage===t;next.onclick=()=>{currentPage++;displayTable();};div.appendChild(next);}
+function filterData(r){const q=document.getElementById('searchInput').value.toLowerCase();filteredPlayers=allPlayers.filter(p=>p.dofus_pseudo.toLowerCase().includes(q));if(r)currentPage=1;renderPodium();displayTable();}
 
-            pageData.forEach((player) => {
-                // Calculs
-                const realRank = allPlayers.indexOf(player) + 1;
-                const winrate = player.winrate || 0;
-                const wins = player.wins || 0;
-                const losses = player.losses || 0;
-                
-                // Styles CSS dynamiques
-                const rowClass = realRank <= 3 ? `top-${realRank}` : '';
-                
-                let winrateColorClass = 'text-low';
-                let winrateFillClass = 'fill-low';
-                if (winrate >= 60) { winrateColorClass = 'text-high'; winrateFillClass = 'fill-high'; }
-                else if (winrate >= 45) { winrateColorClass = 'text-mid'; winrateFillClass = 'fill-mid'; }
+function ago(d){if(!d)return'';const s=(Date.now()-new Date(d).getTime())/1000;if(s<60)return"à l'instant";if(s<3600)return Math.floor(s/60)+' min';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'j';}
+async function loadFeed(){const sid=document.getElementById('seasonSelect').value,el=document.getElementById('feed');try{const r=await fetch('/api/matches/'+sid+'?limit=30');const ms=await r.json();if(!ms.length){el.innerHTML='<div class="feed-empty">Aucun combat enregistré.</div>';return;}el.innerHTML=ms.map((m,i)=>{const w=m.has_won;const ct=m.context==='defense'?'<span class="fc-badge def">DEF</span>':'<span class="fc-badge atk">ATK</span>';const rt=w?'<span class="fc-badge w">Victoire</span>':'<span class="fc-badge l">Défaite</span>';const wn=m.winners.map(n=>'<div class="fc-player">'+n+'</div>').join('');const ln=m.losers.map(n=>'<div class="fc-player">'+n+'</div>').join('');return'<div class="feed-card '+(w?'win':'lose')+'" style="--d:'+(i*0.04)+'s"><div class="fc-top"><div class="fc-tags">'+ct+rt+'</div><span class="fc-time">'+ago(m.created_at)+'</span></div><div class="fc-vs">vs <b>'+(m.alliance||'Inconnu')+'</b></div><div class="fc-teams"><div class="fc-team"><div class="fc-team-label w">Gagnants</div>'+(wn||'<div class="fc-player">—</div>')+'</div><div class="fc-sep"><div class="vl"></div>VS<div class="vl"></div></div><div class="fc-team right"><div class="fc-team-label l">Perdants</div>'+(ln||'<div class="fc-player">—</div>')+'</div></div><div class="fc-bottom"><span class="fc-pts '+(w?'w':'l')+'">+'+m.points+' pts</span></div></div>';}).join('');}catch(e){el.innerHTML='<div class="feed-empty">Erreur de chargement.</div>';}}
 
-                // HTML Médaille
-                let rankHTML = `<span>${realRank}</span>`;
-                if (realRank <= 3) rankHTML = `<div class="rank-medal rank-${realRank}">${realRank}</div>`;
+async function loadStats(){const sid=document.getElementById('seasonSelect').value,el=document.getElementById('statsContent');try{const r=await fetch('/api/stats/'+sid);const d=await r.json();if(!d.pools||!d.pools.length){el.innerHTML='<div class="feed-empty">Pas de données.</div>';return;}const tW=d.pools.reduce((a,p)=>a+p.wins,0),tL=d.pools.reduce((a,p)=>a+p.losses,0),tG=tW+tL;const gWr=tG>0?Math.round(tW/tG*100):0;let h='<div class="stats-grid"><div class="stat-card full"><div class="st-label">Winrate global</div><div class="st-big" style="color:'+wrColor(gWr)+'">'+gWr+'%</div><div class="st-sub">'+tW+'V / '+tL+'D — '+tG+' combats</div></div></div>';for(const p of d.pools){const wr=p.winrate,awr=p.atk_winrate,dwr=p.def_winrate;h+='<div class="pool-card"><div class="pool-name">'+p.name+' <span class="wr-badge" style="background:rgba(42,157,143,0.1);color:'+wrColor(wr)+'">'+wr+'% WR</span></div><div class="pool-stats"><div class="pool-stat"><div class="v">'+p.total+'</div><div class="l">Combats</div></div><div class="pool-stat"><div class="v" style="color:'+wrColor(awr)+'">'+awr+'%</div><div class="l">WR Attaque</div></div><div class="pool-stat"><div class="v" style="color:'+wrColor(dwr)+'">'+dwr+'%</div><div class="l">WR Défense</div></div><div class="pool-stat"><div class="v" style="color:#e9c46a">'+(p.best_win_streak||0)+'</div><div class="l">Best streak</div></div></div>';if(p.top_players.length){h+='<div class="st-label" style="margin-bottom:6px">MVP vs '+p.name+'</div><div class="pool-top">';p.top_players.forEach((tp,i)=>{h+='<div class="player"><span style="color:'+LC[3-i>0?3-i:1]+'">'+(i+1)+'.</span> <b>'+tp.name+'</b> — '+tp.wins+'W</div>';});h+='</div>';}h+='</div>';}const mH=Math.max(...d.hours,1);const hTotal=d.hours.reduce((a,b)=>a+b,0)||1;h+='<div class="stat-card full"><div class="st-label">Distribution horaire</div><div class="hours-chart">';for(let i=0;i<24;i++){const v=d.hours[i]||0;const pct=Math.round(v/hTotal*100);h+='<div class="hour-bar" style="height:'+Math.max(Math.round(v/mH*100),2)+'%" data-v="'+pct+'"></div>';}h+='</div><div class="hours-labels">';for(let i=0;i<24;i++)h+='<span>'+(i%3===0?i+'h':'')+'</span>';h+='</div></div>';el.innerHTML=h;}catch(e){el.innerHTML='<div class="feed-empty">Erreur de chargement.</div>';}}
 
-                // HTML Rank Change Arrow
-                const rankChange = player.rank_change || 0;
-                let rankChangeHTML = '';
-                if (rankChange > 0) {
-                    rankChangeHTML = `<span class="rank-change up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 19V5m-7 7l7-7 7 7"/></svg>${rankChange}</span>`;
-                } else if (rankChange < 0) {
-                    rankChangeHTML = `<span class="rank-change down"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14m7-7l-7 7-7-7"/></svg>${Math.abs(rankChange)}</span>`;
-                }
-
-                // Construction de la ligne
-                const row = `
-                    <tr class="player-row ${rowClass} visible">
-                        <td class="cell-rank"><div class="rank-badge">${rankHTML}${rankChangeHTML}</div></td>
-                        <td class="cell-player">
-                            <div class="player-info">
-                                <div class="player-avatar">${player.dofus_pseudo.charAt(0).toUpperCase()}</div>
-                                <span class="player-name">${player.dofus_pseudo}</span>
-                            </div>
-                        </td>
-                        <td class="cell-winrate">
-                            <div class="winrate-container">
-                                <div class="winrate-bar">
-                                    <div class="winrate-fill ${winrateFillClass}" style="width: ${winrate}%"></div>
-                                </div>
-                                <span class="winrate-value ${winrateColorClass}">${winrate}%</span>
-                            </div>
-                            <span class="winrate-detail">${wins}V / ${losses}D</span>
-                        </td>
-                        <td class="cell-score">
-                            <span class="score-value">${parseInt(player.total_points).toLocaleString()}</span>
-                            <span class="score-label">pts</span>
-                        </td>
-                    </tr>
-                `;
-                tableBody.innerHTML += row;
-            });
-
-            displayPagination();
-        }
-
-        // --- FONCTION : PAGINATION ---
-        function displayPagination() {
-            paginationDiv.innerHTML = "";
-            const pageCount = Math.ceil(filteredPlayers.length / rowsPerPage);
-            if (pageCount <= 1) return;
-
-            // Bouton Précédent
-            const prevBtn = document.createElement('button');
-            prevBtn.innerHTML = "&lsaquo;";
-            prevBtn.className = "page-btn";
-            prevBtn.disabled = currentPage === 1;
-            prevBtn.onclick = () => { currentPage--; displayTable(); };
-            paginationDiv.appendChild(prevBtn);
-
-            // Boutons numérotés intelligents
-            let startPage = Math.max(1, currentPage - 2);
-            let endPage = Math.min(pageCount, currentPage + 2);
-
-            if (startPage > 1) {
-                createPageBtn(1);
-                if(startPage > 2) paginationDiv.appendChild(document.createTextNode("..."));
-            }
-
-            for (let i = startPage; i <= endPage; i++) {
-                createPageBtn(i);
-            }
-
-            if (endPage < pageCount) {
-                if(endPage < pageCount - 1) paginationDiv.appendChild(document.createTextNode("..."));
-                createPageBtn(pageCount);
-            }
-
-            // Bouton Suivant
-            const nextBtn = document.createElement('button');
-            nextBtn.innerHTML = "&rsaquo;";
-            nextBtn.className = "page-btn";
-            nextBtn.disabled = currentPage === pageCount;
-            nextBtn.onclick = () => { currentPage++; displayTable(); };
-            paginationDiv.appendChild(nextBtn);
-
-            function createPageBtn(i) {
-                const btn = document.createElement('button');
-                btn.innerText = i;
-                btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
-                btn.onclick = () => { currentPage = i; displayTable(); };
-                paginationDiv.appendChild(btn);
-            }
-        }
-
-        // --- FONCTION : FILTRER LES DONNÉES (Recherche) ---
-        function filterData(resetPage = true) {
-            const input = document.getElementById('searchInput').value.toLowerCase();
-            // On filtre sur la liste globale 'allPlayers'
-            filteredPlayers = allPlayers.filter(p => p.dofus_pseudo.toLowerCase().includes(input));
-            
-            if (resetPage) currentPage = 1; // On revient page 1 si on tape une recherche
-            displayTable();
-        }
-
-        // --- 🚀 FONCTION : FETCH DATA (Auto Update) ---
-        async function fetchLeaderboardData() {
-            try {
-                // 1. Quel saison est sélectionnée ?
-                const seasonSelect = document.getElementById('seasonSelect');
-                const seasonId = seasonSelect ? seasonSelect.value : 1;
-
-                // 2. Appel API
-                const response = await fetch(`/api/leaderboard/${seasonId}`);
-                if (!response.ok) throw new Error("Erreur réseau");
-
-                const data = await response.json();
-                
-                // 3. Mise à jour des variables
-                allPlayers = data;
-                
-                // 4. On réapplique le filtre de recherche actuel (sans reset la page si possible)
-                // Comme ça si tu es page 2, tu restes page 2
-                filterData(false);
-
-                // 5. Mise à jour des stats du Header
-                if (document.getElementById('playerCount')) {
-                    document.getElementById('playerCount').textContent = data.length;
-                }
-
-                // console.log(`🔄 Mise à jour auto effectuée (${new Date().toLocaleTimeString()})`);
-
-            } catch (error) {
-                console.error("Erreur Auto-Update:", error);
-            }
-        }
-
-        // --- INITIALISATION ---
-        document.addEventListener('DOMContentLoaded', () => {
-            displayTable(); 
-            
-            // Animation Particules
-            const container = document.getElementById('particles');
-            if(container) {
-                for (let i = 0; i < 25; i++) {
-                    const p = document.createElement('div');
-                    p.className = 'energy-particle';
-                    p.style.cssText = `left:${Math.random()*100}%; --duration:${5+Math.random()*5}s; --delay:${Math.random()*4}s; --size:${3+Math.random()*4}px;`;
-                    container.appendChild(p);
-                }
-            }
-
-            // Animation Podium
-            document.querySelectorAll('.podium-item').forEach((item, i) => {
-                setTimeout(() => item.classList.add('visible'), 200 + (i * 150));
-            });
-
-            // ⏱️ Lancer l'Auto-Update
-            setInterval(fetchLeaderboardData, UPDATE_INTERVAL);
-        });
-
-        // Events Listeners UI
-        const searchInput = document.getElementById('searchInput');
-        if(searchInput) searchInput.addEventListener('keyup', () => filterData(true));
-        
-        const searchToggle = document.getElementById('searchToggle');
-        const searchContainer = document.getElementById('searchContainer');
-        if(searchToggle && searchContainer) {
-            searchToggle.addEventListener('click', () => {
-                searchContainer.classList.toggle('expanded');
-                if(searchContainer.classList.contains('expanded')) document.getElementById('searchInput').focus();
-            });
-        }
-
-        // Changement manuel de saison (Déclenche un fetch immédiat)
-        const seasonSelect = document.getElementById('seasonSelect');
-        if(seasonSelect) {
-            seasonSelect.addEventListener('change', fetchLeaderboardData);
-        }
-    </script>
+document.querySelectorAll('.tab-btn').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('on'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));t.classList.add('on');document.getElementById('panel-'+t.dataset.tab).classList.add('on');if(t.dataset.tab==='activite')loadFeed();if(t.dataset.tab==='stats')loadStats();}));
+async function fetchLeaderboardData(){try{const sid=document.getElementById('seasonSelect').value;const r=await fetch('/api/leaderboard/'+sid);if(!r.ok)throw 0;const d=await r.json();allPlayers=d;filterData(false);document.getElementById('playerCount').textContent=d.length;}catch(e){}}
+document.addEventListener('DOMContentLoaded',()=>{renderPodium();displayTable();setInterval(fetchLeaderboardData,UPDATE_INTERVAL);});
+document.getElementById('searchInput').addEventListener('keyup',()=>filterData(true));
+const searchToggle=document.getElementById('searchToggle'),searchContainer=document.getElementById('searchContainer');
+if(searchToggle&&searchContainer)searchToggle.addEventListener('click',()=>{searchContainer.classList.toggle('expanded');if(searchContainer.classList.contains('expanded'))document.getElementById('searchInput').focus();});
+document.getElementById('seasonSelect').addEventListener('change',()=>{fetchLeaderboardData();const a=document.querySelector('.tab-btn.on');if(a&&a.dataset.tab==='activite')loadFeed();if(a&&a.dataset.tab==='stats')loadStats();});
+</script>
 </body>
 </html>
