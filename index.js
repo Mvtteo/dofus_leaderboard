@@ -1144,10 +1144,22 @@ client.on('messageCreate', async message => {
             setSessionTimeout(message.author.id, msgRef);
         }
     } catch (error) {
-        console.error('[PvP] Erreur:', error);
-        const isGemini = error.status === 503 || error.message?.includes('timeout') || error.message?.includes('fetch failed');
-        const msg = isGemini ? "Gemini indisponible, réessayez dans quelques secondes." : "Erreur d'analyse.";
-        try { await msgRef.edit(msg); } catch {}
+    console.error('[PvP] Erreur:', error);
+    let msg;
+    if (error.status === 503 || error.message?.includes('503')) {
+        msg = "Gemini indisponible (503). Réessayez dans quelques secondes.";
+    } else if (error.status === 429 || error.message?.includes('429')) {
+        msg = "Limite de requêtes Gemini atteinte (429). Réessayez dans 30 secondes.";
+    } else if (error.message?.includes('timeout')) {
+        msg = "Timeout Gemini (60s dépassé). Réessayez.";
+    } else if (error.message?.includes('fetch failed') || error.message?.includes('ECONNRESET') || error.message?.includes('ETIMEDOUT')) {
+        msg = "Erreur réseau. Vérifiez la connexion et réessayez.";
+    } else if (error.message?.includes('JSON')) {
+        msg = "Réponse Gemini illisible. Réessayez avec un screenshot plus net.";
+    } else {
+        msg = `Erreur inattendue : ${error.message || error.status || 'inconnue'}`;
+    }
+    try { await msgRef.edit({ content: msg, components: [] }); } catch {}
     }
 });
 
