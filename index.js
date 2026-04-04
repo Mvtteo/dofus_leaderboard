@@ -49,7 +49,7 @@ async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
             const isRetryable = err.status === 503 || err.status === 429 || err.message?.includes('timeout') || err.message?.includes('fetch failed') || err.message?.includes('ECONNRESET') || err.message?.includes('ETIMEDOUT') || err.type === 'system';
             console.log(`[Gemini] Tentative ${attempt}/${retries} echouee: ${err.message || err.status}`);
             if (attempt < retries && isRetryable) {
-                const delay = attempt * 3000; // 3s, 6s, 9s
+                const delay = attempt * 15000; // 15s, 30s, 45s
                 console.log(`[Gemini] Retry dans ${delay/1000}s...`);
                 await new Promise(r => setTimeout(r, delay));
             } else {
