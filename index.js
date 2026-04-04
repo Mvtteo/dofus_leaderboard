@@ -49,7 +49,7 @@ async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
             const isRetryable = err.status === 503 || err.status === 429 || err.message?.includes('timeout') || err.message?.includes('fetch failed') || err.message?.includes('ECONNRESET') || err.message?.includes('ETIMEDOUT') || err.type === 'system';
             console.log(`[Gemini] Tentative ${attempt}/${retries} echouee: ${err.message || err.status}`);
             if (attempt < retries && isRetryable) {
-                const delay = attempt * 15000; // 15s, 30s, 45s
+                const delay = attempt * 15000;
                 console.log(`[Gemini] Retry dans ${delay/1000}s...`);
                 await new Promise(r => setTimeout(r, delay));
             } else {
@@ -57,6 +57,33 @@ async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
             }
         }
     }
+}
+
+// --- GEMINI QUEUE (évite les 429 sur uploads simultanés) ---
+const geminiQueue = [];
+let geminiProcessing = false;
+
+async function queueGemini(parts) {
+    return new Promise((resolve, reject) => {
+        geminiQueue.push({ parts, resolve, reject });
+        processGeminiQueue();
+    });
+}
+
+async function processGeminiQueue() {
+    if (geminiProcessing || geminiQueue.length === 0) return;
+    geminiProcessing = true;
+    while (geminiQueue.length > 0) {
+        const { parts, resolve, reject } = geminiQueue.shift();
+        try {
+            const result = await callGemini(parts);
+            resolve(result);
+        } catch (err) {
+            reject(err);
+        }
+        if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 4000));
+    }
+    geminiProcessing = false;
 }
 
 // --- FONCTION UTILITAIRE : SUPPRESSION ACCENTS ---
@@ -82,7 +109,7 @@ const client = new Client({
 
 const activeSessions = new Map();
 const sessionTimeouts = new Map();
-const SESSION_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+const SESSION_TIMEOUT_MS = 2 * 60 * 1000;
 
 function setSessionTimeout(userId, msgRef) {
     clearSessionTimeout(userId);
@@ -108,7 +135,7 @@ async function parseScreenWithAI(imageUrl) {
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
         
-        const result = await callGemini([
+        const result = await queueGemini([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
              Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
@@ -140,9 +167,7 @@ async function parseScreenWithAI(imageUrl) {
         try {
             parsed = JSON.parse(clean);
         } catch (jsonErr) {
-            // Fallback : extraire les pseudos meme si le JSON est casse
             console.log('[Gemini] JSON invalide, tentative repair...');
-            // Capturer tout entre "winners": et "losers": puis entre "losers": et la fin
             const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
             const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
             const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
@@ -150,7 +175,6 @@ async function parseScreenWithAI(imageUrl) {
             console.log('[Gemini] Repair result:', JSON.stringify(parsed));
         }
 
-        // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
         const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
@@ -175,7 +199,7 @@ async function parseNuggetsWithAI(imageUrl) {
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
-        const result = await callGemini([
+        const result = await queueGemini([
             { inlineData: { data: base64, mimeType: "image/png" } },
             `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
         ]);
@@ -218,7 +242,7 @@ function adminAuth(req, res, next) {
     req.adminAuth = false; next();
 }
 
-// --- LIVE SETTINGS (pool bonuses en DB) ---
+// --- LIVE SETTINGS ---
 const liveConfig = {
     pools: JSON.parse(JSON.stringify(config.DEFAULT_POOLS || [
         { id: "pool_1", name: "Pool 1", bonus: 0 },
@@ -238,11 +262,9 @@ async function loadSettings() {
         const dbKeys = {};
         for (const row of res.rows) dbKeys[row.key] = row.value;
 
-        // Load pools (JSON array)
         if (dbKeys.pools) {
             try { liveConfig.pools = JSON.parse(dbKeys.pools); } catch {}
         } else if (dbKeys.pool_1_name) {
-            // Migration from old format
             liveConfig.pools = [
                 { id: 'pool_1', name: dbKeys.pool_1_name || 'Pool 1', bonus: parseInt(dbKeys.pool_1_bonus) || 0 },
                 { id: 'pool_2', name: dbKeys.pool_2_name || 'Pool 2', bonus: parseInt(dbKeys.pool_2_bonus) || 0 }
@@ -251,14 +273,12 @@ async function loadSettings() {
             console.log('[Settings] Migration pools ancien format -> nouveau format OK');
         }
 
-        // Load 4 grids
         const gridKeys = ['pts_atk_win', 'pts_atk_lose', 'pts_def_win', 'pts_def_lose'];
         for (const gk of gridKeys) {
             if (dbKeys[gk]) {
                 try { liveConfig[gk] = JSON.parse(dbKeys[gk]); } catch {}
             }
         }
-        // Migration: if new keys don't exist but old ones do
         if (!dbKeys.pts_atk_win && dbKeys.pts_win) {
             try {
                 const oldWin = JSON.parse(dbKeys.pts_win);
@@ -275,7 +295,6 @@ async function loadSettings() {
             } catch {}
         }
 
-        // Load season override
         if (dbKeys.season_end_override !== undefined) {
             liveConfig.season_end_override = dbKeys.season_end_override || null;
         }
@@ -299,7 +318,6 @@ async function saveSetting(key, value) {
     }
 }
 
-// Charger les settings au demarrage
 loadSettings();
 
 function getSeasons() {
@@ -319,7 +337,6 @@ function getSeasons() {
         end.setDate(end.getDate() + DAYS_PER_SEASON);
         end.setMilliseconds(-1); 
 
-        // Override de fin de saison : s'applique a la saison qui contient "now"
         if (!overrideApplied && liveConfig.season_end_override) {
             const ov = new Date(liveConfig.season_end_override);
             ov.setHours(23, 59, 59, 999);
@@ -334,10 +351,9 @@ function getSeasons() {
 
         const startStr = start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         const endStr = end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-        const endRaw = end.toISOString().split('T')[0]; // YYYY-MM-DD pour l'input admin
+        const endRaw = end.toISOString().split('T')[0];
         seasons.push({ id, label: `Saison ${id} (${startStr} - ${endStr})`, start, end, endRaw, isCurrent });
         
-        // La saison suivante demarre le lendemain de la fin
         loopDate = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1);
         id++;
         if (id > 1000) break;
@@ -390,11 +406,7 @@ app.get('/', async (req, res) => {
         });
 
         const countRes = await pool.query('SELECT COUNT(*) as c FROM matches WHERE season_id = $1', [seasonId]);
-
-        res.render('index', { 
-            players, seasons, currentSeason, 
-            totalCombats: parseInt(countRes.rows[0].c) 
-        });
+        res.render('index', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c) });
     } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
 });
 
@@ -511,7 +523,6 @@ app.get('/api/stats/:seasonId', async (req, res) => {
     try {
         const seasonId = req.params.seasonId;
 
-        // 1. Per-pool breakdown
         const poolStats = await pool.query(`
             SELECT 
                 m.alliance_tier,
@@ -528,7 +539,6 @@ app.get('/api/stats/:seasonId', async (req, res) => {
             GROUP BY m.alliance_tier
         `, [seasonId]);
 
-        // 2. Top players per pool (most wins)
         const topPlayers = await pool.query(`
             SELECT 
                 m.alliance_tier,
@@ -542,7 +552,6 @@ app.get('/api/stats/:seasonId', async (req, res) => {
             ORDER BY m.alliance_tier, wins DESC
         `, [seasonId]);
 
-        // 3. Hourly distribution (only matches with created_at)
         const hourly = await pool.query(`
             SELECT EXTRACT(HOUR FROM m.created_at) as hour, COUNT(*) as count
             FROM matches m
@@ -550,7 +559,6 @@ app.get('/api/stats/:seasonId', async (req, res) => {
             GROUP BY hour ORDER BY hour
         `, [seasonId]);
 
-        // Build per-pool with top 3 players
         const poolMap = {};
         for (const row of poolStats.rows) {
             const poolObj = liveConfig.pools.find(p => p.id === row.alliance_tier);
@@ -575,7 +583,6 @@ app.get('/api/stats/:seasonId', async (req, res) => {
             }
         }
 
-        // Hourly array (0-23)
         const hours = Array(24).fill(0);
         for (const row of hourly.rows) { if (row.hour !== null) hours[parseInt(row.hour)] = parseInt(row.count); }
 
@@ -632,7 +639,7 @@ app.get('/admin', adminAuth, async (req, res) => {
 // --- ADMIN RATE LIMIT ---
 const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+const LOCKOUT_MS = 15 * 60 * 1000;
 
 function checkRateLimit(ip) {
     const entry = loginAttempts.get(ip);
@@ -677,7 +684,6 @@ app.post('/admin/api/pools', adminAuth, async (req, res) => {
         const { pools: newPools } = req.body;
         if (!Array.isArray(newPools)) return res.status(400).json({ error: 'Format invalide.' });
         if (newPools.length > (config.MAX_POOLS || 5)) return res.status(400).json({ error: `Maximum ${config.MAX_POOLS || 5} pools.` });
-        // Validate each pool
         for (const p of newPools) {
             if (!p.id || !p.name || typeof p.bonus !== 'number') return res.status(400).json({ error: 'Pool invalide.' });
         }
@@ -689,11 +695,15 @@ app.post('/admin/api/pools', adminAuth, async (req, res) => {
 app.get('/admin/api/players', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json([]);
     try {
+        const seasonId = await ensureCurrentSeason();
         const r = await pool.query(`
-            SELECT DISTINCT COALESCE(discord_nickname, dofus_pseudo) as name 
-            FROM players 
+            SELECT DISTINCT COALESCE(p.discord_nickname, p.dofus_pseudo) as name
+            FROM players p
+            JOIN season_stats ss ON ss.player_id = p.id
+            WHERE ss.season_id = $1
+            AND (ss.wins + ss.losses) > 0
             ORDER BY name
-        `);
+        `, [seasonId]);
         res.json(r.rows.map(p => p.name));
     } catch { res.json([]); }
 });
@@ -720,7 +730,6 @@ app.post('/admin/api/player-points', adminAuth, async (req, res) => {
         const pts = parseInt(points);
         if (!pseudo || isNaN(pts)) return res.status(400).json({ error: 'Pseudo ou points invalides.' });
 
-        // Trouver le joueur
         const playerRes = await pool.query(`
             SELECT id, COALESCE(discord_nickname, dofus_pseudo) as name 
             FROM players WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1)
@@ -733,7 +742,6 @@ app.post('/admin/api/player-points', adminAuth, async (req, res) => {
 
         await updateSeasonStats(playerId, seasonId, { points: pts, wins: 0, losses: 0 });
 
-        // Recalculer le total
         const totalRes = await pool.query('SELECT SUM(points) as total FROM season_stats WHERE player_id = $1 AND season_id = $2', [playerId, seasonId]);
         const newTotal = parseInt(totalRes.rows[0].total) || 0;
 
@@ -741,7 +749,6 @@ app.post('/admin/api/player-points', adminAuth, async (req, res) => {
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// --- Pepites par saison ---
 app.get('/admin/api/nuggets/:seasonId', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json([]);
     try {
@@ -760,7 +767,6 @@ app.get('/admin/api/nuggets/:seasonId', adminAuth, async (req, res) => {
     } catch (e) { console.error(e); res.json([]); }
 });
 
-// --- Reset pepites (saison en cours) ---
 app.post('/admin/api/reset-nuggets', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
     try {
@@ -770,13 +776,11 @@ app.post('/admin/api/reset-nuggets', adminAuth, async (req, res) => {
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// --- Modifier fin de saison ---
 app.post('/admin/api/season-end', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
     try {
         const { end_date } = req.body;
         if (!end_date) {
-            // Reset l'override
             liveConfig.season_end_override = null;
             await saveSetting('season_end_override', '');
             return res.json({ ok: true, cleared: true });
@@ -787,11 +791,9 @@ app.post('/admin/api/season-end', adminAuth, async (req, res) => {
         liveConfig.season_end_override = end_date;
         await saveSetting('season_end_override', end_date);
         
-        // Recalculer les saisons avec le nouvel override
         const { seasons, currentSeason } = getSeasons();
         const curSeason = seasons.find(s => s.id === currentSeason);
         
-        // Mettre a jour la saison en DB aussi
         if (curSeason) {
             await pool.query('UPDATE seasons SET end_date = $1 WHERE id = $2', [curSeason.end, curSeason.id]);
         }
@@ -800,7 +802,6 @@ app.post('/admin/api/season-end', adminAuth, async (req, res) => {
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// --- Modifier grilles de points ---
 app.post('/admin/api/points-grid', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
     try {
@@ -820,6 +821,21 @@ app.post('/admin/api/points-grid', adminAuth, async (req, res) => {
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
+app.get('/admin/api/multi-accounts', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json([]);
+    try {
+        const r = await pool.query(`
+            SELECT array_agg(p.dofus_pseudo ORDER BY p.id) as pseudos, COUNT(*) as count
+            FROM players p
+            WHERE p.discord_id IS NOT NULL
+            GROUP BY p.discord_id
+            HAVING COUNT(*) > 1
+            ORDER BY count DESC
+        `);
+        res.json(r.rows);
+    } catch { res.json([]); }
+});
+
 app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${config.WEB_PORT}`); });
 
 // ============================================
@@ -837,7 +853,6 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS has_won BOOLEAN DEFAULT true`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL`);
         
-        // Migration : reporter les anciennes bank_nuggets dans season_stats si pas deja fait
         const migCheck = await pool.query("SELECT value FROM settings WHERE key = 'nuggets_migrated'");
         if (migCheck.rows.length === 0) {
             console.log('[Migration] Report bank_nuggets vers season_stats...');
@@ -881,6 +896,7 @@ client.on('messageCreate', async message => {
             return message.reply(`[OK] Joueur ${cleanArg} ajouté.`);
         } catch (err) { return message.reply("Erreur d'ajout."); }
     }
+
     if (message.content.startsWith('!deleteplayer') && (message.member.permissions.has('Administrator') || message.author.id === config.OWNER_ID || message.author.username.toLowerCase() === 'sino299')) {
         const args = message.content.split(' ');
         if (args.length < 2) return message.reply("Usage : `!deleteplayer <PseudoExact>`");
@@ -895,12 +911,9 @@ client.on('messageCreate', async message => {
             return message.reply(`[OK] Joueur ${cleanArg} supprimé.`);
         } catch (err) { console.error(err); return message.reply("Erreur suppression."); }
     }
-    // --- CLASSEMENT PEPITES (STAFF) ---
-    if (message.content === '!pepites') {
-        if (!hasStaffRole(message.member)) {
-            return message.reply("[REFUS] Cette commande est réservée au STAFF.");
-        }
 
+    if (message.content === '!pepites') {
+        if (!hasStaffRole(message.member)) return message.reply("[REFUS] Cette commande est réservée au STAFF.");
         try {
             const seasonId = await ensureCurrentSeason();
             const res = await pool.query(`
@@ -913,45 +926,24 @@ client.on('messageCreate', async message => {
                 GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
                 ORDER BY nuggets DESC 
             `, [seasonId]);
-
             if (res.rows.length === 0) return message.reply("Aucune pépite en banque pour cette saison.");
-
-            const lines = res.rows.map((p, i) => {
-                let rank = `${i + 1}.`;
-                return `${rank} **${p.name}** : ${p.nuggets}`;
-            });
-
-            // On coupe le message si trop long (Discord limite à 4096 caractères)
-            // Ici on affiche max les 20 premiers dans l'embed, le reste en texte si besoin
-            const topList = lines.slice(0, 20).join('\n');
-            
+            const lines = res.rows.map((p, i) => `${i + 1}. **${p.name}** : ${p.nuggets}`);
             const embed = new EmbedBuilder()
                 .setTitle('Banque des Pépites (Alliance)')
                 .setColor(0xFFD700)
-                .setDescription(topList)
+                .setDescription(lines.slice(0, 20).join('\n'))
                 .setFooter({ text: `Total accumulé - Top 20 sur ${res.rows.length} comptes` });
-
             return message.reply({ embeds: [embed] });
-
-        } catch (e) {
-            console.error(e);
-            return message.reply("Erreur récupération pépites.");
-        }
+        } catch (e) { console.error(e); return message.reply("Erreur récupération pépites."); }
     }
 
-    // --- RESET PEPITES (STAFF) ---
     if (message.content === '!resetpepites') {
-        if (!hasStaffRole(message.member)) {
-            return message.reply("[REFUS] Cette commande est réservée au STAFF.");
-        }
+        if (!hasStaffRole(message.member)) return message.reply("[REFUS] Cette commande est réservée au STAFF.");
         try {
             const seasonId = await ensureCurrentSeason();
             await pool.query('UPDATE season_stats SET nuggets = 0 WHERE season_id = $1 AND nuggets > 0', [seasonId]);
             return message.reply(`[OK] Pépites remises à zéro pour la saison ${seasonId}.`);
-        } catch (e) {
-            console.error(e);
-            return message.reply("Erreur reset pépites.");
-        }
+        } catch (e) { console.error(e); return message.reply("Erreur reset pépites."); }
     }
 
     if (message.content === '!setup_profile' && message.member.permissions.has('Administrator')) {
@@ -970,7 +962,6 @@ client.on('messageCreate', async message => {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
         const msgRef = await message.reply('Analyse pépites...');
-        
         try {
             for (const [id, attachment] of attachments) {
                 const imgResponse = await fetch(attachment.url);
@@ -981,11 +972,7 @@ client.on('messageCreate', async message => {
                 if (dup.rows.length > 0) { await msgRef.edit('Image déjà traitée.'); return; }
 
                 const parsed = await parseNuggetsWithAI(attachment.url);
-                
-                if (!parsed || !parsed.alliance_amount) { 
-                    await msgRef.edit('Montant introuvable.'); 
-                    return; 
-                }
+                if (!parsed || !parsed.alliance_amount) { await msgRef.edit('Montant introuvable.'); return; }
 
                 const playerShare = Math.floor(parsed.alliance_amount * 0.5);
                 const mentionedMember = message.mentions.members?.first();
@@ -993,10 +980,8 @@ client.on('messageCreate', async message => {
                 const recipientName = mentionedMember ? mentionedMember.displayName : (message.member?.displayName || message.author.username);
                 const displayName = recipientName.toLowerCase() === 'duma' ? 'Gros orteils' : recipientName;
                 
-                // Trouver ou créer le player pour ce discord_id
                 let playerRes = await pool.query('SELECT id FROM players WHERE discord_id = $1 LIMIT 1', [recipientId]);
                 if (playerRes.rows.length === 0) {
-                    // Auto-créer avec le pseudo Discord comme dofus_pseudo
                     const cleanName = removeAccents(recipientName);
                     await pool.query(
                         'INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4) ON CONFLICT (dofus_pseudo) DO UPDATE SET discord_id = $2, discord_nickname = $4',
@@ -1009,13 +994,9 @@ client.on('messageCreate', async message => {
 
                 await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
                 await updateSeasonStats(playerId, seasonId, { nuggets: playerShare });
-
                 await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${displayName}.`);
             }
-        } catch (e) { 
-            console.error(e);
-            await msgRef.edit('Erreur technique.'); 
-        }
+        } catch (e) { console.error(e); await msgRef.edit('Erreur technique.'); }
         return;
     }
 
@@ -1030,7 +1011,6 @@ client.on('messageCreate', async message => {
     console.log('[PvP] Message reply envoyé, debut analyse Gemini...');
 
     try {
-        // Analyser chaque image SEPAREMENT pour fiabilité, puis merger
         let allParsedWinners = [];
         let allParsedLosers = [];
         const totalImages = attachments.size;
@@ -1045,7 +1025,7 @@ client.on('messageCreate', async message => {
             const buffer = await response.arrayBuffer();
             const base64 = Buffer.from(buffer).toString('base64');
 
-            const geminiResult = await callGemini([
+            const geminiResult = await queueGemini([
                 { inlineData: { data: base64, mimeType: attachment.contentType || "image/png" } },
                 `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
                  Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
@@ -1089,7 +1069,6 @@ client.on('messageCreate', async message => {
             if (parsed.losers) allParsedLosers.push(...parsed.losers);
         }
 
-        // Dedup
         const parsed = {
             winners: [...new Set(allParsedWinners)],
             losers: [...new Set(allParsedLosers)]
@@ -1097,26 +1076,21 @@ client.on('messageCreate', async message => {
 
         console.log('[PvP] Merged result:', JSON.stringify(parsed));
 
-        // Compteurs avant filtrage (pour détecter percepteur)
         const preFilterWinCount = parsed.winners ? parsed.winners.length : 0;
         const preFilterLoseCount = parsed.losers ? parsed.losers.length : 0;
 
-        // Filtre code : exclure les noms parasites + tout nom avec accents (pseudos joueurs n'en ont pas)
         const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
         if (parsed.losers) parsed.losers = parsed.losers.filter(n => !isNPC(n));
 
-        // Détection percepteur : des noms existaient avant filtrage mais plus après
         if (preFilterLoseCount > 0 && parsed.losers.length === 0) userSession.percepteurDetected = true;
         if (preFilterWinCount > 0 && parsed.winners.length === 0) userSession.percepteurDetected = true;
 
-        // Cap 5v5
         if (parsed.winners && parsed.winners.length > 5) parsed.winners = parsed.winners.slice(0, 5);
         if (parsed.losers && parsed.losers.length > 5) parsed.losers = parsed.losers.slice(0, 5);
 
-        // Merge avec la session existante (cas ou le joueur envoie en plusieurs messages)
         if (parsed.winners) userSession.winners = [...new Set([...userSession.winners, ...parsed.winners])];
         if (parsed.losers) userSession.losers = [...new Set([...userSession.losers, ...parsed.losers])];
 
@@ -1126,7 +1100,6 @@ client.on('messageCreate', async message => {
         const percepteurFight = userSession.percepteurDetected && !bothSides && (userSession.winners.length > 0 || userSession.losers.length > 0);
 
         if (percepteurFight) {
-            // Perco seul en face → 0 pts, on arrête là
             clearSessionTimeout(message.author.id);
             activeSessions.delete(message.author.id);
             await msgRef.edit({ content: `Pas de def, 0 point chef`, components: [] });
@@ -1144,22 +1117,22 @@ client.on('messageCreate', async message => {
             setSessionTimeout(message.author.id, msgRef);
         }
     } catch (error) {
-    console.error('[PvP] Erreur:', error);
-    let msg;
-    if (error.status === 503 || error.message?.includes('503')) {
-        msg = "Gemini indisponible (503). Réessayez dans quelques secondes.";
-    } else if (error.status === 429 || error.message?.includes('429')) {
-        msg = "Limite de requêtes Gemini atteinte (429). Réessayez dans 30 secondes.";
-    } else if (error.message?.includes('timeout')) {
-        msg = "Timeout Gemini (60s dépassé). Réessayez.";
-    } else if (error.message?.includes('fetch failed') || error.message?.includes('ECONNRESET') || error.message?.includes('ETIMEDOUT')) {
-        msg = "Erreur réseau. Vérifiez la connexion et réessayez.";
-    } else if (error.message?.includes('JSON')) {
-        msg = "Réponse Gemini illisible. Réessayez avec un screenshot plus net.";
-    } else {
-        msg = `Erreur inattendue : ${error.message || error.status || 'inconnue'}`;
-    }
-    try { await msgRef.edit({ content: msg, components: [] }); } catch {}
+        console.error('[PvP] Erreur:', error);
+        let msg;
+        if (error.status === 503 || error.message?.includes('503')) {
+            msg = "Gemini indisponible (503). Réessayez dans quelques secondes.";
+        } else if (error.status === 429 || error.message?.includes('429')) {
+            msg = "Limite de requêtes Gemini atteinte (429). Réessayez dans 30 secondes.";
+        } else if (error.message?.includes('timeout')) {
+            msg = "Timeout Gemini (60s dépassé). Réessayez.";
+        } else if (error.message?.includes('fetch failed') || error.message?.includes('ECONNRESET') || error.message?.includes('ETIMEDOUT')) {
+            msg = "Erreur réseau. Vérifiez la connexion et réessayez.";
+        } else if (error.message?.includes('JSON')) {
+            msg = "Réponse Gemini illisible. Réessayez avec un screenshot plus net.";
+        } else {
+            msg = `Erreur inattendue : ${error.message || error.status || 'inconnue'}`;
+        }
+        try { await msgRef.edit({ content: msg, components: [] }); } catch {}
     }
 });
 
@@ -1232,7 +1205,6 @@ client.on('interactionCreate', async interaction => {
             await interaction.showModal(modal); return;
         }
 
-        // ETAPE 1 : Attaque / Défense → affiche Victoire / Défaite
         if (interaction.customId === 'attack' || interaction.customId === 'defense') {
             session.context = interaction.customId;
             const row = new ActionRowBuilder().addComponents(
@@ -1244,7 +1216,6 @@ client.on('interactionCreate', async interaction => {
             setSessionTimeout(interaction.user.id, interaction.message);
         }
 
-        // ETAPE 2 : Victoire / Défaite → affiche sélection pool adverse
         else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
             session.hasWon = interaction.customId === 'result_win';
             const resultLabel = session.hasWon ? 'Victoire' : 'Défaite';
@@ -1255,7 +1226,6 @@ client.on('interactionCreate', async interaction => {
             setSessionTimeout(interaction.user.id, interaction.message);
         }
 
-        // ETAPE 3 : Sélection pool → calcul final (bonus uniquement en victoire)
         else if (interaction.isStringSelectMenu() && interaction.customId === 'select_alliance_bonus') {
             session.allianceTier = interaction.values[0];
             const poolObj = liveConfig.pools.find(p => p.id === session.allianceTier);
@@ -1267,32 +1237,24 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferUpdate();
 
             const hasWon = session.hasWon;
-            
-            // 1. NETTOYAGE DES PSEUDOS
             const myTeam = hasWon ? session.winners : session.losers;
             const enTeam = hasWon ? session.losers : session.winners;
-            
             const myC = Math.min(Math.max(myTeam.length, 1), 5); 
             const enC = Math.min(Math.max(enTeam.length, 1), 5);
             
-            // Calcul Points (grilles + multiplicateur pool% uniquement en victoire)
             const gridWin = session.context === 'defense' ? liveConfig.pts_def_win : liveConfig.pts_atk_win;
             const gridLose = session.context === 'defense' ? liveConfig.pts_def_lose : liveConfig.pts_atk_lose;
             const gridPts = hasWon ? gridWin[myC-1][enC-1] : gridLose[myC-1][enC-1];
             const poolPct = (hasWon && poolObj) ? (poolObj.bonus || 0) : 0;
             let pts = Math.floor(gridPts * (1 + poolPct / 100));
 
-            // Percepteur seul en face (aucun joueur adverse après filtrage) = 0 pts
-            if (enTeam.length === 0) {
-                pts = 0;
-            }
+            if (enTeam.length === 0) pts = 0;
 
             const seasonId = await ensureCurrentSeason();
             await snapshotRanks(seasonId);
             const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded, context, has_won) VALUES ($1, $2, $3, $4, $5) RETURNING id", [seasonId, session.allianceTier, pts, session.context, hasWon]);
             const matchId = matchRes.rows[0].id;
             
-            // --- LOGIQUE MULTI-COMPTE ---
             const processedDiscordIds = new Set();
             const paid = [], skipped = [], defeated = [];
 
@@ -1314,7 +1276,6 @@ client.on('interactionCreate', async interaction => {
 
                     if (isAlly) {
                         let shouldCountStats = true;
-
                         if (pData.discord_id) {
                             if (processedDiscordIds.has(pData.discord_id)) {
                                 shouldCountStats = false;
@@ -1324,12 +1285,7 @@ client.on('interactionCreate', async interaction => {
                         }
 
                         if (shouldCountStats) {
-                            const pointsToAdd = pts;
-                            const winsToAdd = isWinner ? 1 : 0;
-                            const lossesToAdd = isWinner ? 0 : 1;
-                            
-                            await updateSeasonStats(pData.id, seasonId, { points: pointsToAdd, wins: winsToAdd, losses: lossesToAdd });
-                            
+                            await updateSeasonStats(pData.id, seasonId, { points: pts, wins: isWinner ? 1 : 0, losses: isWinner ? 0 : 1 });
                             if (isWinner) paid.push(pName);
                             else defeated.push(pName);
                         } else {
@@ -1346,7 +1302,6 @@ client.on('interactionCreate', async interaction => {
             const contextLabel = session.context === 'attack' ? 'Attaque' : 'Défense';
             const allianceLine = `**${resultLabel}** vs **${session.allianceName || session.allianceTier}** (${contextLabel})`;
 
-            // Detect multi-account groups (same discord_id, multiple pseudos)
             const multiGroups = {};
             const allAllyPseudos = hasWon ? session.winners : session.losers;
             const allyRows = await pool.query(`
@@ -1369,13 +1324,8 @@ client.on('interactionCreate', async interaction => {
             } else {
                 msg = `${allianceLine}\nAucun joueur crédité.`;
             }
-            
-            if (skipped.length > 0) {
-                msg += `\n⚠️ Multi-comptes ignorés : ${skipped.join(', ')}`;
-            }
-            if (multiAccountLines.length > 0) {
-                msg += `\n🔗 Comptes liés : ${multiAccountLines.map(g => g.join(' = ')).join(' | ')}`;
-            }
+            if (skipped.length > 0) msg += `\n⚠️ Multi-comptes ignorés : ${skipped.join(', ')}`;
+            if (multiAccountLines.length > 0) msg += `\n🔗 Comptes liés : ${multiAccountLines.map(g => g.join(' = ')).join(' | ')}`;
             
             await interaction.editReply({ content: msg, components: [] });
         }
@@ -1391,7 +1341,6 @@ async function ensureCurrentSeason() {
 }
 
 async function snapshotRanks(seasonId) {
-    // Capture les rangs actuels avant modification
     await pool.query(`
         WITH ranked AS (
             SELECT ss.player_id, ss.season_id,
