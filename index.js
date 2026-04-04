@@ -46,7 +46,8 @@ async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
             ]);
             return result;
         } catch (err) {
-            const isRetryable = err.status === 503 || err.status === 429 || err.message?.includes('timeout') || err.message?.includes('fetch failed') || err.message?.includes('ECONNRESET') || err.message?.includes('ETIMEDOUT') || err.type === 'system';
+            // 429 géré au niveau queue, pas ici
+            const isRetryable = err.status === 503 || err.message?.includes('timeout') || err.message?.includes('fetch failed') || err.message?.includes('ECONNRESET') || err.message?.includes('ETIMEDOUT') || err.type === 'system';
             console.log(`[Gemini] Tentative ${attempt}/${retries} echouee: ${err.message || err.status}`);
             if (attempt < retries && isRetryable) {
                 const delay = attempt * 15000;
@@ -78,10 +79,17 @@ async function processGeminiQueue() {
         try {
             const result = await callGemini(parts);
             resolve(result);
+            if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 5000));
         } catch (err) {
-            reject(err);
+            if (err.status === 429 || err.message?.includes('429')) {
+                console.log('[Queue] 429 reçu, pause 30s puis retry...');
+                await new Promise(r => setTimeout(r, 30000));
+                geminiQueue.unshift({ parts, resolve, reject });
+            } else {
+                reject(err);
+                if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 5000));
+            }
         }
-        if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 4000));
     }
     geminiProcessing = false;
 }
