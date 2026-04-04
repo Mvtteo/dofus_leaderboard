@@ -75,19 +75,21 @@ async function processGeminiQueue() {
     if (geminiProcessing || geminiQueue.length === 0) return;
     geminiProcessing = true;
     while (geminiQueue.length > 0) {
-        const { parts, resolve, reject } = geminiQueue.shift();
+        const item = geminiQueue.shift();
+        const { parts, resolve, reject } = item;
+        const retries = item.retries || 0;
         try {
             const result = await callGemini(parts);
             resolve(result);
-            if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 500));
+            if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 5000));
         } catch (err) {
-            if (err.status === 429 || err.message?.includes('429')) {
-                console.log('[Queue] 429 reçu, pause 30s puis retry...');
+            if ((err.status === 429 || err.message?.includes('429')) && retries < 3) {
+                console.log(`[Queue] 429 reçu, pause 30s puis retry (${retries + 1}/3)...`);
                 await new Promise(r => setTimeout(r, 30000));
-                geminiQueue.unshift({ parts, resolve, reject });
+                geminiQueue.unshift({ parts, resolve, reject, retries: retries + 1 });
             } else {
                 reject(err);
-                if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 500));
+                if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 5000));
             }
         }
     }
