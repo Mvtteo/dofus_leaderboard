@@ -1,3 +1,10 @@
+// --- VERTEX AI CREDENTIALS ---
+if (process.env.GCP_CREDENTIALS) {
+    const fs = require('fs');
+    fs.writeFileSync('/tmp/sa.json', Buffer.from(process.env.GCP_CREDENTIALS, 'base64'));
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = '/tmp/sa.json';
+}
+
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -24,33 +31,36 @@ const {
     StringSelectMenuOptionBuilder,
     Events 
 } = require('discord.js');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { VertexAI } = require('@google-cloud/vertexai');
 
 // --- IMPORTS ---
 const { pool } = require('./db');
 const config = require('./config');
 
-// --- GEMINI AI ---
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// --- VERTEX AI ---
 const GEMINI_TIMEOUT_MS = 60000;
 const GEMINI_MAX_RETRIES = 3;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-001';
+
+const vertexAI = new VertexAI({
+    project: process.env.GCP_PROJECT_ID,
+    location: 'us-central1'
+});
 
 async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
-    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+    const model = vertexAI.getGenerativeModel({ model: GEMINI_MODEL });
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             const result = await Promise.race([
-                model.generateContent(parts),
+                model.generateContent({ contents: [{ role: 'user', parts }] }),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini timeout (60s)')), GEMINI_TIMEOUT_MS))
             ]);
             return result;
         } catch (err) {
-            // 429 géré au niveau queue, pas ici
             const isRetryable = err.status === 503 || err.message?.includes('timeout') || err.message?.includes('fetch failed') || err.message?.includes('ECONNRESET') || err.message?.includes('ETIMEDOUT') || err.type === 'system';
             console.log(`[Gemini] Tentative ${attempt}/${retries} echouee: ${err.message || err.status}`);
             if (attempt < retries && isRetryable) {
-                const delay = attempt * 15000;
+                const delay = attempt * 10000;
                 console.log(`[Gemini] Retry dans ${delay/1000}s...`);
                 await new Promise(r => setTimeout(r, delay));
             } else {
@@ -60,13 +70,13 @@ async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
     }
 }
 
-// --- GEMINI QUEUE (évite les 429 sur uploads simultanés) ---
+// --- GEMINI QUEUE ---
 const geminiQueue = [];
 let geminiProcessing = false;
 
 async function queueGemini(parts) {
     return new Promise((resolve, reject) => {
-        geminiQueue.push({ parts, resolve, reject });
+        geminiQueue.push({ parts, resolve, reject, retries: 0 });
         processGeminiQueue();
     });
 }
@@ -74,26 +84,28 @@ async function queueGemini(parts) {
 async function processGeminiQueue() {
     if (geminiProcessing || geminiQueue.length === 0) return;
     geminiProcessing = true;
-    while (geminiQueue.length > 0) {
-        const item = geminiQueue.shift();
-        const { parts, resolve, reject } = item;
-        const retries = item.retries || 0;
-        try {
-            const result = await callGemini(parts);
-            resolve(result);
-            if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 5000));
-        } catch (err) {
-            if ((err.status === 429 || err.message?.includes('429')) && retries < 3) {
-                console.log(`[Queue] 429 reçu, pause 30s puis retry (${retries + 1}/3)...`);
-                await new Promise(r => setTimeout(r, 30000));
-                geminiQueue.unshift({ parts, resolve, reject, retries: retries + 1 });
-            } else {
-                reject(err);
-                if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 5000));
+    try {
+        while (geminiQueue.length > 0) {
+            const item = geminiQueue.shift();
+            const { parts, resolve, reject } = item;
+            try {
+                const result = await callGemini(parts);
+                resolve(result);
+                if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
+            } catch (err) {
+                if ((err.status === 429 || err.message?.includes('429')) && item.retries < 3) {
+                    console.log(`[Queue] 429 reçu, pause 15s puis retry (${item.retries + 1}/3)...`);
+                    await new Promise(r => setTimeout(r, 15000));
+                    geminiQueue.unshift({ ...item, retries: item.retries + 1 });
+                } else {
+                    reject(err);
+                    if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
+                }
             }
         }
+    } finally {
+        geminiProcessing = false;
     }
-    geminiProcessing = false;
 }
 
 // --- FONCTION UTILITAIRE : SUPPRESSION ACCENTS ---
@@ -136,6 +148,11 @@ function clearSessionTimeout(userId) {
     if (existing) { clearTimeout(existing); sessionTimeouts.delete(userId); }
 }
 
+// Helper : extrait le texte de la réponse Vertex AI
+function getVertexText(result) {
+    return result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
 // ============================================
 // 1. IA : LECTURE DES SCREENS PVP
 // ============================================
@@ -147,7 +164,7 @@ async function parseScreenWithAI(imageUrl) {
         
         const result = await queueGemini([
             { inlineData: { data: base64, mimeType: "image/png" } },
-            `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
+            { text: `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
              Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
              
              IMPORTANT : Le screenshot peut ne montrer QU'UNE SEULE section (soit GAGNANTS, soit PERDANTS).
@@ -166,10 +183,10 @@ async function parseScreenWithAI(imageUrl) {
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
              - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
              
-             Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
+             Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}` }
         ]);
         
-        const text = result.response.text();
+        const text = getVertexText(result);
         const clean = text.replace(/```json\n?|```\n?/g, '').trim();
         console.log('[Gemini] Reponse brute:', clean);
         
@@ -211,10 +228,10 @@ async function parseNuggetsWithAI(imageUrl) {
 
         const result = await queueGemini([
             { inlineData: { data: base64, mimeType: "image/png" } },
-            `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.`
+            { text: `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.` }
         ]);
 
-        const text = result.response.text();
+        const text = getVertexText(result);
         
         const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
         const match = text.match(regex);
@@ -1037,7 +1054,7 @@ client.on('messageCreate', async message => {
 
             const geminiResult = await queueGemini([
                 { inlineData: { data: base64, mimeType: attachment.contentType || "image/png" } },
-                `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
+                { text: `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
                  Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
                  
                  IMPORTANT : Le screenshot peut ne montrer QU'UNE SEULE section (soit GAGNANTS, soit PERDANTS).
@@ -1056,10 +1073,10 @@ client.on('messageCreate', async message => {
                  - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
                  - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
                  
-                 Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}`
+                 Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}` }
             ]);
 
-            const text = geminiResult.response.text();
+            const text = getVertexText(geminiResult);
             const clean = text.replace(/```json\n?|```\n?/g, '').trim();
             console.log('[Gemini] Image', id, 'reponse:', clean);
 
