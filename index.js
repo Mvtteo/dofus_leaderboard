@@ -31,28 +31,31 @@ const {
     StringSelectMenuOptionBuilder,
     Events 
 } = require('discord.js');
-const { VertexAI } = require('@google-cloud/vertexai');
+const { GoogleGenAI } = require('@google/genai');
 
 // --- IMPORTS ---
 const { pool } = require('./db');
 const config = require('./config');
 
-// --- VERTEX AI ---
+// --- GOOGLE GEN AI (Vertex AI) ---
 const GEMINI_TIMEOUT_MS = 60000;
 const GEMINI_MAX_RETRIES = 3;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-001';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
-const vertexAI = new VertexAI({
+const ai = new GoogleGenAI({
+    vertexai: true,
     project: process.env.GCP_PROJECT_ID,
     location: 'us-central1'
 });
 
 async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
-    const model = vertexAI.getGenerativeModel({ model: GEMINI_MODEL });
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             const result = await Promise.race([
-                model.generateContent({ contents: [{ role: 'user', parts }] }),
+                ai.models.generateContent({
+                    model: GEMINI_MODEL,
+                    contents: [{ role: 'user', parts }]
+                }),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini timeout (60s)')), GEMINI_TIMEOUT_MS))
             ]);
             return result;
@@ -148,9 +151,9 @@ function clearSessionTimeout(userId) {
     if (existing) { clearTimeout(existing); sessionTimeouts.delete(userId); }
 }
 
-// Helper : extrait le texte de la réponse Vertex AI
-function getVertexText(result) {
-    return result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+// Helper : extrait le texte de la réponse
+function getResponseText(result) {
+    return result?.text || result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 // ============================================
@@ -186,7 +189,7 @@ async function parseScreenWithAI(imageUrl) {
              Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}` }
         ]);
         
-        const text = getVertexText(result);
+        const text = getResponseText(result);
         const clean = text.replace(/```json\n?|```\n?/g, '').trim();
         console.log('[Gemini] Reponse brute:', clean);
         
@@ -231,7 +234,7 @@ async function parseNuggetsWithAI(imageUrl) {
             { text: `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.` }
         ]);
 
-        const text = getVertexText(result);
+        const text = getResponseText(result);
         
         const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
         const match = text.match(regex);
@@ -1076,7 +1079,7 @@ client.on('messageCreate', async message => {
                  Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}` }
             ]);
 
-            const text = getVertexText(geminiResult);
+            const text = getResponseText(geminiResult);
             const clean = text.replace(/```json\n?|```\n?/g, '').trim();
             console.log('[Gemini] Image', id, 'reponse:', clean);
 
