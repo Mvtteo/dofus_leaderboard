@@ -869,7 +869,7 @@
         async function loadPlayerPoints(pseudo) {
             currentPlayerPseudo = pseudo;
             try {
-                const res = await fetch(`/admin/api/player-stats/${encodeURIComponent(pseudo)}`);
+                const res = await fetch('/admin/api/player-stats/' + encodeURIComponent(pseudo));
                 const data = await res.json();
                 ptsCurrent = data.points || 0;
                 ptsDelta = 0;
@@ -887,7 +887,7 @@
             card.style.display = 'block';
             container.innerHTML = '<div class="empty-state">Chargement...</div>';
             try {
-                const res = await fetch(`/admin/api/player-matches/${encodeURIComponent(pseudo)}`);
+                const res = await fetch('/admin/api/player-matches/' + encodeURIComponent(pseudo));
                 playerMatchesData = await res.json();
                 playerMatchesPage = 1;
                 renderPlayerMatches();
@@ -941,7 +941,7 @@
             for (const m of rows) {
                 const isWin = m.has_won;
                 const cancelled = m.cancelled;
-                const date = m.created_at ? new Date(m.created_at).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+                const date = m.created_at ? new Date(m.created_at).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
                 const rowClass = cancelled ? ' class="match-cancelled"' : '';
                 const resultClass = isWin ? 'match-win' : 'match-lose';
                 const resultLabel = isWin ? 'Victoire' : 'Défaite';
@@ -957,7 +957,7 @@
                 html += '<td style="color:var(--text-muted);font-size:0.75rem;">' + date + '</td>';
                 html += '<td class="' + resultClass + '">' + resultLabel + '</td>';
                 html += '<td style="color:var(--text-muted);">' + ctxLabel + '</td>';
-                html += '<td>' + escapeHTML(m.alliance || '—') + '</td>';
+                html += '<td>' + escapeHTML(m.alliance || '-') + '</td>';
                 html += '<td style="font-size:0.75rem;color:var(--text-muted);">' + players + '</td>';
                 html += '<td style="text-align:center;">' + ptsCell + '</td>';
                 html += '<td style="text-align:center;white-space:nowrap;">' + actionsCell + '</td>';
@@ -972,23 +972,24 @@
             let html = '';
             for (let i = 1; i <= total; i++) {
                 const active = i === current ? ' active' : '';
-                html += `<button class="page-btn${active}" onclick="${varName}=${i};${varName==='playerMatchesPage'?'renderPlayerMatches()':'renderRecentMatches()}">${i}</button>`;
+                const cb = varName === 'playerMatchesPage' ? 'renderPlayerMatches()' : 'renderRecentMatches()';
+                html += '<button class="page-btn' + active + '" onclick="' + varName + '=' + i + ';' + cb + '">' + i + '</button>';
             }
             return html;
         }
 
         async function editMatchPoints(matchId, ctx) {
-            const input = document.getElementById(`pts_${matchId}`);
+            const input = document.getElementById('pts_' + matchId);
             const newPts = parseInt(input?.value);
             if (isNaN(newPts)) return showToast('Points invalides.', 'error');
             try {
-                const res = await fetch(`/admin/api/match/${matchId}/points`, {
+                const res = await fetch('/admin/api/match/' + matchId + '/points', {
                     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ points: newPts })
                 });
                 const data = await res.json();
                 if (data.ok) {
-                    showToast(`Match #${matchId} mis à jour.`);
+                    showToast('Match #' + matchId + ' mis a jour.');
                     if (ctx === 'player') await loadPlayerMatches(currentPlayerPseudo);
                     else { recentMatchesData = []; await loadRecentMatches(recentPage); }
                 } else showToast(data.error || 'Erreur.', 'error');
@@ -996,12 +997,12 @@
         }
 
         async function cancelMatch(matchId, ctx) {
-            openConfirm(`Annuler le match #${matchId} ? Les points seront retirés aux joueurs.`, async () => {
+            openConfirm('Annuler le match #' + matchId + ' ? Les points seront retires aux joueurs.', async () => {
                 try {
-                    const res = await fetch(`/admin/api/match/${matchId}`, { method: 'DELETE' });
+                    const res = await fetch('/admin/api/match/' + matchId, { method: 'DELETE' });
                     const data = await res.json();
                     if (data.ok) {
-                        showToast(`Match #${matchId} annulé.`);
+                        showToast('Match #' + matchId + ' annule.');
                         if (ctx === 'player') await loadPlayerMatches(currentPlayerPseudo);
                         else { recentMatchesData = []; await loadRecentMatches(recentPage); }
                         if (ctx === 'player') { ptsCurrent = data.newTotal ?? ptsCurrent; ptsDelta = 0; updatePtsDisplay(); }
