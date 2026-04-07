@@ -873,30 +873,30 @@ app.get('/admin/api/player-matches/:pseudo', adminAuth, async (req, res) => {
     try {
         const pseudo = req.params.pseudo;
         const seasonId = await ensureCurrentSeason();
-        const r = await pool.query(`
-            SELECT DISTINCT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at, m.cancelled,
-                (SELECT json_agg(json_build_object('name', COALESCE(p2.discord_nickname, p2.dofus_pseudo), 'is_winner', mp2.is_winner))
-                 FROM match_participants mp2 JOIN players p2 ON p2.id = mp2.player_id WHERE mp2.match_id = m.id) as participants
-            FROM matches m
-            JOIN match_participants mp ON mp.match_id = m.id
-            JOIN players p ON p.id = mp.player_id
-            WHERE m.season_id = $1
-            AND LOWER(COALESCE(p.discord_nickname, p.dofus_pseudo)) = LOWER($2)
-            ORDER BY m.created_at DESC NULLS LAST, m.id DESC
-            LIMIT 25
-        `, [seasonId, pseudo]);
-        const matches = r.rows.map(m => {
-            const poolObj = liveConfig.pools.find(p => p.id === m.alliance_tier);
-            return {
-                id: m.id, alliance: poolObj ? poolObj.name : m.alliance_tier,
-                points_awarded: m.points_awarded, context: m.context,
-                has_won: m.has_won !== false, created_at: m.created_at, cancelled: m.cancelled || false,
-                winners: (m.participants||[]).filter(p => p.is_winner).map(p => p.name),
-                losers: (m.participants||[]).filter(p => !p.is_winner).map(p => p.name)
-            };
-        });
-        res.json(matches);
-    } catch (e) { console.error(e); res.json([]); }
+        console.log('[PlayerMatches] pseudo:', pseudo, 'seasonId:', seasonId);
+
+        const playerRes = await pool.query(
+            `SELECT id FROM players WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1) LIMIT 1`,
+            [pseudo]
+        );
+        console.log('[PlayerMatches] player found:', playerRes.rows);
+        if (playerRes.rows.length === 0) return res.json([]);
+
+        const playerId = playerRes.rows[0].id;
+        const r = await pool.query(
+            `SELECT m.id, m.points_awarded, m.context, m.has_won, m.created_at, m.alliance_tier
+             FROM matches m
+             JOIN match_participants mp ON mp.match_id = m.id
+             WHERE m.season_id = $1 AND mp.player_id = $2
+             ORDER BY m.created_at DESC NULLS LAST LIMIT 25`,
+            [seasonId, playerId]
+        );
+        console.log('[PlayerMatches] matches found:', r.rows.length);
+        res.json(r.rows);
+    } catch (e) {
+        console.error('[PlayerMatches] ERROR:', e.message);
+        res.json([]);
+    }
 });
 
 // 25 derniers matchs globaux
