@@ -1009,7 +1009,10 @@
             });
         }
 
-        // ===== MULTI COMPTES =====
+        function adjustPts(n) { ptsDelta += n; updatePtsDisplay(); }
+        function resetPts() { ptsDelta = 0; updatePtsDisplay(); }
+
+        function updatePtsDisplay() {
             ptsCurrentEl.textContent = ptsCurrent;
             ptsDeltaEl.textContent = ptsDelta === 0 ? '0' : (ptsDelta > 0 ? '+' + ptsDelta : ptsDelta);
             ptsDeltaEl.className = 'pts-delta' + (ptsDelta > 0 ? ' positive' : ptsDelta < 0 ? ' negative' : '');
@@ -1033,6 +1036,7 @@
                     ptsCurrent = data.newTotal;
                     ptsDelta = 0;
                     updatePtsDisplay();
+                    await loadPlayerMatches(currentPlayerPseudo);
                 } else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
         });
