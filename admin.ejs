@@ -934,33 +934,34 @@
         }
 
         function renderMatchTable(rows, ctx) {
-            let html = `<table class="match-table">
-                <thead><tr>
-                    <th>Date</th><th>Résultat</th><th>Contexte</th><th>Alliance</th><th>Joueurs</th>
-                    <th style="text-align:center;">Points</th><th style="text-align:center;">Actions</th>
-                </tr></thead><tbody>`;
+            let html = '<table class="match-table"><thead><tr>';
+            html += '<th>Date</th><th>Résultat</th><th>Contexte</th><th>Alliance</th><th>Joueurs</th>';
+            html += '<th style="text-align:center;">Points</th><th style="text-align:center;">Actions</th>';
+            html += '</tr></thead><tbody>';
             for (const m of rows) {
                 const isWin = m.has_won;
                 const cancelled = m.cancelled;
                 const date = m.created_at ? new Date(m.created_at).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
                 const rowClass = cancelled ? ' class="match-cancelled"' : '';
-                html += `<tr${rowClass}>
-                    <td style="color:var(--text-muted);font-size:0.75rem;">${date}</td>
-                    <td class="${isWin ? 'match-win' : 'match-lose'}">${isWin ? 'Victoire' : 'Défaite'}</td>
-                    <td style="color:var(--text-muted);">${m.context === 'attack' ? 'Attaque' : 'Défense'}</td>
-                    <td>${escapeHTML(m.alliance || '—')}</td>
-                    <td style="font-size:0.75rem;color:var(--text-muted);">${(m.winners||[]).concat(m.losers||[]).map(p=>escapeHTML(p)).join(', ')}</td>
-                    <td style="text-align:center;">
-                        ${cancelled ? '<span style="color:var(--text-muted);">annulé</span>' :
-                        `<input type="number" class="pts-input-inline" value="${m.points_awarded}" id="pts_${m.id}" />`}
-                    </td>
-                    <td style="text-align:center;white-space:nowrap;">
-                        ${cancelled ? '' : `
-                        <button class="btn-action btn-edit" onclick="editMatchPoints(${m.id}, '${ctx}')">Modifier</button>
-                        <button class="btn-action btn-cancel" onclick="cancelMatch(${m.id}, '${ctx}')" style="margin-left:0.3rem;">Annuler</button>
-                        `}
-                    </td>
-                </tr>`;
+                const resultClass = isWin ? 'match-win' : 'match-lose';
+                const resultLabel = isWin ? 'Victoire' : 'Défaite';
+                const ctxLabel = m.context === 'attack' ? 'Attaque' : 'Défense';
+                const players = (m.winners||[]).concat(m.losers||[]).map(p => escapeHTML(p)).join(', ');
+                const ptsCell = cancelled
+                    ? '<span style="color:var(--text-muted);">annulé</span>'
+                    : '<input type="number" class="pts-input-inline" value="' + m.points_awarded + '" id="pts_' + m.id + '" />';
+                const actionsCell = cancelled ? '' :
+                    '<button class="btn-action btn-edit" onclick="editMatchPoints(' + m.id + ', \'' + ctx + '\')">Modifier</button>' +
+                    '<button class="btn-action btn-cancel" onclick="cancelMatch(' + m.id + ', \'' + ctx + '\')" style="margin-left:0.3rem;">Annuler</button>';
+                html += '<tr' + rowClass + '>';
+                html += '<td style="color:var(--text-muted);font-size:0.75rem;">' + date + '</td>';
+                html += '<td class="' + resultClass + '">' + resultLabel + '</td>';
+                html += '<td style="color:var(--text-muted);">' + ctxLabel + '</td>';
+                html += '<td>' + escapeHTML(m.alliance || '—') + '</td>';
+                html += '<td style="font-size:0.75rem;color:var(--text-muted);">' + players + '</td>';
+                html += '<td style="text-align:center;">' + ptsCell + '</td>';
+                html += '<td style="text-align:center;white-space:nowrap;">' + actionsCell + '</td>';
+                html += '</tr>';
             }
             html += '</tbody></table>';
             return html;
