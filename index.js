@@ -891,19 +891,15 @@ app.get('/admin/api/player-matches/:pseudo', adminAuth, async (req, res) => {
         if (playerIds.length === 0) return res.json([]);
 
         const r = await pool.query(`
-            SELECT DISTINCT m.id, m.points_awarded, m.context, m.has_won, m.created_at, m.alliance_tier, m.cancelled,
-                json_agg(json_build_object(
-                    'name', COALESCE(p.discord_nickname, p.dofus_pseudo),
-                    'is_winner', mp.is_winner
-                )) OVER (PARTITION BY m.id) as participants
+            SELECT m.id, m.points_awarded, m.context, m.has_won, m.created_at, m.alliance_tier, m.cancelled,
+                (SELECT json_agg(json_build_object('name', COALESCE(p2.discord_nickname, p2.dofus_pseudo), 'is_winner', mp2.is_winner))
+                 FROM match_participants mp2 JOIN players p2 ON p2.id = mp2.player_id
+                 WHERE mp2.match_id = m.id) as participants
             FROM matches m
-            JOIN match_participants mp ON mp.match_id = m.id
-            JOIN players p ON p.id = mp.player_id
             WHERE m.season_id = $1
             AND m.id IN (
                 SELECT match_id FROM match_participants WHERE player_id = ANY($2::int[])
             )
-            GROUP BY m.id
             ORDER BY m.created_at DESC NULLS LAST
             LIMIT 25
         `, [seasonId, playerIds]);
