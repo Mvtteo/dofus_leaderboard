@@ -764,6 +764,7 @@ app.post('/admin/api/player-points', adminAuth, async (req, res) => {
             SELECT id, COALESCE(discord_nickname, dofus_pseudo) as name 
             FROM players WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1)
         `, [pseudo]);
+        console.log('[PlayerMatches] pseudo recu:', JSON.stringify(pseudo), 'found rows:', playerRes.rows.length);
         if (playerRes.rows.length === 0) return res.status(404).json({ error: 'Joueur introuvable.' });
 
         const playerId = playerRes.rows[0].id;
