@@ -866,6 +866,132 @@ app.get('/admin/api/multi-accounts', adminAuth, async (req, res) => {
     } catch { res.json([]); }
 });
 
+// Historique matchs d'un joueur (25 derniers)
+app.get('/admin/api/player-matches/:pseudo', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json([]);
+    try {
+        const pseudo = req.params.pseudo;
+        const seasonId = await ensureCurrentSeason();
+        const r = await pool.query(`
+            SELECT DISTINCT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at, m.cancelled,
+                (SELECT json_agg(json_build_object('name', COALESCE(p2.discord_nickname, p2.dofus_pseudo), 'is_winner', mp2.is_winner))
+                 FROM match_participants mp2 JOIN players p2 ON p2.id = mp2.player_id WHERE mp2.match_id = m.id) as participants
+            FROM matches m
+            JOIN match_participants mp ON mp.match_id = m.id
+            JOIN players p ON p.id = mp.player_id
+            WHERE m.season_id = $1
+            AND LOWER(COALESCE(p.discord_nickname, p.dofus_pseudo)) = LOWER($2)
+            ORDER BY m.created_at DESC NULLS LAST, m.id DESC
+            LIMIT 25
+        `, [seasonId, pseudo]);
+        const matches = r.rows.map(m => {
+            const poolObj = liveConfig.pools.find(p => p.id === m.alliance_tier);
+            return {
+                id: m.id, alliance: poolObj ? poolObj.name : m.alliance_tier,
+                points_awarded: m.points_awarded, context: m.context,
+                has_won: m.has_won !== false, created_at: m.created_at, cancelled: m.cancelled || false,
+                winners: (m.participants||[]).filter(p => p.is_winner).map(p => p.name),
+                losers: (m.participants||[]).filter(p => !p.is_winner).map(p => p.name)
+            };
+        });
+        res.json(matches);
+    } catch (e) { console.error(e); res.json([]); }
+});
+
+// 25 derniers matchs globaux
+app.get('/admin/api/recent-matches', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json([]);
+    try {
+        const seasonId = await ensureCurrentSeason();
+        const r = await pool.query(`
+            SELECT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at, m.cancelled,
+                json_agg(json_build_object('name', COALESCE(p.discord_nickname, p.dofus_pseudo), 'is_winner', mp.is_winner)) as participants
+            FROM matches m
+            LEFT JOIN match_participants mp ON mp.match_id = m.id
+            LEFT JOIN players p ON p.id = mp.player_id
+            WHERE m.season_id = $1
+            GROUP BY m.id
+            ORDER BY m.created_at DESC NULLS LAST, m.id DESC
+            LIMIT 25
+        `, [seasonId]);
+        const matches = r.rows.map(m => {
+            const poolObj = liveConfig.pools.find(p => p.id === m.alliance_tier);
+            return {
+                id: m.id, alliance: poolObj ? poolObj.name : m.alliance_tier,
+                points_awarded: m.points_awarded, context: m.context,
+                has_won: m.has_won !== false, created_at: m.created_at, cancelled: m.cancelled || false,
+                winners: (m.participants||[]).filter(p => p.is_winner).map(p => p.name),
+                losers: (m.participants||[]).filter(p => !p.is_winner).map(p => p.name)
+            };
+        });
+        res.json(matches);
+    } catch (e) { console.error(e); res.json([]); }
+});
+
+// Modifier les points d'un match
+app.patch('/admin/api/match/:id/points', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const matchId = parseInt(req.params.id);
+        const newPts = parseInt(req.body.points);
+        if (isNaN(matchId) || isNaN(newPts)) return res.status(400).json({ error: 'Paramètres invalides.' });
+
+        const matchRes = await pool.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+        if (matchRes.rows.length === 0) return res.status(404).json({ error: 'Match introuvable.' });
+        const match = matchRes.rows[0];
+        if (match.cancelled) return res.status(400).json({ error: 'Match annulé, impossible de modifier.' });
+
+        const delta = newPts - match.points_awarded;
+        const isWin = match.has_won;
+
+        const allyRows = await pool.query(
+            'SELECT mp.player_id FROM match_participants mp WHERE mp.match_id = $1 AND mp.is_winner = $2',
+            [matchId, isWin]
+        );
+        for (const row of allyRows.rows) {
+            await pool.query(
+                'UPDATE season_stats SET points = points + $1 WHERE player_id = $2 AND season_id = $3',
+                [delta, row.player_id, match.season_id]
+            );
+        }
+        await pool.query('UPDATE matches SET points_awarded = $1 WHERE id = $2', [newPts, matchId]);
+        res.json({ ok: true });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+// Annuler un match
+app.delete('/admin/api/match/:id', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const matchId = parseInt(req.params.id);
+        if (isNaN(matchId)) return res.status(400).json({ error: 'ID invalide.' });
+
+        const matchRes = await pool.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+        if (matchRes.rows.length === 0) return res.status(404).json({ error: 'Match introuvable.' });
+        const match = matchRes.rows[0];
+        if (match.cancelled) return res.status(400).json({ error: 'Match déjà annulé.' });
+
+        const pts = match.points_awarded;
+        const isWin = match.has_won;
+
+        const allyRows = await pool.query(
+            'SELECT mp.player_id FROM match_participants mp WHERE mp.match_id = $1 AND mp.is_winner = $2',
+            [matchId, isWin]
+        );
+        for (const row of allyRows.rows) {
+            await pool.query(`
+                UPDATE season_stats SET
+                    points = GREATEST(0, points - $1),
+                    wins = GREATEST(0, wins - $2),
+                    losses = GREATEST(0, losses - $3)
+                WHERE player_id = $4 AND season_id = $5
+            `, [pts, isWin ? 1 : 0, isWin ? 0 : 1, row.player_id, match.season_id]);
+        }
+        await pool.query('UPDATE matches SET cancelled = true, points_awarded = 0 WHERE id = $1', [matchId]);
+        res.json({ ok: true });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
 app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${config.WEB_PORT}`); });
 
 // ============================================
@@ -882,6 +1008,7 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS context TEXT DEFAULT 'attack'`);
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS has_won BOOLEAN DEFAULT true`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL`);
+        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS cancelled BOOLEAN DEFAULT false`);
         
         const migCheck = await pool.query("SELECT value FROM settings WHERE key = 'nuggets_migrated'");
         if (migCheck.rows.length === 0) {

@@ -248,6 +248,37 @@
         }
         .multi-count { font-weight:700; color:var(--gold); font-size:0.8rem; }
 
+        /* MATCH HISTORY */
+        .match-table { width:100%; border-collapse:collapse; }
+        .match-table thead th { text-align:left; padding:0.5rem 0.6rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
+        .match-table tbody td { padding:0.6rem 0.6rem; font-size:0.8rem; border-bottom:1px solid rgba(255,255,255,0.02); vertical-align:middle; }
+        .match-table tbody tr:hover { background:var(--bg-card-hover); }
+        .match-win { color:var(--accent-bright); font-weight:700; }
+        .match-lose { color:var(--red); font-weight:700; }
+        .match-pts { font-weight:700; font-variant-numeric:tabular-nums; }
+        .match-cancelled { opacity:0.4; text-decoration:line-through; }
+        .pagination { display:flex; gap:0.4rem; align-items:center; margin-top:0.75rem; justify-content:center; }
+        .page-btn {
+            width:28px; height:28px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm);
+            background:transparent; color:var(--text-muted); font-size:0.75rem; font-weight:600;
+            cursor:pointer; transition:all 0.15s; font-family:inherit; display:flex; align-items:center; justify-content:center;
+        }
+        .page-btn:hover { border-color:var(--border-medium); color:var(--text-secondary); }
+        .page-btn.active { background:rgba(42,157,143,0.15); border-color:var(--border-medium); color:var(--accent-bright); }
+        .btn-action {
+            padding:0.25rem 0.6rem; border-radius:4px; font-size:0.7rem; font-weight:600;
+            cursor:pointer; font-family:inherit; transition:all 0.15s; border:1px solid;
+        }
+        .btn-cancel { background:rgba(231,111,81,0.08); color:var(--red); border-color:rgba(231,111,81,0.25); }
+        .btn-cancel:hover { background:rgba(231,111,81,0.2); }
+        .btn-edit { background:rgba(42,157,143,0.08); color:var(--accent-bright); border-color:var(--border-medium); }
+        .btn-edit:hover { background:rgba(42,157,143,0.2); }
+        .pts-input-inline {
+            width:60px; padding:0.2rem 0.4rem; background:var(--bg-input); border:1px solid var(--border-medium);
+            border-radius:4px; color:var(--text-primary); font-size:0.8rem; font-weight:600;
+            text-align:center; font-family:inherit;
+        }
+
         /* CONFIRM DIALOG */
         .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:500; display:none; align-items:center; justify-content:center; }
         .confirm-overlay.show { display:flex; }
@@ -581,7 +612,6 @@
                                 <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Actuel :</span>
                                 <span id="ptsCurrentDisplay" style="font-size:1rem;font-weight:700;color:var(--text-secondary);font-variant-numeric:tabular-nums;">-</span>
                             </div>
-
                             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
                                 <button type="button" class="btn-pts" onclick="adjustPts(-5)">-5</button>
                                 <button type="button" class="btn-pts" onclick="adjustPts(-1)">-1</button>
@@ -591,9 +621,7 @@
                                 <div style="flex:1;"></div>
                                 <button type="button" class="btn-pts-reset" onclick="resetPts()">Reset</button>
                             </div>
-
                             <input type="hidden" name="points" id="ptsHiddenInput" value="0" />
-
                             <div style="margin-top:1.25rem;display:flex;align-items:center;justify-content:space-between;">
                                 <div style="display:flex;align-items:center;gap:0.6rem;">
                                     <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Prevision :</span>
@@ -619,6 +647,34 @@
                         <div class="empty-state">Chargement...</div>
                     </div>
                 </div>
+
+                <!-- HISTORIQUE JOUEUR -->
+                <div class="card card-full" id="playerMatchesCard" style="display:none;">
+                    <div class="card-title">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Historique — <span id="playerMatchesName" style="color:var(--accent-bright);"></span>
+                    </div>
+                    <div id="playerMatchesContainer"><div class="empty-state">Aucun match.</div></div>
+                    <div class="pagination" id="playerMatchesPagination"></div>
+                </div>
+
+                <!-- DERNIERS MATCHS GLOBAUX -->
+                <div class="card card-full">
+                    <div class="card-title">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        Derniers matchs
+                        <button class="btn btn-sm" onclick="loadRecentMatches(recentPage)" style="margin-left:auto;background:rgba(42,157,143,0.1);color:var(--accent-bright);border:1px solid var(--border-medium);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            Actualiser
+                        </button>
+                    </div>
+                    <div id="recentMatchesContainer"><div class="empty-state">Chargement...</div></div>
+                    <div class="pagination" id="recentMatchesPagination"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -643,7 +699,10 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + name).classList.add('active');
             e.currentTarget.classList.add('active');
-            if (name === 'joueurs') loadMultiAccounts();
+            if (name === 'joueurs') {
+                loadMultiAccounts();
+                loadRecentMatches(1);
+            }
         }
 
         // ===== TOAST =====
@@ -801,7 +860,14 @@
         });
         document.addEventListener('click', (e) => { if (!e.target.closest('.autocomplete-wrapper')) acList.classList.remove('show'); });
 
+        // ===== HISTORIQUE JOUEUR =====
+        let playerMatchesData = [];
+        let playerMatchesPage = 1;
+        let currentPlayerPseudo = '';
+        const PAGE_SIZE = 5;
+
         async function loadPlayerPoints(pseudo) {
+            currentPlayerPseudo = pseudo;
             try {
                 const res = await fetch(`/admin/api/player-stats/${encodeURIComponent(pseudo)}`);
                 const data = await res.json();
@@ -810,12 +876,140 @@
                 updatePtsDisplay();
                 ptsEditor.style.display = 'block';
             } catch { ptsCurrent = 0; ptsDelta = 0; updatePtsDisplay(); ptsEditor.style.display = 'block'; }
+            await loadPlayerMatches(pseudo);
         }
 
-        function adjustPts(n) { ptsDelta += n; updatePtsDisplay(); }
-        function resetPts() { ptsDelta = 0; updatePtsDisplay(); }
+        async function loadPlayerMatches(pseudo) {
+            const card = document.getElementById('playerMatchesCard');
+            const container = document.getElementById('playerMatchesContainer');
+            const nameEl = document.getElementById('playerMatchesName');
+            nameEl.textContent = pseudo;
+            card.style.display = 'block';
+            container.innerHTML = '<div class="empty-state">Chargement...</div>';
+            try {
+                const res = await fetch(`/admin/api/player-matches/${encodeURIComponent(pseudo)}`);
+                playerMatchesData = await res.json();
+                playerMatchesPage = 1;
+                renderPlayerMatches();
+            } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
+        }
 
-        function updatePtsDisplay() {
+        function renderPlayerMatches() {
+            const container = document.getElementById('playerMatchesContainer');
+            const pagEl = document.getElementById('playerMatchesPagination');
+            const total = playerMatchesData.length;
+            if (total === 0) { container.innerHTML = '<div class="empty-state">Aucun match.</div>'; pagEl.innerHTML = ''; return; }
+            const totalPages = Math.ceil(total / PAGE_SIZE);
+            const start = (playerMatchesPage - 1) * PAGE_SIZE;
+            const rows = playerMatchesData.slice(start, start + PAGE_SIZE);
+            container.innerHTML = renderMatchTable(rows, 'player');
+            pagEl.innerHTML = renderPagination(playerMatchesPage, totalPages, 'playerMatchesPage');
+        }
+
+        // ===== DERNIERS MATCHS GLOBAUX =====
+        let recentMatchesData = [];
+        let recentPage = 1;
+
+        async function loadRecentMatches(page = 1) {
+            recentPage = page;
+            const container = document.getElementById('recentMatchesContainer');
+            if (recentMatchesData.length === 0) container.innerHTML = '<div class="empty-state">Chargement...</div>';
+            try {
+                const res = await fetch('/admin/api/recent-matches');
+                recentMatchesData = await res.json();
+                renderRecentMatches();
+            } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
+        }
+
+        function renderRecentMatches() {
+            const container = document.getElementById('recentMatchesContainer');
+            const pagEl = document.getElementById('recentMatchesPagination');
+            const total = recentMatchesData.length;
+            if (total === 0) { container.innerHTML = '<div class="empty-state">Aucun match.</div>'; pagEl.innerHTML = ''; return; }
+            const totalPages = Math.ceil(total / PAGE_SIZE);
+            const start = (recentPage - 1) * PAGE_SIZE;
+            const rows = recentMatchesData.slice(start, start + PAGE_SIZE);
+            container.innerHTML = renderMatchTable(rows, 'recent');
+            pagEl.innerHTML = renderPagination(recentPage, totalPages, 'recentPage');
+        }
+
+        function renderMatchTable(rows, ctx) {
+            let html = `<table class="match-table">
+                <thead><tr>
+                    <th>Date</th><th>Résultat</th><th>Contexte</th><th>Alliance</th><th>Joueurs</th>
+                    <th style="text-align:center;">Points</th><th style="text-align:center;">Actions</th>
+                </tr></thead><tbody>`;
+            for (const m of rows) {
+                const isWin = m.has_won;
+                const cancelled = m.cancelled;
+                const date = m.created_at ? new Date(m.created_at).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+                const rowClass = cancelled ? ' class="match-cancelled"' : '';
+                html += `<tr${rowClass}>
+                    <td style="color:var(--text-muted);font-size:0.75rem;">${date}</td>
+                    <td class="${isWin ? 'match-win' : 'match-lose'}">${isWin ? 'Victoire' : 'Défaite'}</td>
+                    <td style="color:var(--text-muted);">${m.context === 'attack' ? 'Attaque' : 'Défense'}</td>
+                    <td>${escapeHTML(m.alliance || '—')}</td>
+                    <td style="font-size:0.75rem;color:var(--text-muted);">${(m.winners||[]).concat(m.losers||[]).map(p=>escapeHTML(p)).join(', ')}</td>
+                    <td style="text-align:center;">
+                        ${cancelled ? '<span style="color:var(--text-muted);">annulé</span>' :
+                        `<input type="number" class="pts-input-inline" value="${m.points_awarded}" id="pts_${m.id}" />`}
+                    </td>
+                    <td style="text-align:center;white-space:nowrap;">
+                        ${cancelled ? '' : `
+                        <button class="btn-action btn-edit" onclick="editMatchPoints(${m.id}, '${ctx}')">Modifier</button>
+                        <button class="btn-action btn-cancel" onclick="cancelMatch(${m.id}, '${ctx}')" style="margin-left:0.3rem;">Annuler</button>
+                        `}
+                    </td>
+                </tr>`;
+            }
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function renderPagination(current, total, varName) {
+            if (total <= 1) return '';
+            let html = '';
+            for (let i = 1; i <= total; i++) {
+                const active = i === current ? ' active' : '';
+                html += `<button class="page-btn${active}" onclick="${varName}=${i};${varName==='playerMatchesPage'?'renderPlayerMatches()':'renderRecentMatches()}">${i}</button>`;
+            }
+            return html;
+        }
+
+        async function editMatchPoints(matchId, ctx) {
+            const input = document.getElementById(`pts_${matchId}`);
+            const newPts = parseInt(input?.value);
+            if (isNaN(newPts)) return showToast('Points invalides.', 'error');
+            try {
+                const res = await fetch(`/admin/api/match/${matchId}/points`, {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ points: newPts })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast(`Match #${matchId} mis à jour.`);
+                    if (ctx === 'player') await loadPlayerMatches(currentPlayerPseudo);
+                    else { recentMatchesData = []; await loadRecentMatches(recentPage); }
+                } else showToast(data.error || 'Erreur.', 'error');
+            } catch { showToast('Erreur reseau.', 'error'); }
+        }
+
+        async function cancelMatch(matchId, ctx) {
+            openConfirm(`Annuler le match #${matchId} ? Les points seront retirés aux joueurs.`, async () => {
+                try {
+                    const res = await fetch(`/admin/api/match/${matchId}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.ok) {
+                        showToast(`Match #${matchId} annulé.`);
+                        if (ctx === 'player') await loadPlayerMatches(currentPlayerPseudo);
+                        else { recentMatchesData = []; await loadRecentMatches(recentPage); }
+                        if (ctx === 'player') { ptsCurrent = data.newTotal ?? ptsCurrent; ptsDelta = 0; updatePtsDisplay(); }
+                    } else showToast(data.error || 'Erreur.', 'error');
+                } catch { showToast('Erreur reseau.', 'error'); }
+            });
+        }
+
+        // ===== MULTI COMPTES =====
             ptsCurrentEl.textContent = ptsCurrent;
             ptsDeltaEl.textContent = ptsDelta === 0 ? '0' : (ptsDelta > 0 ? '+' + ptsDelta : ptsDelta);
             ptsDeltaEl.className = 'pts-delta' + (ptsDelta > 0 ? ' positive' : ptsDelta < 0 ? ' negative' : '');
