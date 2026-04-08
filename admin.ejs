@@ -98,7 +98,7 @@
 
         /* DASHBOARD */
         .dashboard { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:2rem; }
-        .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem; flex-wrap:wrap; gap:1rem; }
+        .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2.5rem; flex-wrap:wrap; gap:1rem; }
         .dash-brand { display:flex; align-items:center; gap:0.75rem; }
         .dash-brand img { height:38px; opacity:0.9; }
         .dash-brand h1 { font-family:'Space Grotesk',sans-serif; font-size:1.4rem; font-weight:700; letter-spacing:0.06em; }
@@ -107,27 +107,6 @@
         .back-link { color:var(--text-muted); text-decoration:none; font-size:0.8rem; transition:all 0.2s; display:flex; align-items:center; gap:0.4rem; }
         .back-link:hover { color:var(--accent-bright); }
         .back-link svg { width:14px; height:14px; }
-
-        /* TABS */
-        .tabs-nav {
-            display:flex; gap:0; margin-bottom:2rem;
-            background:rgba(255,255,255,0.02); border:1px solid var(--border-subtle);
-            border-radius:var(--radius-md); padding:4px; width:fit-content;
-        }
-        .tab-btn {
-            padding:0.55rem 1.25rem; border:none; border-radius:calc(var(--radius-md) - 2px);
-            background:transparent; color:var(--text-muted); font-family:inherit; font-size:0.8rem;
-            font-weight:600; cursor:pointer; transition:all 0.2s ease; letter-spacing:0.03em;
-            white-space:nowrap;
-        }
-        .tab-btn:hover { color:var(--text-secondary); }
-        .tab-btn.active {
-            background:linear-gradient(135deg,rgba(42,157,143,0.2),rgba(42,157,143,0.1));
-            color:var(--accent-bright); border:1px solid var(--border-medium);
-            box-shadow:0 2px 12px rgba(42,157,143,0.15);
-        }
-        .tab-panel { display:none; }
-        .tab-panel.active { display:block; animation:fadeUp 0.3s ease both; }
 
         /* CARDS */
         .dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
@@ -234,51 +213,6 @@
         .grid-input:focus { outline:none; border-color:var(--accent); background:rgba(42,157,143,0.06); box-shadow:0 0 0 2px rgba(42,157,143,0.1); }
         .grid-input::-webkit-inner-spin-button { -webkit-appearance:none; }
 
-        /* MULTI ACCOUNTS */
-        .multi-table-wrapper { max-height:400px; overflow-y:auto; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); }
-        .multi-table { width:100%; border-collapse:collapse; }
-        .multi-table thead { position:sticky; top:0; background:var(--bg-primary); z-index:1; }
-        .multi-table thead th { text-align:left; padding:0.6rem 0.75rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
-        .multi-table tbody td { padding:0.65rem 0.75rem; font-size:0.85rem; border-bottom:1px solid rgba(255,255,255,0.02); }
-        .multi-table tbody tr:hover { background:var(--bg-card-hover); }
-        .multi-tag {
-            display:inline-block; background:rgba(42,157,143,0.1); border:1px solid var(--border-medium);
-            border-radius:4px; padding:0.15rem 0.5rem; font-size:0.75rem; color:var(--accent-bright);
-            margin:0.1rem;
-        }
-        .multi-count { font-weight:700; color:var(--gold); font-size:0.8rem; }
-
-        /* MATCH HISTORY */
-        .match-table { width:100%; border-collapse:collapse; }
-        .match-table thead th { text-align:left; padding:0.5rem 0.6rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
-        .match-table tbody td { padding:0.6rem 0.6rem; font-size:0.8rem; border-bottom:1px solid rgba(255,255,255,0.02); vertical-align:middle; }
-        .match-table tbody tr:hover { background:var(--bg-card-hover); }
-        .match-win { color:var(--accent-bright); font-weight:700; }
-        .match-lose { color:var(--red); font-weight:700; }
-        .match-pts { font-weight:700; font-variant-numeric:tabular-nums; }
-        .match-cancelled { opacity:0.4; text-decoration:line-through; }
-        .pagination { display:flex; gap:0.4rem; align-items:center; margin-top:0.75rem; justify-content:center; }
-        .page-btn {
-            width:28px; height:28px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm);
-            background:transparent; color:var(--text-muted); font-size:0.75rem; font-weight:600;
-            cursor:pointer; transition:all 0.15s; font-family:inherit; display:flex; align-items:center; justify-content:center;
-        }
-        .page-btn:hover { border-color:var(--border-medium); color:var(--text-secondary); }
-        .page-btn.active { background:rgba(42,157,143,0.15); border-color:var(--border-medium); color:var(--accent-bright); }
-        .btn-action {
-            padding:0.25rem 0.6rem; border-radius:4px; font-size:0.7rem; font-weight:600;
-            cursor:pointer; font-family:inherit; transition:all 0.15s; border:1px solid;
-        }
-        .btn-cancel { background:rgba(231,111,81,0.08); color:var(--red); border-color:rgba(231,111,81,0.25); }
-        .btn-cancel:hover { background:rgba(231,111,81,0.2); }
-        .btn-edit { background:rgba(42,157,143,0.08); color:var(--accent-bright); border-color:var(--border-medium); }
-        .btn-edit:hover { background:rgba(42,157,143,0.2); }
-        .pts-input-inline {
-            width:60px; padding:0.2rem 0.4rem; background:var(--bg-input); border:1px solid var(--border-medium);
-            border-radius:4px; color:var(--text-primary); font-size:0.8rem; font-weight:600;
-            text-align:center; font-family:inherit;
-        }
-
         /* CONFIRM DIALOG */
         .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:500; display:none; align-items:center; justify-content:center; }
         .confirm-overlay.show { display:flex; }
@@ -302,6 +236,12 @@
 
         /* ANIMATIONS */
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        .card { animation:fadeUp 0.5s ease both; }
+        .card:nth-child(1) { animation-delay:0.05s; }
+        .card:nth-child(2) { animation-delay:0.1s; }
+        .card:nth-child(3) { animation-delay:0.15s; }
+        .card:nth-child(4) { animation-delay:0.2s; }
+        .login-card { animation:fadeUp 0.6s ease both; }
 
         ::-webkit-scrollbar { width:6px; }
         ::-webkit-scrollbar-track { background:transparent; }
@@ -314,8 +254,6 @@
             .dashboard { padding:1rem; }
             .nuggets-header { flex-direction:column; align-items:stretch; }
             [style*="grid-template-columns:1fr 1fr"] { grid-template-columns:1fr !important; }
-            .tabs-nav { width:100%; }
-            .tab-btn { flex:1; text-align:center; }
         }
     </style>
 </head>
@@ -358,322 +296,278 @@
             </div>
         </div>
 
-        <!-- TABS NAV -->
-        <div class="tabs-nav">
-            <button class="tab-btn active" onclick="switchTab(event, 'saison')">Saison & Pépites</button>
-            <button class="tab-btn" onclick="switchTab(event, 'bareme')">Barème & Pools</button>
-            <button class="tab-btn" onclick="switchTab(event, 'joueurs')">Joueurs</button>
-        </div>
-
-        <!-- ===== TAB 1 : SAISON & PEPITES ===== -->
-        <div class="tab-panel active" id="tab-saison">
-            <div class="dash-grid">
-                <div class="card card-full">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                        </svg>
-                        Saison en cours
+        <div class="dash-grid">
+            <!-- ===== SAISON ===== -->
+            <div class="card card-full">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    Saison en cours
+                </div>
+                <div class="season-info">
+                    <div class="season-stat">
+                        <span class="season-stat-label">Saison</span>
+                        <span class="season-stat-value gold" id="seasonNumber"><%= currentSeason %></span>
                     </div>
-                    <div class="season-info">
-                        <div class="season-stat">
-                            <span class="season-stat-label">Saison</span>
-                            <span class="season-stat-value gold" id="seasonNumber"><%= currentSeason %></span>
+                    <div class="season-stat">
+                        <span class="season-stat-label">Debut</span>
+                        <span class="season-stat-value" id="seasonStart"><%= curSeason ? curSeason.start.toLocaleDateString('fr-FR') : '-' %></span>
+                    </div>
+                    <div class="season-stat">
+                        <span class="season-stat-label">Fin actuelle</span>
+                        <span class="season-stat-value" id="seasonEnd"><%= curSeason ? curSeason.end.toLocaleDateString('fr-FR') : '-' %></span>
+                    </div>
+                    <div class="season-form">
+                        <div class="form-group">
+                            <label class="form-label">Modifier la date de fin</label>
+                            <input type="date" id="seasonEndInput" class="form-input" value="<%= curSeason ? curSeason.endRaw : '' %>" />
                         </div>
-                        <div class="season-stat">
-                            <span class="season-stat-label">Debut</span>
-                            <span class="season-stat-value" id="seasonStart"><%= curSeason ? curSeason.start.toLocaleDateString('fr-FR') : '-' %></span>
+                        <button class="btn btn-primary" onclick="updateSeasonEnd()">Appliquer</button>
+                        <button class="btn btn-danger btn-sm" onclick="resetSeasonEnd()" title="Remettre la date par defaut" style="padding:0.75rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== POOLS ===== -->
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    Bonus Pools
+                    <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:500;" id="poolCount"><%= pools.length %>/<%= maxPools %></span>
+                </div>
+                <div id="poolContainer">
+                    <div class="pool-grid" style="grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;">
+                        <span class="pool-label-header">Nom</span>
+                        <span class="pool-label-header">Bonus %</span>
+                        <span class="pool-label-header"></span>
+                    </div>
+                    <% pools.forEach((p, i) => { %>
+                    <div class="pool-row pool-grid" style="grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;" data-pool-id="<%= p.id %>">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <div class="pool-dot" style="flex-shrink:0;"></div>
+                            <input type="text" class="form-input pool-name-input" value="<%= p.name %>" />
                         </div>
-                        <div class="season-stat">
-                            <span class="season-stat-label">Fin actuelle</span>
-                            <span class="season-stat-value" id="seasonEnd"><%= curSeason ? curSeason.end.toLocaleDateString('fr-FR') : '-' %></span>
+                        <div style="position:relative;">
+                            <input type="number" class="form-input form-input-small pool-bonus-input" value="<%= p.bonus %>" style="width:100%;padding-right:1.5rem;" />
+                            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:0.75rem;pointer-events:none;">%</span>
                         </div>
-                        <div class="season-form">
-                            <div class="form-group">
-                                <label class="form-label">Modifier la date de fin</label>
-                                <input type="date" id="seasonEndInput" class="form-input" value="<%= curSeason ? curSeason.endRaw : '' %>" />
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removePool(this)" style="padding:0.35rem 0.5rem;min-width:0;" title="Supprimer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <% }); %>
+                </div>
+                <div style="margin-top:1rem;display:flex;gap:0.75rem;justify-content:space-between;align-items:center;">
+                    <button type="button" class="btn btn-sm" id="addPoolBtn" onclick="addPool()" style="background:rgba(42,157,143,0.1);color:var(--accent-bright);border:1px solid var(--border-medium);<%= pools.length >= maxPools ? 'opacity:0.4;pointer-events:none;' : '' %>">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                        Ajouter
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="savePools()">Sauvegarder</button>
+                </div>
+            </div>
+
+            <!-- ===== POINTS JOUEUR ===== -->
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Points joueur
+                </div>
+                <form id="pointsForm">
+                    <div class="form-group autocomplete-wrapper" style="margin-bottom:1.25rem;">
+                        <label class="form-label">Joueur</label>
+                        <input type="text" id="playerSearch" name="pseudo" class="form-input" placeholder="Rechercher un joueur..." autocomplete="off" required />
+                        <div class="autocomplete-list" id="autocompleteList"></div>
+                    </div>
+
+                    <div id="pointsEditor" style="display:none;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+                            <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Actuel :</span>
+                            <span id="ptsCurrentDisplay" style="font-size:1rem;font-weight:700;color:var(--text-secondary);font-variant-numeric:tabular-nums;">-</span>
+                        </div>
+
+                        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                            <button type="button" class="btn-pts" onclick="adjustPts(-5)">-5</button>
+                            <button type="button" class="btn-pts" onclick="adjustPts(-1)">-1</button>
+                            <div id="ptsDeltaDisplay" class="pts-delta">0</div>
+                            <button type="button" class="btn-pts btn-pts-plus" onclick="adjustPts(+1)">+1</button>
+                            <button type="button" class="btn-pts btn-pts-plus" onclick="adjustPts(+5)">+5</button>
+                            <div style="flex:1;"></div>
+                            <button type="button" class="btn-pts-reset" onclick="resetPts()">Reset</button>
+                        </div>
+
+                        <input type="hidden" name="points" id="ptsHiddenInput" value="0" />
+
+                        <div style="margin-top:1.25rem;display:flex;align-items:center;justify-content:space-between;">
+                            <div style="display:flex;align-items:center;gap:0.6rem;">
+                                <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Prevision :</span>
+                                <span id="ptsPreviewDisplay" style="font-size:1.2rem;font-weight:700;color:var(--accent-bright);font-variant-numeric:tabular-nums;transition:all 0.2s;">-</span>
                             </div>
-                            <button class="btn btn-primary" onclick="updateSeasonEnd()">Appliquer</button>
-                            <button class="btn btn-danger btn-sm" onclick="resetSeasonEnd()" title="Remettre la date par defaut" style="padding:0.75rem;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                            </button>
+                            <button type="submit" class="btn btn-warning" id="ptsSubmitBtn" disabled>Appliquer</button>
                         </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ===== GRILLES DE POINTS ===== -->
+            <div class="card card-full">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                    Bareme de points
+                    <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:400;">Multiplie par le % du pool</span>
+                </div>
+
+                <!-- ATTAQUE -->
+                <div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
+                    Attaque
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;">
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="atk_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkWin[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="atk_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkLose[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div class="card card-full">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 3h12l4 6-10 13L2 9z"/>
-                        </svg>
-                        Classement Pepites
-                        <span id="nuggetsTotal" style="margin-left:auto;font-size:0.8rem;color:var(--gold);font-weight:600;text-shadow:0 0 12px var(--gold-glow);">
-                            <% if (nuggets.length > 0) { %>
-                                Total : <%= nuggets.reduce((s, n) => s + (parseInt(n.nuggets) || 0), 0).toLocaleString() %>
-                            <% } %>
-                        </span>
+                <!-- DEFENSE -->
+                <div style="font-size:0.8rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;padding-top:1rem;border-top:1px solid var(--border-subtle);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Defense
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="def_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefWin[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
                     </div>
-
-                    <div class="nuggets-header">
-                        <div class="nuggets-header-left">
-                            <select class="form-select" id="nuggetsSeason" onchange="loadNuggets(this.value)">
-                                <% seasons.forEach(s => { %>
-                                    <option value="<%= s.id %>" <%= s.id === currentSeason ? 'selected' : '' %>><%= s.label %></option>
-                                <% }); %>
-                            </select>
-                        </div>
-                        <button class="btn btn-danger btn-sm" onclick="confirmResetNuggets()">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            Reset pepites (saison en cours)
-                        </button>
+                    <div>
+                        <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
+                        <table class="grid-table">
+                            <thead>
+                                <tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr>
+                            </thead>
+                            <tbody>
+                                <% for (let r = 0; r < 5; r++) { %>
+                                <tr>
+                                    <td class="grid-row-header"><%= r + 1 %></td>
+                                    <% for (let c = 0; c < 5; c++) { %>
+                                    <td><input type="number" class="grid-input" data-grid="def_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefLose[r][c] %>" /></td>
+                                    <% } %>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
                     </div>
+                </div>
+                <div style="margin-top:1.25rem;text-align:right;">
+                    <button class="btn btn-primary" onclick="saveGrids()">Sauvegarder le bareme</button>
+                </div>
+            </div>
 
-                    <div id="nuggetsTableContainer">
-                        <% if (nuggets.length === 0) { %>
-                            <div class="empty-state">Aucune pepite pour cette saison.</div>
-                        <% } else { %>
-                            <table class="nuggets-table">
-                                <thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead>
-                                <tbody>
-                                    <% nuggets.forEach((n, i) => { %>
-                                    <tr>
-                                        <td class="nuggets-rank <%= i < 3 ? 'nuggets-rank-' + (i+1) : '' %>"><%= i + 1 %></td>
-                                        <td class="nuggets-name"><%= n.name %></td>
-                                        <td class="nuggets-amount <%= i === 0 ? 'nuggets-amount-gold' : '' %>"><%= (parseInt(n.nuggets) || 0).toLocaleString() %></td>
-                                    </tr>
-                                    <% }); %>
-                                    <tr class="nuggets-total-row">
-                                        <td></td>
-                                        <td>Total alliance</td>
-                                        <td style="text-align:right;"><%= nuggets.reduce((s, n) => s + (parseInt(n.nuggets) || 0), 0).toLocaleString() %></td>
-                                    </tr>
-                                </tbody>
-                            </table>
+            <!-- ===== PEPITES ===== -->
+            <div class="card card-full">
+                <div class="card-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 3h12l4 6-10 13L2 9z"/>
+                    </svg>
+                    Classement Pepites
+                    <span id="nuggetsTotal" style="margin-left:auto;font-size:0.8rem;color:var(--gold);font-weight:600;text-shadow:0 0 12px var(--gold-glow);">
+                        <% if (nuggets.length > 0) { %>
+                            Total : <%= nuggets.reduce((s, n) => s + (parseInt(n.nuggets) || 0), 0).toLocaleString() %>
                         <% } %>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== TAB 2 : BAREME & POOLS ===== -->
-        <div class="tab-panel" id="tab-bareme">
-            <div class="dash-grid">
-                <!-- POOLS -->
-                <div class="card">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-                        </svg>
-                        Bonus Pools
-                        <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:500;" id="poolCount"><%= pools.length %>/<%= maxPools %></span>
-                    </div>
-                    <div id="poolContainer">
-                        <div class="pool-grid" style="grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;">
-                            <span class="pool-label-header">Nom</span>
-                            <span class="pool-label-header">Bonus %</span>
-                            <span class="pool-label-header"></span>
-                        </div>
-                        <% pools.forEach((p, i) => { %>
-                        <div class="pool-row pool-grid" style="grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;" data-pool-id="<%= p.id %>">
-                            <div style="display:flex;align-items:center;gap:0.5rem;">
-                                <div class="pool-dot" style="flex-shrink:0;"></div>
-                                <input type="text" class="form-input pool-name-input" value="<%= p.name %>" />
-                            </div>
-                            <div style="position:relative;">
-                                <input type="number" class="form-input form-input-small pool-bonus-input" value="<%= p.bonus %>" style="width:100%;padding-right:1.5rem;" />
-                                <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:0.75rem;pointer-events:none;">%</span>
-                            </div>
-                            <button type="button" class="btn btn-danger btn-sm" onclick="removePool(this)" style="padding:0.35rem 0.5rem;min-width:0;" title="Supprimer">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                            </button>
-                        </div>
-                        <% }); %>
-                    </div>
-                    <div style="margin-top:1rem;display:flex;gap:0.75rem;justify-content:space-between;align-items:center;">
-                        <button type="button" class="btn btn-sm" id="addPoolBtn" onclick="addPool()" style="background:rgba(42,157,143,0.1);color:var(--accent-bright);border:1px solid var(--border-medium);<%= pools.length >= maxPools ? 'opacity:0.4;pointer-events:none;' : '' %>">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                            Ajouter
-                        </button>
-                        <button type="button" class="btn btn-primary" onclick="savePools()">Sauvegarder</button>
-                    </div>
+                    </span>
                 </div>
 
-                <!-- GRILLES -->
-                <div class="card card-full">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                        </svg>
-                        Bareme de points
-                        <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:400;">Multiplie par le % du pool</span>
+                <div class="nuggets-header">
+                    <div class="nuggets-header-left">
+                        <select class="form-select" id="nuggetsSeason" onchange="loadNuggets(this.value)">
+                            <% seasons.forEach(s => { %>
+                                <option value="<%= s.id %>" <%= s.id === currentSeason ? 'selected' : '' %>><%= s.label %></option>
+                            <% }); %>
+                        </select>
                     </div>
-
-                    <div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
-                        Attaque
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;">
-                        <div>
-                            <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
-                            <table class="grid-table">
-                                <thead><tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
-                                <tbody>
-                                    <% for (let r = 0; r < 5; r++) { %>
-                                    <tr><td class="grid-row-header"><%= r + 1 %></td>
-                                        <% for (let c = 0; c < 5; c++) { %>
-                                        <td><input type="number" class="grid-input" data-grid="atk_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkWin[r][c] %>" /></td>
-                                        <% } %>
-                                    </tr>
-                                    <% } %>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div>
-                            <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
-                            <table class="grid-table">
-                                <thead><tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
-                                <tbody>
-                                    <% for (let r = 0; r < 5; r++) { %>
-                                    <tr><td class="grid-row-header"><%= r + 1 %></td>
-                                        <% for (let c = 0; c < 5; c++) { %>
-                                        <td><input type="number" class="grid-input" data-grid="atk_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsAtkLose[r][c] %>" /></td>
-                                        <% } %>
-                                    </tr>
-                                    <% } %>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div style="font-size:0.8rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;padding-top:1rem;border-top:1px solid var(--border-subtle);">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                        Defense
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
-                        <div>
-                            <div style="font-size:0.75rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Victoire</div>
-                            <table class="grid-table">
-                                <thead><tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
-                                <tbody>
-                                    <% for (let r = 0; r < 5; r++) { %>
-                                    <tr><td class="grid-row-header"><%= r + 1 %></td>
-                                        <% for (let c = 0; c < 5; c++) { %>
-                                        <td><input type="number" class="grid-input" data-grid="def_win" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefWin[r][c] %>" /></td>
-                                        <% } %>
-                                    </tr>
-                                    <% } %>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div>
-                            <div style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Defaite</div>
-                            <table class="grid-table">
-                                <thead><tr><th class="grid-corner">Ogre \ Adv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
-                                <tbody>
-                                    <% for (let r = 0; r < 5; r++) { %>
-                                    <tr><td class="grid-row-header"><%= r + 1 %></td>
-                                        <% for (let c = 0; c < 5; c++) { %>
-                                        <td><input type="number" class="grid-input" data-grid="def_lose" data-r="<%= r %>" data-c="<%= c %>" value="<%= ptsDefLose[r][c] %>" /></td>
-                                        <% } %>
-                                    </tr>
-                                    <% } %>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div style="margin-top:1.25rem;text-align:right;">
-                        <button class="btn btn-primary" onclick="saveGrids()">Sauvegarder le bareme</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ===== TAB 3 : JOUEURS ===== -->
-        <div class="tab-panel" id="tab-joueurs">
-            <div class="dash-grid">
-                <!-- AJUSTEMENT POINTS -->
-                <div class="card">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                        </svg>
-                        Ajustement points
-                    </div>
-                    <form id="pointsForm">
-                        <div class="form-group autocomplete-wrapper" style="margin-bottom:1.25rem;">
-                            <label class="form-label">Joueur</label>
-                            <input type="text" id="playerSearch" name="pseudo" class="form-input" placeholder="Rechercher un joueur..." autocomplete="off" required />
-                            <div class="autocomplete-list" id="autocompleteList"></div>
-                        </div>
-
-                        <div id="pointsEditor" style="display:none;">
-                            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
-                                <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Actuel :</span>
-                                <span id="ptsCurrentDisplay" style="font-size:1rem;font-weight:700;color:var(--text-secondary);font-variant-numeric:tabular-nums;">-</span>
-                            </div>
-                            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-                                <button type="button" class="btn-pts" onclick="adjustPts(-5)">-5</button>
-                                <button type="button" class="btn-pts" onclick="adjustPts(-1)">-1</button>
-                                <div id="ptsDeltaDisplay" class="pts-delta">0</div>
-                                <button type="button" class="btn-pts btn-pts-plus" onclick="adjustPts(+1)">+1</button>
-                                <button type="button" class="btn-pts btn-pts-plus" onclick="adjustPts(+5)">+5</button>
-                                <div style="flex:1;"></div>
-                                <button type="button" class="btn-pts-reset" onclick="resetPts()">Reset</button>
-                            </div>
-                            <input type="hidden" name="points" id="ptsHiddenInput" value="0" />
-                            <div style="margin-top:1.25rem;display:flex;align-items:center;justify-content:space-between;">
-                                <div style="display:flex;align-items:center;gap:0.6rem;">
-                                    <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Prevision :</span>
-                                    <span id="ptsPreviewDisplay" style="font-size:1.2rem;font-weight:700;color:var(--accent-bright);font-variant-numeric:tabular-nums;transition:all 0.2s;">-</span>
-                                </div>
-                                <button type="submit" class="btn btn-warning" id="ptsSubmitBtn" disabled>Appliquer</button>
-                            </div>
-                        </div>
-                    </form>
+                    <button class="btn btn-danger btn-sm" onclick="confirmResetNuggets()">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Reset pepites (saison en cours)
+                    </button>
                 </div>
 
-                <!-- MULTI COMPTES -->
-                <div class="card">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                        </svg>
-                        Comptes multiples
-                        <span id="multiCount" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:500;"></span>
-                    </div>
-                    <div class="multi-table-wrapper" id="multiTableContainer">
-                        <div class="empty-state">Chargement...</div>
-                    </div>
-                </div>
-
-                <!-- HISTORIQUE JOUEUR -->
-                <div class="card card-full" id="playerMatchesCard" style="display:none;">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                        Historique — <span id="playerMatchesName" style="color:var(--accent-bright);"></span>
-                    </div>
-                    <div id="playerMatchesContainer"><div class="empty-state">Aucun match.</div></div>
-                    <div class="pagination" id="playerMatchesPagination"></div>
-                </div>
-
-                <!-- DERNIERS MATCHS GLOBAUX -->
-                <div class="card card-full">
-                    <div class="card-title">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                        Derniers matchs
-                        <button class="btn btn-sm" onclick="loadRecentMatches(recentPage)" style="margin-left:auto;background:rgba(42,157,143,0.1);color:var(--accent-bright);border:1px solid var(--border-medium);">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                            Actualiser
-                        </button>
-                    </div>
-                    <div id="recentMatchesContainer"><div class="empty-state">Chargement...</div></div>
-                    <div class="pagination" id="recentMatchesPagination"></div>
+                <div id="nuggetsTableContainer">
+                    <% if (nuggets.length === 0) { %>
+                        <div class="empty-state">Aucune pepite pour cette saison.</div>
+                    <% } else { %>
+                        <table class="nuggets-table">
+                            <thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead>
+                            <tbody>
+                                <% nuggets.forEach((n, i) => { %>
+                                <tr>
+                                    <td class="nuggets-rank <%= i < 3 ? 'nuggets-rank-' + (i+1) : '' %>"><%= i + 1 %></td>
+                                    <td class="nuggets-name"><%= n.name %></td>
+                                    <td class="nuggets-amount <%= i === 0 ? 'nuggets-amount-gold' : '' %>"><%= (parseInt(n.nuggets) || 0).toLocaleString() %></td>
+                                </tr>
+                                <% }); %>
+                                <tr class="nuggets-total-row">
+                                    <td></td>
+                                    <td>Total alliance</td>
+                                    <td style="text-align:right;"><%= nuggets.reduce((s, n) => s + (parseInt(n.nuggets) || 0), 0).toLocaleString() %></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    <% } %>
                 </div>
             </div>
         </div>
@@ -693,19 +587,6 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        // ===== TABS =====
-        function switchTab(e, name) {
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById('tab-' + name).classList.add('active');
-            e.currentTarget.classList.add('active');
-            if (name === 'joueurs') {
-                loadMultiAccounts();
-                loadRecentMatches(1);
-            }
-        }
-
-        // ===== TOAST =====
         function showToast(msg, type = 'success') {
             const t = document.getElementById('toast');
             t.textContent = msg;
@@ -719,7 +600,7 @@
             return d.innerHTML;
         }
 
-        // ===== CONFIRM =====
+        // ===== CONFIRM DIALOG =====
         let confirmCallback = null;
         function openConfirm(msg, cb) {
             document.getElementById('confirmMsg').textContent = msg;
@@ -744,7 +625,9 @@
                 const data = await res.json();
                 if (data.ok) {
                     showToast('Date de fin mise a jour.');
-                    if (data.curSeason) document.getElementById('seasonEnd').textContent = new Date(data.curSeason.end).toLocaleDateString('fr-FR');
+                    if (data.curSeason) {
+                        document.getElementById('seasonEnd').textContent = new Date(data.curSeason.end).toLocaleDateString('fr-FR');
+                    }
                 } else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
         }
@@ -756,7 +639,10 @@
                     body: JSON.stringify({ end_date: '' })
                 });
                 const data = await res.json();
-                if (data.ok) { showToast('Date remise par defaut.'); setTimeout(() => location.reload(), 500); }
+                if (data.ok) {
+                    showToast('Date remise par defaut.');
+                    setTimeout(() => location.reload(), 500);
+                }
             } catch { showToast('Erreur reseau.', 'error'); }
         }
 
@@ -792,7 +678,8 @@
 
         function removePool(btn) {
             const row = btn.closest('.pool-row');
-            const rows = document.querySelectorAll('.pool-row');
+            const container = document.getElementById('poolContainer');
+            const rows = container.querySelectorAll('.pool-row');
             if (rows.length <= 1) return showToast('Il faut au moins 1 pool.', 'error');
             row.remove();
             updatePoolCount();
@@ -860,159 +747,26 @@
         });
         document.addEventListener('click', (e) => { if (!e.target.closest('.autocomplete-wrapper')) acList.classList.remove('show'); });
 
-        // ===== HISTORIQUE JOUEUR =====
-        let playerMatchesData = [];
-        let playerMatchesPage = 1;
-        let currentPlayerPseudo = '';
-        const PAGE_SIZE = 5;
-
         async function loadPlayerPoints(pseudo) {
-            currentPlayerPseudo = pseudo;
             try {
-                const res = await fetch('/admin/api/player-stats/' + encodeURIComponent(pseudo));
+                const res = await fetch(`/admin/api/player-stats/${encodeURIComponent(pseudo)}`);
                 const data = await res.json();
                 ptsCurrent = data.points || 0;
                 ptsDelta = 0;
                 updatePtsDisplay();
                 ptsEditor.style.display = 'block';
             } catch { ptsCurrent = 0; ptsDelta = 0; updatePtsDisplay(); ptsEditor.style.display = 'block'; }
-            await loadPlayerMatches(pseudo);
         }
 
-        async function loadPlayerMatches(pseudo) {
-            const card = document.getElementById('playerMatchesCard');
-            const container = document.getElementById('playerMatchesContainer');
-            const nameEl = document.getElementById('playerMatchesName');
-            nameEl.textContent = pseudo;
-            card.style.display = 'block';
-            container.innerHTML = '<div class="empty-state">Chargement...</div>';
-            try {
-                const res = await fetch('/admin/api/player-matches/' + encodeURIComponent(pseudo));
-                playerMatchesData = await res.json();
-                playerMatchesPage = 1;
-                renderPlayerMatches();
-            } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
+        function adjustPts(n) {
+            ptsDelta += n;
+            updatePtsDisplay();
         }
 
-        function renderPlayerMatches() {
-            const container = document.getElementById('playerMatchesContainer');
-            const pagEl = document.getElementById('playerMatchesPagination');
-            const total = playerMatchesData.length;
-            if (total === 0) { container.innerHTML = '<div class="empty-state">Aucun match.</div>'; pagEl.innerHTML = ''; return; }
-            const totalPages = Math.ceil(total / PAGE_SIZE);
-            const start = (playerMatchesPage - 1) * PAGE_SIZE;
-            const rows = playerMatchesData.slice(start, start + PAGE_SIZE);
-            container.innerHTML = renderMatchTable(rows, 'player');
-            pagEl.innerHTML = renderPagination(playerMatchesPage, totalPages, 'playerMatchesPage');
+        function resetPts() {
+            ptsDelta = 0;
+            updatePtsDisplay();
         }
-
-        // ===== DERNIERS MATCHS GLOBAUX =====
-        let recentMatchesData = [];
-        let recentPage = 1;
-
-        async function loadRecentMatches(page = 1) {
-            recentPage = page;
-            const container = document.getElementById('recentMatchesContainer');
-            if (recentMatchesData.length === 0) container.innerHTML = '<div class="empty-state">Chargement...</div>';
-            try {
-                const res = await fetch('/admin/api/recent-matches');
-                recentMatchesData = await res.json();
-                renderRecentMatches();
-            } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
-        }
-
-        function renderRecentMatches() {
-            const container = document.getElementById('recentMatchesContainer');
-            const pagEl = document.getElementById('recentMatchesPagination');
-            const total = recentMatchesData.length;
-            if (total === 0) { container.innerHTML = '<div class="empty-state">Aucun match.</div>'; pagEl.innerHTML = ''; return; }
-            const totalPages = Math.ceil(total / PAGE_SIZE);
-            const start = (recentPage - 1) * PAGE_SIZE;
-            const rows = recentMatchesData.slice(start, start + PAGE_SIZE);
-            container.innerHTML = renderMatchTable(rows, 'recent');
-            pagEl.innerHTML = renderPagination(recentPage, totalPages, 'recentPage');
-        }
-
-        function renderMatchTable(rows, ctx) {
-            let html = '<table class="match-table"><thead><tr>';
-            html += '<th>Date</th><th>Résultat</th><th>Contexte</th><th>Alliance</th><th>Joueurs</th>';
-            html += '<th style="text-align:center;">Points</th><th style="text-align:center;">Actions</th>';
-            html += '</tr></thead><tbody>';
-            for (const m of rows) {
-                const isWin = m.has_won;
-                const cancelled = m.cancelled;
-                const date = m.created_at ? new Date(m.created_at).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
-                const rowClass = cancelled ? ' class="match-cancelled"' : '';
-                const resultClass = isWin ? 'match-win' : 'match-lose';
-                const resultLabel = isWin ? 'Victoire' : 'Défaite';
-                const ctxLabel = m.context === 'attack' ? 'Attaque' : 'Défense';
-                const players = (m.winners||[]).concat(m.losers||[]).map(p => escapeHTML(p)).join(', ');
-                const ptsCell = cancelled
-                    ? '<span style="color:var(--text-muted);">annulé</span>'
-                    : '<input type="number" class="pts-input-inline" value="' + m.points_awarded + '" id="pts_' + m.id + '" />';
-                const actionsCell = cancelled ? '' :
-                    '<button class="btn-action btn-edit" onclick="editMatchPoints(' + m.id + ', \'' + ctx + '\')">Modifier</button>' +
-                    '<button class="btn-action btn-cancel" onclick="cancelMatch(' + m.id + ', \'' + ctx + '\')" style="margin-left:0.3rem;">Annuler</button>';
-                html += '<tr' + rowClass + '>';
-                html += '<td style="color:var(--text-muted);font-size:0.75rem;">' + date + '</td>';
-                html += '<td class="' + resultClass + '">' + resultLabel + '</td>';
-                html += '<td style="color:var(--text-muted);">' + ctxLabel + '</td>';
-                html += '<td>' + escapeHTML(m.alliance || '-') + '</td>';
-                html += '<td style="font-size:0.75rem;color:var(--text-muted);">' + players + '</td>';
-                html += '<td style="text-align:center;">' + ptsCell + '</td>';
-                html += '<td style="text-align:center;white-space:nowrap;">' + actionsCell + '</td>';
-                html += '</tr>';
-            }
-            html += '</tbody></table>';
-            return html;
-        }
-
-        function renderPagination(current, total, varName) {
-            if (total <= 1) return '';
-            let html = '';
-            for (let i = 1; i <= total; i++) {
-                const active = i === current ? ' active' : '';
-                const cb = varName === 'playerMatchesPage' ? 'renderPlayerMatches()' : 'renderRecentMatches()';
-                html += '<button class="page-btn' + active + '" onclick="' + varName + '=' + i + ';' + cb + '">' + i + '</button>';
-            }
-            return html;
-        }
-
-        async function editMatchPoints(matchId, ctx) {
-            const input = document.getElementById('pts_' + matchId);
-            const newPts = parseInt(input?.value);
-            if (isNaN(newPts)) return showToast('Points invalides.', 'error');
-            try {
-                const res = await fetch('/admin/api/match/' + matchId + '/points', {
-                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ points: newPts })
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    showToast('Match #' + matchId + ' mis a jour.');
-                    if (ctx === 'player') await loadPlayerMatches(currentPlayerPseudo);
-                    else { recentMatchesData = []; await loadRecentMatches(recentPage); }
-                } else showToast(data.error || 'Erreur.', 'error');
-            } catch { showToast('Erreur reseau.', 'error'); }
-        }
-
-        async function cancelMatch(matchId, ctx) {
-            openConfirm('Annuler le match #' + matchId + ' ? Les points seront retires aux joueurs.', async () => {
-                try {
-                    const res = await fetch('/admin/api/match/' + matchId, { method: 'DELETE' });
-                    const data = await res.json();
-                    if (data.ok) {
-                        showToast('Match #' + matchId + ' annule.');
-                        if (ctx === 'player') await loadPlayerMatches(currentPlayerPseudo);
-                        else { recentMatchesData = []; await loadRecentMatches(recentPage); }
-                        if (ctx === 'player') { ptsCurrent = data.newTotal ?? ptsCurrent; ptsDelta = 0; updatePtsDisplay(); }
-                    } else showToast(data.error || 'Erreur.', 'error');
-                } catch { showToast('Erreur reseau.', 'error'); }
-            });
-        }
-
-        function adjustPts(n) { ptsDelta += n; updatePtsDisplay(); }
-        function resetPts() { ptsDelta = 0; updatePtsDisplay(); }
 
         function updatePtsDisplay() {
             ptsCurrentEl.textContent = ptsCurrent;
@@ -1025,6 +779,7 @@
             ptsSubmitBtn.disabled = ptsDelta === 0;
         }
 
+        // ===== POINTS =====
         document.getElementById('pointsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
@@ -1038,12 +793,11 @@
                     ptsCurrent = data.newTotal;
                     ptsDelta = 0;
                     updatePtsDisplay();
-                    await loadPlayerMatches(currentPlayerPseudo);
                 } else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
         });
 
-        // ===== GRILLES =====
+        // ===== GRILLES DE POINTS =====
         async function saveGrids() {
             const readGrid = (name) => {
                 const grid = [];
@@ -1059,44 +813,19 @@
             };
             try {
                 const res = await fetch('/admin/api/points-grid', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        pts_atk_win: readGrid('atk_win'), pts_atk_lose: readGrid('atk_lose'),
-                        pts_def_win: readGrid('def_win'), pts_def_lose: readGrid('def_lose')
+                        pts_atk_win: readGrid('atk_win'),
+                        pts_atk_lose: readGrid('atk_lose'),
+                        pts_def_win: readGrid('def_win'),
+                        pts_def_lose: readGrid('def_lose')
                     })
                 });
                 const data = await res.json();
                 if (data.ok) showToast('Bareme sauvegarde.');
                 else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
-        }
-
-        // ===== MULTI COMPTES =====
-        let multiLoaded = false;
-        async function loadMultiAccounts() {
-            if (multiLoaded) return;
-            const container = document.getElementById('multiTableContainer');
-            const countEl = document.getElementById('multiCount');
-            try {
-                const res = await fetch('/admin/api/multi-accounts');
-                const rows = await res.json();
-                multiLoaded = true;
-                if (rows.length === 0) {
-                    container.innerHTML = '<div class="empty-state">Aucun compte multiple detecte.</div>';
-                    countEl.textContent = '0 groupes';
-                    return;
-                }
-                countEl.textContent = rows.length + ' groupe' + (rows.length > 1 ? 's' : '');
-                let html = '<table class="multi-table"><thead><tr><th>#</th><th>Pseudos lies</th><th style="text-align:center;">Comptes</th></tr></thead><tbody>';
-                rows.forEach((r, i) => {
-                    const tags = r.pseudos.map(p => `<span class="multi-tag">${escapeHTML(p)}</span>`).join('');
-                    html += `<tr><td style="color:var(--text-muted);font-size:0.8rem;">${i+1}</td><td>${tags}</td><td style="text-align:center;"><span class="multi-count">${r.count}</span></td></tr>`;
-                });
-                html += '</tbody></table>';
-                container.innerHTML = html;
-            } catch {
-                container.innerHTML = '<div class="empty-state">Erreur chargement.</div>';
-            }
         }
 
         // ===== NUGGETS =====
@@ -1106,23 +835,43 @@
             try {
                 const res = await fetch(`/admin/api/nuggets/${seasonId}`);
                 const rows = await res.json();
+
                 if (rows.length === 0) {
                     container.innerHTML = '<div class="empty-state">Aucune pepite pour cette saison.</div>';
                     totalSpan.textContent = '';
                     return;
                 }
+
                 const total = rows.reduce((s, r) => s + parseInt(r.nuggets), 0);
                 totalSpan.textContent = `Total : ${total.toLocaleString()}`;
+
                 let html = '<table class="nuggets-table"><thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead><tbody>';
                 rows.forEach((r, i) => {
                     const rankClass = i < 3 ? ` nuggets-rank-${i+1}` : '';
                     const amountClass = i === 0 ? ' nuggets-amount-gold' : '';
-                    html += `<tr><td class="nuggets-rank${rankClass}">${i+1}</td><td class="nuggets-name">${escapeHTML(r.name)}</td><td class="nuggets-amount${amountClass}">${parseInt(r.nuggets).toLocaleString()}</td></tr>`;
+                    html += `<tr>
+                        <td class="nuggets-rank${rankClass}">${i+1}</td>
+                        <td class="nuggets-name">${escapeHTML(r.name)}</td>
+                        <td class="nuggets-amount${amountClass}">${parseInt(r.nuggets).toLocaleString()}</td>
+                    </tr>`;
                 });
                 html += `<tr class="nuggets-total-row"><td></td><td>Total alliance</td><td style="text-align:right;">${total.toLocaleString()}</td></tr>`;
                 html += '</tbody></table>';
                 container.innerHTML = html;
             } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
+        }
+
+        async function saveDefaultWinratePool() {
+            const poolId = document.getElementById('defaultWinratePool').value;
+            try {
+                const res = await fetch('/admin/api/default-winrate-pool', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pool_id: poolId })
+                });
+                const data = await res.json();
+                if (data.ok) showToast(poolId ? 'Winrate vs pool applique.' : 'Winrate global applique.');
+                else showToast(data.error || 'Erreur.', 'error');
+            } catch { showToast('Erreur reseau.', 'error'); }
         }
 
         function confirmResetNuggets() {
@@ -1132,6 +881,7 @@
                     const data = await res.json();
                     if (data.ok) {
                         showToast(`Pepites remises a zero (saison ${data.seasonId}).`);
+                        // Recharger le tableau sur la saison en cours
                         document.getElementById('nuggetsSeason').value = data.seasonId;
                         loadNuggets(data.seasonId);
                     } else showToast(data.error || 'Erreur.', 'error');

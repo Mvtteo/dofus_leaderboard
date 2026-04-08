@@ -282,7 +282,8 @@ const liveConfig = {
     pts_atk_win:  [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
     pts_atk_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]],
     pts_def_win:  [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
-    pts_def_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
+    pts_def_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]],
+    default_winrate_pool: null
 };
 
 async function loadSettings() {
@@ -327,6 +328,9 @@ async function loadSettings() {
 
         if (dbKeys.season_end_override !== undefined) {
             liveConfig.season_end_override = dbKeys.season_end_override || null;
+        }
+        if (dbKeys.default_winrate_pool !== undefined) {
+            liveConfig.default_winrate_pool = dbKeys.default_winrate_pool || null;
         }
 
         console.log('[Settings] Charges depuis la DB:', JSON.stringify(liveConfig, null, 2));
@@ -476,7 +480,7 @@ app.get('/dev', async (req, res) => {
 app.get('/api/leaderboard/:seasonId', async (req, res) => {
     try {
         const seasonId = req.params.seasonId;
-        const query = `
+        const result = await pool.query(`
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
                 MAX(p.avatar_url) as avatar_url,
@@ -490,8 +494,30 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
             GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
             HAVING SUM(ss.wins) + SUM(ss.losses) > 0
             ORDER BY total_points DESC
-        `;
-        const result = await pool.query(query, [seasonId]);
+        `, [seasonId]);
+
+        // Build pool winrate map if a default pool is configured
+        const poolId = liveConfig.default_winrate_pool;
+        let poolWinrateMap = {};
+        if (poolId) {
+            const pw = await pool.query(`
+                SELECT
+                    COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                    SUM(CASE WHEN m.has_won = true AND mp.is_winner = true AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_wins,
+                    SUM(CASE WHEN NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_total
+                FROM players p
+                JOIN match_participants mp ON mp.player_id = p.id
+                JOIN matches m ON m.id = mp.match_id
+                WHERE m.season_id = $1 AND m.alliance_tier = $2
+                GROUP BY COALESCE(p.discord_id, p.dofus_pseudo::text)
+            `, [seasonId, poolId]);
+            for (const row of pw.rows) {
+                const w = Number(row.pool_wins) || 0;
+                const t = Number(row.pool_total) || 0;
+                poolWinrateMap[row.display_name] = t > 0 ? Math.round(w / t * 100) : 0;
+            }
+        }
+
         const players = result.rows.map((p, index) => {
             const wins = Number(p.wins) || 0;
             const losses = Number(p.losses) || 0;
@@ -500,17 +526,20 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
             const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
             let rankChange = 0;
             if (prevRank !== null) rankChange = prevRank - currentRank;
+            const winrate = poolId && poolWinrateMap[p.dofus_pseudo] !== undefined
+                ? poolWinrateMap[p.dofus_pseudo]
+                : totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
             return {
                 dofus_pseudo: p.dofus_pseudo,
                 avatar_url: p.avatar_url || null,
                 total_points: p.total_points,
                 wins, losses,
-                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
+                winrate,
                 rank_change: rankChange
             };
         });
         res.json(players);
-    } catch (error) { res.status(500).json({ error: 'Erreur serveur' }); }
+    } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
 app.get('/api/matches/:seasonId', async (req, res) => {
@@ -656,7 +685,8 @@ app.get('/admin', adminAuth, async (req, res) => {
             ptsAtkWin: liveConfig.pts_atk_win,
             ptsAtkLose: liveConfig.pts_atk_lose,
             ptsDefWin: liveConfig.pts_def_win,
-            ptsDefLose: liveConfig.pts_def_lose
+            ptsDefLose: liveConfig.pts_def_lose,
+            defaultWinratePool: liveConfig.default_winrate_pool
         });
     } catch (e) { 
         console.error(e);
@@ -993,31 +1023,15 @@ app.delete('/admin/api/match/:id', adminAuth, async (req, res) => {
 });
 
 
-// Winrate par pool pour le leaderboard
-app.get('/api/pool-winrates/:seasonId/:poolId', async (req, res) => {
+// Sauvegarder le pool de winrate par défaut
+app.post('/admin/api/default-winrate-pool', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
     try {
-        const { seasonId, poolId } = req.params;
-        const r = await pool.query(`
-            SELECT
-                COALESCE(p.discord_id, p.dofus_pseudo::text) as group_key,
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
-                SUM(CASE WHEN m.has_won = true AND mp.is_winner = true AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_wins,
-                SUM(CASE WHEN NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_total
-            FROM players p
-            JOIN match_participants mp ON mp.player_id = p.id
-            JOIN matches m ON m.id = mp.match_id
-            WHERE m.season_id = $1 AND m.alliance_tier = $2
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo::text)
-        `, [seasonId, poolId]);
-
-        const result = {};
-        for (const row of r.rows) {
-            const w = Number(row.pool_wins) || 0;
-            const t = Number(row.pool_total) || 0;
-            result[row.display_name] = t > 0 ? Math.round(w / t * 100) : null;
-        }
-        res.json(result);
-    } catch (e) { console.error(e); res.status(500).json({}); }
+        const { pool_id } = req.body;
+        liveConfig.default_winrate_pool = pool_id || null;
+        await saveSetting('default_winrate_pool', pool_id || '');
+        res.json({ ok: true, pool_id: liveConfig.default_winrate_pool });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${config.WEB_PORT}`); });
