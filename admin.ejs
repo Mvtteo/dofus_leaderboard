@@ -316,7 +316,17 @@
             </div>
         </div>
 
-        <div class="dash-grid">
+        <!-- TABS NAV -->
+        <div class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab(event, 'saison')">Saison &amp; Pépites</button>
+            <button class="tab-btn" onclick="switchTab(event, 'bareme')">Barème &amp; Pools</button>
+            <button class="tab-btn" onclick="switchTab(event, 'joueurs')">Joueurs</button>
+        </div>
+
+        <!-- ===== TAB 1 : SAISON & PEPITES ===== -->
+        <div class="tab-panel active" id="tab-saison">
+            <div class="dash-grid">
+
             <!-- ===== SAISON ===== -->
             <div class="card card-full">
                 <div class="card-title">
@@ -351,6 +361,12 @@
                 </div>
             </div>
 
+            </div>
+        </div>
+
+        <!-- ===== TAB 2 : BAREME & POOLS ===== -->
+        <div class="tab-panel" id="tab-bareme">
+            <div class="dash-grid">
             <!-- ===== POOLS ===== -->
             <div class="card">
                 <div class="card-title">
@@ -592,7 +608,10 @@
             </div>
         </div>
         <!-- ===== TAB 3 : JOUEURS ===== -->
-        <div class="tab-panel" id="tab-joueurs">
+            </div>
+        </div>
+
+                <div class="tab-panel" id="tab-joueurs">
             <div class="dash-grid">
                 <div class="card">
                     <div class="card-title">
@@ -672,6 +691,8 @@
                 </div>
             </div>
         </div>
+    </div>
+
     </div>
 
     <!-- CONFIRM DIALOG -->
