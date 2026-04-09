@@ -235,6 +235,16 @@
         .grid-input::-webkit-inner-spin-button { -webkit-appearance:none; }
 
 
+        /* MULTI ACCOUNTS */
+        .multi-table-wrapper { max-height:400px; overflow-y:auto; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); }
+        .multi-table { width:100%; border-collapse:collapse; }
+        .multi-table thead { position:sticky; top:0; background:var(--bg-primary); z-index:1; }
+        .multi-table thead th { text-align:left; padding:0.6rem 0.75rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
+        .multi-table tbody td { padding:0.65rem 0.75rem; font-size:0.85rem; border-bottom:1px solid rgba(255,255,255,0.02); }
+        .multi-table tbody tr:hover { background:var(--bg-card-hover); }
+        .multi-tag { display:inline-block; background:rgba(42,157,143,0.1); border:1px solid var(--border-medium); border-radius:4px; padding:0.15rem 0.5rem; font-size:0.75rem; color:var(--accent-bright); margin:0.1rem; }
+        .multi-count { font-weight:700; color:var(--gold); font-size:0.8rem; }
+
         /* MATCH HISTORY */
         .match-table { width:100%; border-collapse:collapse; }
         .match-table thead th { text-align:left; padding:0.5rem 0.6rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
@@ -1072,7 +1082,8 @@
                 countEl.textContent = rows.length + ' groupe' + (rows.length > 1 ? 's' : '');
                 let html = '<table class="multi-table"><thead><tr><th>#</th><th>Pseudos lies</th><th style="text-align:center;">Comptes</th></tr></thead><tbody>';
                 rows.forEach((r, i) => {
-                    const tags = r.pseudos.map(p => '<span class="multi-tag">' + escapeHTML(p) + '</span>').join('');
+                    const pseudos = Array.isArray(r.pseudos) ? r.pseudos : (r.pseudos ? [r.pseudos] : []);
+                    const tags = pseudos.map(p => '<span class="multi-tag">' + escapeHTML(p) + '</span>').join('');
                     html += '<tr><td style="color:var(--text-muted);font-size:0.8rem;">' + (i+1) + '</td><td>' + tags + '</td><td style="text-align:center;"><span class="multi-count">' + r.count + '</span></td></tr>';
                 });
                 html += '</tbody></table>';
