@@ -988,8 +988,8 @@
                     ? '<span style="color:var(--text-muted);">annulé</span>'
                     : '<input type="number" class="pts-input-inline" value="' + m.points_awarded + '" id="pts_' + m.id + '" />';
                 const actionsCell = cancelled ? '' :
-                    '<button class="btn-action btn-edit" onclick="editMatchPoints(' + m.id + ', '' + ctx + '')">Modifier</button>' +
-                    '<button class="btn-action btn-cancel" onclick="cancelMatch(' + m.id + ', '' + ctx + '')" style="margin-left:0.3rem;">Annuler</button>';
+                    '<button class="btn-action btn-edit" onclick="editMatchPoints(' + m.id + ', \'' + ctx + '\')">Modifier</button>' +
+                    '<button class="btn-action btn-cancel" onclick="cancelMatch(' + m.id + ', \'' + ctx + '\')" style="margin-left:0.3rem;">Annuler</button>';
                 html += '<tr' + rowClass + '>';
                 html += '<td style="color:var(--text-muted);font-size:0.75rem;">' + date + '</td>';
                 html += '<td class="' + resultClass + '">' + resultLabel + '</td>';
