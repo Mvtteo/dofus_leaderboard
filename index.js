@@ -424,7 +424,7 @@ async function getLeaderboardPlayers(seasonId) {
             SELECT
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
                 SUM(CASE WHEN m.has_won = true AND mp.is_winner = true AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_wins,
-                SUM(CASE WHEN mp.is_winner = m.has_won AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_total
+                SUM(CASE WHEN m.has_won = false AND mp.is_winner = false AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_losses
             FROM players p
             JOIN match_participants mp ON mp.player_id = p.id
             JOIN matches m ON m.id = mp.match_id
@@ -433,8 +433,11 @@ async function getLeaderboardPlayers(seasonId) {
         `, [seasonId, poolId]);
         for (const row of pw.rows) {
             const w = Number(row.pool_wins) || 0;
-            const t = Number(row.pool_total) || 0;
+            const l = Number(row.pool_losses) || 0;
+            const t = w + l;
             poolWinrateMap[row.display_name] = t > 0 ? Math.round(w / t * 100) : null;
+            poolWinrateMap[row.display_name + '_w'] = w;
+            poolWinrateMap[row.display_name + '_l'] = l;
         }
     }
 
@@ -445,14 +448,17 @@ async function getLeaderboardPlayers(seasonId) {
         const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
         let rankChange = 0;
         if (prevRank !== null) rankChange = prevRank - (index + 1);
-        const winrate = poolId && poolWinrateMap[p.dofus_pseudo] !== null && poolWinrateMap[p.dofus_pseudo] !== undefined
+        const hasPoolData = poolId && poolWinrateMap[p.dofus_pseudo] !== null && poolWinrateMap[p.dofus_pseudo] !== undefined;
+        const winrate = hasPoolData
             ? poolWinrateMap[p.dofus_pseudo]
             : totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+        const displayWins = hasPoolData ? poolWinrateMap[p.dofus_pseudo + '_w'] : wins;
+        const displayLosses = hasPoolData ? poolWinrateMap[p.dofus_pseudo + '_l'] : losses;
         return {
             dofus_pseudo: p.dofus_pseudo,
             avatar_url: p.avatar_url || null,
             total_points: parseInt(p.total_points),
-            wins, losses, winrate, rank_change: rankChange
+            wins: displayWins, losses: displayLosses, winrate, rank_change: rankChange
         };
     });
 }
