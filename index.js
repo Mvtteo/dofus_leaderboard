@@ -400,47 +400,71 @@ function getSeasons() {
     return { seasons, currentSeason: currentSeasonId };
 }
 
+async function getLeaderboardPlayers(seasonId) {
+    const result = await pool.query(`
+        SELECT 
+            COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
+            MAX(p.avatar_url) as avatar_url,
+            SUM(ss.points) as total_points,
+            SUM(ss.wins) as wins,
+            SUM(ss.losses) as losses,
+            MIN(ss.previous_rank) as previous_rank
+        FROM players p
+        JOIN season_stats ss ON ss.player_id = p.id
+        WHERE ss.season_id = $1
+        GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+        HAVING SUM(ss.wins) + SUM(ss.losses) > 0
+        ORDER BY total_points DESC
+    `, [seasonId]);
+
+    const poolId = liveConfig.default_winrate_pool;
+    let poolWinrateMap = {};
+    if (poolId) {
+        const pw = await pool.query(`
+            SELECT
+                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                SUM(CASE WHEN m.has_won = true AND mp.is_winner = true AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_wins,
+                SUM(CASE WHEN mp.is_winner = m.has_won AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_total
+            FROM players p
+            JOIN match_participants mp ON mp.player_id = p.id
+            JOIN matches m ON m.id = mp.match_id
+            WHERE m.season_id = $1 AND m.alliance_tier = $2
+            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo::text)
+        `, [seasonId, poolId]);
+        for (const row of pw.rows) {
+            const w = Number(row.pool_wins) || 0;
+            const t = Number(row.pool_total) || 0;
+            poolWinrateMap[row.display_name] = t > 0 ? Math.round(w / t * 100) : null;
+        }
+    }
+
+    return result.rows.map((p, index) => {
+        const wins = Number(p.wins) || 0;
+        const losses = Number(p.losses) || 0;
+        const totalGames = wins + losses;
+        const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
+        let rankChange = 0;
+        if (prevRank !== null) rankChange = prevRank - (index + 1);
+        const winrate = poolId && poolWinrateMap[p.dofus_pseudo] !== null && poolWinrateMap[p.dofus_pseudo] !== undefined
+            ? poolWinrateMap[p.dofus_pseudo]
+            : totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+        return {
+            dofus_pseudo: p.dofus_pseudo,
+            avatar_url: p.avatar_url || null,
+            total_points: parseInt(p.total_points),
+            wins, losses, winrate, rank_change: rankChange
+        };
+    });
+}
+
 app.get('/', async (req, res) => {
     try {
         const { seasons, currentSeason } = getSeasons();
         const seasonId = await ensureCurrentSeason();
 
-        const query = `
-            SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
-                MAX(p.avatar_url) as avatar_url,
-                SUM(ss.points) as total_points,
-                SUM(ss.wins) as wins,
-                SUM(ss.losses) as losses,
-                MIN(ss.previous_rank) as previous_rank
-            FROM players p
-            JOIN season_stats ss ON ss.player_id = p.id
-            WHERE ss.season_id = $1
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
-            ORDER BY total_points DESC
-        `;
-        const result = await pool.query(query, [seasonId]);
-        const players = result.rows.map((p, index) => {
-            const wins = Number(p.wins) || 0;
-            const losses = Number(p.losses) || 0;
-            const totalGames = wins + losses;
-            const currentRank = index + 1;
-            const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
-            let rankChange = 0;
-            if (prevRank !== null) rankChange = prevRank - currentRank;
-            return {
-                dofus_pseudo: p.display_name,
-                avatar_url: p.avatar_url || null,
-                total_points: parseInt(p.total_points),
-                wins, losses,
-                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
-                rank_change: rankChange
-            };
-        });
-
+        const players = await getLeaderboardPlayers(seasonId);
         const countRes = await pool.query('SELECT COUNT(*) as c FROM matches WHERE season_id = $1', [seasonId]);
-        res.render('index', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c), pools: liveConfig.pools });
+        res.render('index', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c), pools: liveConfig.pools, defaultWinratePool: liveConfig.default_winrate_pool });
     } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
 });
 
@@ -480,64 +504,7 @@ app.get('/dev', async (req, res) => {
 app.get('/api/leaderboard/:seasonId', async (req, res) => {
     try {
         const seasonId = req.params.seasonId;
-        const result = await pool.query(`
-            SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
-                MAX(p.avatar_url) as avatar_url,
-                SUM(ss.points) as total_points,
-                SUM(ss.wins) as wins,
-                SUM(ss.losses) as losses,
-                MIN(ss.previous_rank) as previous_rank
-            FROM players p
-            JOIN season_stats ss ON ss.player_id = p.id
-            WHERE ss.season_id = $1
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
-            ORDER BY total_points DESC
-        `, [seasonId]);
-
-        // Build pool winrate map if a default pool is configured
-        const poolId = liveConfig.default_winrate_pool;
-        let poolWinrateMap = {};
-        if (poolId) {
-            const pw = await pool.query(`
-                SELECT
-                    COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
-                    SUM(CASE WHEN m.has_won = true AND mp.is_winner = true AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_wins,
-                    SUM(CASE WHEN NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_total
-                FROM players p
-                JOIN match_participants mp ON mp.player_id = p.id
-                JOIN matches m ON m.id = mp.match_id
-                WHERE m.season_id = $1 AND m.alliance_tier = $2
-                GROUP BY COALESCE(p.discord_id, p.dofus_pseudo::text)
-            `, [seasonId, poolId]);
-            for (const row of pw.rows) {
-                const w = Number(row.pool_wins) || 0;
-                const t = Number(row.pool_total) || 0;
-                poolWinrateMap[row.display_name] = t > 0 ? Math.round(w / t * 100) : 0;
-            }
-        }
-
-        const players = result.rows.map((p, index) => {
-            const wins = Number(p.wins) || 0;
-            const losses = Number(p.losses) || 0;
-            const totalGames = wins + losses;
-            const currentRank = index + 1;
-            const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
-            let rankChange = 0;
-            if (prevRank !== null) rankChange = prevRank - currentRank;
-            const winrate = poolId && poolWinrateMap[p.dofus_pseudo] !== undefined
-                ? poolWinrateMap[p.dofus_pseudo]
-                : totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
-            return {
-                dofus_pseudo: p.dofus_pseudo,
-                avatar_url: p.avatar_url || null,
-                total_points: p.total_points,
-                wins, losses,
-                winrate,
-                rank_change: rankChange
-            };
-        });
+        const players = await getLeaderboardPlayers(seasonId);
         res.json(players);
     } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
 });

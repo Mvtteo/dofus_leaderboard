@@ -161,7 +161,7 @@ async function loadStats(){const sid=document.getElementById('seasonSelect').val
 
 document.querySelectorAll('.tab-btn').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('on'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));t.classList.add('on');document.getElementById('panel-'+t.dataset.tab).classList.add('on');if(t.dataset.tab==='activite')loadFeed();if(t.dataset.tab==='stats')loadStats();}));
 async function fetchLeaderboardData(){try{const sid=document.getElementById('seasonSelect').value;const r=await fetch('/api/leaderboard/'+sid);if(!r.ok)throw 0;const d=await r.json();allPlayers=d;filterData(false);document.getElementById('playerCount').textContent=d.length;}catch(e){}}
-document.addEventListener('DOMContentLoaded',()=>{renderPodium();displayTable();setInterval(fetchLeaderboardData,UPDATE_INTERVAL);});
+document.addEventListener('DOMContentLoaded',()=>{fetchLeaderboardData();setInterval(fetchLeaderboardData,UPDATE_INTERVAL);});
 document.getElementById('searchInput').addEventListener('keyup',()=>filterData(true));
 const searchToggle=document.getElementById('searchToggle'),searchContainer=document.getElementById('searchContainer');
 if(searchToggle&&searchContainer)searchToggle.addEventListener('click',()=>{searchContainer.classList.toggle('expanded');if(searchContainer.classList.contains('expanded'))document.getElementById('searchInput').focus();});
