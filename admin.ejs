@@ -98,7 +98,7 @@
 
         /* DASHBOARD */
         .dashboard { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:2rem; }
-        .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem; flex-wrap:wrap; gap:1rem; }
+        .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2.5rem; flex-wrap:wrap; gap:1rem; }
         .dash-brand { display:flex; align-items:center; gap:0.75rem; }
         .dash-brand img { height:38px; opacity:0.9; }
         .dash-brand h1 { font-family:'Space Grotesk',sans-serif; font-size:1.4rem; font-weight:700; letter-spacing:0.06em; }
@@ -234,19 +234,6 @@
         .grid-input:focus { outline:none; border-color:var(--accent); background:rgba(42,157,143,0.06); box-shadow:0 0 0 2px rgba(42,157,143,0.1); }
         .grid-input::-webkit-inner-spin-button { -webkit-appearance:none; }
 
-        /* MULTI ACCOUNTS */
-        .multi-table-wrapper { max-height:400px; overflow-y:auto; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); }
-        .multi-table { width:100%; border-collapse:collapse; }
-        .multi-table thead { position:sticky; top:0; background:var(--bg-primary); z-index:1; }
-        .multi-table thead th { text-align:left; padding:0.6rem 0.75rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
-        .multi-table tbody td { padding:0.65rem 0.75rem; font-size:0.85rem; border-bottom:1px solid rgba(255,255,255,0.02); }
-        .multi-table tbody tr:hover { background:var(--bg-card-hover); }
-        .multi-tag {
-            display:inline-block; background:rgba(42,157,143,0.1); border:1px solid var(--border-medium);
-            border-radius:4px; padding:0.15rem 0.5rem; font-size:0.75rem; color:var(--accent-bright);
-            margin:0.1rem;
-        }
-        .multi-count { font-weight:700; color:var(--gold); font-size:0.8rem; }
 
         /* MATCH HISTORY */
         .match-table { width:100%; border-collapse:collapse; }
@@ -255,29 +242,17 @@
         .match-table tbody tr:hover { background:var(--bg-card-hover); }
         .match-win { color:var(--accent-bright); font-weight:700; }
         .match-lose { color:var(--red); font-weight:700; }
-        .match-pts { font-weight:700; font-variant-numeric:tabular-nums; }
         .match-cancelled { opacity:0.4; text-decoration:line-through; }
         .pagination { display:flex; gap:0.4rem; align-items:center; margin-top:0.75rem; justify-content:center; }
-        .page-btn {
-            width:28px; height:28px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm);
-            background:transparent; color:var(--text-muted); font-size:0.75rem; font-weight:600;
-            cursor:pointer; transition:all 0.15s; font-family:inherit; display:flex; align-items:center; justify-content:center;
-        }
+        .page-btn { width:28px; height:28px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); background:transparent; color:var(--text-muted); font-size:0.75rem; font-weight:600; cursor:pointer; transition:all 0.15s; font-family:inherit; display:flex; align-items:center; justify-content:center; }
         .page-btn:hover { border-color:var(--border-medium); color:var(--text-secondary); }
         .page-btn.active { background:rgba(42,157,143,0.15); border-color:var(--border-medium); color:var(--accent-bright); }
-        .btn-action {
-            padding:0.25rem 0.6rem; border-radius:4px; font-size:0.7rem; font-weight:600;
-            cursor:pointer; font-family:inherit; transition:all 0.15s; border:1px solid;
-        }
+        .btn-action { padding:0.25rem 0.6rem; border-radius:4px; font-size:0.7rem; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.15s; border:1px solid; }
         .btn-cancel { background:rgba(231,111,81,0.08); color:var(--red); border-color:rgba(231,111,81,0.25); }
         .btn-cancel:hover { background:rgba(231,111,81,0.2); }
         .btn-edit { background:rgba(42,157,143,0.08); color:var(--accent-bright); border-color:var(--border-medium); }
         .btn-edit:hover { background:rgba(42,157,143,0.2); }
-        .pts-input-inline {
-            width:60px; padding:0.2rem 0.4rem; background:var(--bg-input); border:1px solid var(--border-medium);
-            border-radius:4px; color:var(--text-primary); font-size:0.8rem; font-weight:600;
-            text-align:center; font-family:inherit;
-        }
+        .pts-input-inline { width:60px; padding:0.2rem 0.4rem; background:var(--bg-input); border:1px solid var(--border-medium); border-radius:4px; color:var(--text-primary); font-size:0.8rem; font-weight:600; text-align:center; font-family:inherit; }
 
         /* CONFIRM DIALOG */
         .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); z-index:500; display:none; align-items:center; justify-content:center; }
@@ -302,6 +277,12 @@
 
         /* ANIMATIONS */
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        .card { animation:fadeUp 0.5s ease both; }
+        .card:nth-child(1) { animation-delay:0.05s; }
+        .card:nth-child(2) { animation-delay:0.1s; }
+        .card:nth-child(3) { animation-delay:0.15s; }
+        .card:nth-child(4) { animation-delay:0.2s; }
+        .login-card { animation:fadeUp 0.6s ease both; }
 
         ::-webkit-scrollbar { width:6px; }
         ::-webkit-scrollbar-track { background:transparent; }
@@ -314,8 +295,6 @@
             .dashboard { padding:1rem; }
             .nuggets-header { flex-direction:column; align-items:stretch; }
             [style*="grid-template-columns:1fr 1fr"] { grid-template-columns:1fr !important; }
-            .tabs-nav { width:100%; }
-            .tab-btn { flex:1; text-align:center; }
         }
     </style>
 </head>
@@ -360,8 +339,8 @@
 
         <!-- TABS NAV -->
         <div class="tabs-nav">
-            <button class="tab-btn active" onclick="switchTab(event, 'saison')">Saison & Pépites</button>
-            <button class="tab-btn" onclick="switchTab(event, 'bareme')">Barème & Pools</button>
+            <button class="tab-btn active" onclick="switchTab(event, 'saison')">Saison &amp; Pépites</button>
+            <button class="tab-btn" onclick="switchTab(event, 'bareme')">Barème &amp; Pools</button>
             <button class="tab-btn" onclick="switchTab(event, 'joueurs')">Joueurs</button>
         </div>
 
@@ -413,7 +392,6 @@
                             <% } %>
                         </span>
                     </div>
-
                     <div class="nuggets-header">
                         <div class="nuggets-header-left">
                             <select class="form-select" id="nuggetsSeason" onchange="loadNuggets(this.value)">
@@ -427,7 +405,6 @@
                             Reset pepites (saison en cours)
                         </button>
                     </div>
-
                     <div id="nuggetsTableContainer">
                         <% if (nuggets.length === 0) { %>
                             <div class="empty-state">Aucune pepite pour cette saison.</div>
@@ -458,7 +435,6 @@
         <!-- ===== TAB 2 : BAREME & POOLS ===== -->
         <div class="tab-panel" id="tab-bareme">
             <div class="dash-grid">
-                <!-- POOLS -->
                 <div class="card">
                     <div class="card-title">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -496,9 +472,20 @@
                         </button>
                         <button type="button" class="btn btn-primary" onclick="savePools()">Sauvegarder</button>
                     </div>
+                    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border-subtle);">
+                        <div class="form-label" style="margin-bottom:0.5rem;">Winrate affiché sur le leaderboard</div>
+                        <div style="display:flex;gap:0.75rem;align-items:center;">
+                            <select class="form-select" id="defaultWinratePool" style="flex:1;">
+                                <option value="" <%= !locals.defaultWinratePool ? 'selected' : '' %>>Winrate global (V/D total)</option>
+                                <% pools.forEach(p => { %>
+                                <option value="<%= p.id %>" <%= locals.defaultWinratePool === p.id ? 'selected' : '' %>>WR vs <%= p.name %></option>
+                                <% }); %>
+                            </select>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="saveDefaultWinratePool()">Appliquer</button>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- GRILLES -->
                 <div class="card card-full">
                     <div class="card-title">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -507,7 +494,6 @@
                         Bareme de points
                         <span style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:400;">Multiplie par le % du pool</span>
                     </div>
-
                     <div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
                         Attaque
@@ -544,7 +530,6 @@
                             </table>
                         </div>
                     </div>
-
                     <div style="font-size:0.8rem;font-weight:700;color:var(--accent-bright);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;padding-top:1rem;border-top:1px solid var(--border-subtle);">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                         Defense
@@ -591,7 +576,6 @@
         <!-- ===== TAB 3 : JOUEURS ===== -->
         <div class="tab-panel" id="tab-joueurs">
             <div class="dash-grid">
-                <!-- AJUSTEMENT POINTS -->
                 <div class="card">
                     <div class="card-title">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -606,7 +590,6 @@
                             <input type="text" id="playerSearch" name="pseudo" class="form-input" placeholder="Rechercher un joueur..." autocomplete="off" required />
                             <div class="autocomplete-list" id="autocompleteList"></div>
                         </div>
-
                         <div id="pointsEditor" style="display:none;">
                             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
                                 <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">Actuel :</span>
@@ -633,7 +616,6 @@
                     </form>
                 </div>
 
-                <!-- MULTI COMPTES -->
                 <div class="card">
                     <div class="card-title">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -648,7 +630,6 @@
                     </div>
                 </div>
 
-                <!-- HISTORIQUE JOUEUR -->
                 <div class="card card-full" id="playerMatchesCard" style="display:none;">
                     <div class="card-title">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -660,7 +641,6 @@
                     <div class="pagination" id="playerMatchesPagination"></div>
                 </div>
 
-                <!-- DERNIERS MATCHS GLOBAUX -->
                 <div class="card card-full">
                     <div class="card-title">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -699,10 +679,7 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + name).classList.add('active');
             e.currentTarget.classList.add('active');
-            if (name === 'joueurs') {
-                loadMultiAccounts();
-                loadRecentMatches(1);
-            }
+            if (name === 'joueurs') { loadMultiAccounts(); loadRecentMatches(1); }
         }
 
         // ===== TOAST =====
@@ -719,7 +696,7 @@
             return d.innerHTML;
         }
 
-        // ===== CONFIRM =====
+        // ===== CONFIRM DIALOG =====
         let confirmCallback = null;
         function openConfirm(msg, cb) {
             document.getElementById('confirmMsg').textContent = msg;
@@ -744,7 +721,9 @@
                 const data = await res.json();
                 if (data.ok) {
                     showToast('Date de fin mise a jour.');
-                    if (data.curSeason) document.getElementById('seasonEnd').textContent = new Date(data.curSeason.end).toLocaleDateString('fr-FR');
+                    if (data.curSeason) {
+                        document.getElementById('seasonEnd').textContent = new Date(data.curSeason.end).toLocaleDateString('fr-FR');
+                    }
                 } else showToast(data.error || 'Erreur.', 'error');
             } catch { showToast('Erreur reseau.', 'error'); }
         }
@@ -756,7 +735,10 @@
                     body: JSON.stringify({ end_date: '' })
                 });
                 const data = await res.json();
-                if (data.ok) { showToast('Date remise par defaut.'); setTimeout(() => location.reload(), 500); }
+                if (data.ok) {
+                    showToast('Date remise par defaut.');
+                    setTimeout(() => location.reload(), 500);
+                }
             } catch { showToast('Erreur reseau.', 'error'); }
         }
 
@@ -792,7 +774,8 @@
 
         function removePool(btn) {
             const row = btn.closest('.pool-row');
-            const rows = document.querySelectorAll('.pool-row');
+            const container = document.getElementById('poolContainer');
+            const rows = container.querySelectorAll('.pool-row');
             if (rows.length <= 1) return showToast('Il faut au moins 1 pool.', 'error');
             row.remove();
             updatePoolCount();
@@ -847,7 +830,7 @@
             if (matches.length === 0) { acList.classList.remove('show'); return; }
             acList.innerHTML = matches.map(m => {
                 const d = document.createElement('div'); d.textContent = m;
-                return `<div class="autocomplete-item">${d.innerHTML}</div>`;
+                return '<div class="autocomplete-item">' + d.innerHTML + '</div>';
             }).join('');
             acList.classList.add('show');
             acList.querySelectorAll('.autocomplete-item').forEach(item => {
@@ -1034,7 +1017,7 @@
                 const res = await fetch('/admin/api/player-points', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 const data = await res.json();
                 if (data.ok) {
-                    showToast(`${data.pseudo} : ${data.newTotal} pts (${data.delta >= 0 ? '+' : ''}${data.delta})`);
+                    showToast(data.pseudo + ' : ' + data.newTotal + ' pts (' + (data.delta >= 0 ? '+' : '') + data.delta + ')');
                     ptsCurrent = data.newTotal;
                     ptsDelta = 0;
                     updatePtsDisplay();
@@ -1050,7 +1033,7 @@
                 for (let r = 0; r < 5; r++) {
                     const row = [];
                     for (let c = 0; c < 5; c++) {
-                        const input = document.querySelector(`input[data-grid="${name}"][data-r="${r}"][data-c="${c}"]`);
+                        const input = document.querySelector('input[data-grid="' + name + '"][data-r="' + r + '"][data-c="' + c + '"]');
                         row.push(parseInt(input.value) || 0);
                     }
                     grid.push(row);
@@ -1089,8 +1072,8 @@
                 countEl.textContent = rows.length + ' groupe' + (rows.length > 1 ? 's' : '');
                 let html = '<table class="multi-table"><thead><tr><th>#</th><th>Pseudos lies</th><th style="text-align:center;">Comptes</th></tr></thead><tbody>';
                 rows.forEach((r, i) => {
-                    const tags = r.pseudos.map(p => `<span class="multi-tag">${escapeHTML(p)}</span>`).join('');
-                    html += `<tr><td style="color:var(--text-muted);font-size:0.8rem;">${i+1}</td><td>${tags}</td><td style="text-align:center;"><span class="multi-count">${r.count}</span></td></tr>`;
+                    const tags = r.pseudos.map(p => '<span class="multi-tag">' + escapeHTML(p) + '</span>').join('');
+                    html += '<tr><td style="color:var(--text-muted);font-size:0.8rem;">' + (i+1) + '</td><td>' + tags + '</td><td style="text-align:center;"><span class="multi-count">' + r.count + '</span></td></tr>';
                 });
                 html += '</tbody></table>';
                 container.innerHTML = html;
@@ -1104,7 +1087,7 @@
             const container = document.getElementById('nuggetsTableContainer');
             const totalSpan = document.getElementById('nuggetsTotal');
             try {
-                const res = await fetch(`/admin/api/nuggets/${seasonId}`);
+                const res = await fetch('/admin/api/nuggets/' + seasonId);
                 const rows = await res.json();
                 if (rows.length === 0) {
                     container.innerHTML = '<div class="empty-state">Aucune pepite pour cette saison.</div>';
@@ -1112,17 +1095,30 @@
                     return;
                 }
                 const total = rows.reduce((s, r) => s + parseInt(r.nuggets), 0);
-                totalSpan.textContent = `Total : ${total.toLocaleString()}`;
+                totalSpan.textContent = 'Total : ' + total.toLocaleString();
                 let html = '<table class="nuggets-table"><thead><tr><th>#</th><th>Joueur</th><th style="text-align:right;">Pepites</th></tr></thead><tbody>';
                 rows.forEach((r, i) => {
-                    const rankClass = i < 3 ? ` nuggets-rank-${i+1}` : '';
+                    const rankClass = i < 3 ? ' nuggets-rank-' + (i+1) : '';
                     const amountClass = i === 0 ? ' nuggets-amount-gold' : '';
-                    html += `<tr><td class="nuggets-rank${rankClass}">${i+1}</td><td class="nuggets-name">${escapeHTML(r.name)}</td><td class="nuggets-amount${amountClass}">${parseInt(r.nuggets).toLocaleString()}</td></tr>`;
+                    html += '<tr><td class="nuggets-rank' + rankClass + '">' + (i+1) + '</td><td class="nuggets-name">' + escapeHTML(r.name) + '</td><td class="nuggets-amount' + amountClass + '">' + parseInt(r.nuggets).toLocaleString() + '</td></tr>';
                 });
-                html += `<tr class="nuggets-total-row"><td></td><td>Total alliance</td><td style="text-align:right;">${total.toLocaleString()}</td></tr>`;
+                html += '<tr class="nuggets-total-row"><td></td><td>Total alliance</td><td style="text-align:right;">' + total.toLocaleString() + '</td></tr>';
                 html += '</tbody></table>';
                 container.innerHTML = html;
             } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
+        }
+
+        async function saveDefaultWinratePool() {
+            const poolId = document.getElementById('defaultWinratePool').value;
+            try {
+                const res = await fetch('/admin/api/default-winrate-pool', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pool_id: poolId })
+                });
+                const data = await res.json();
+                if (data.ok) showToast(poolId ? 'Winrate vs pool applique.' : 'Winrate global applique.');
+                else showToast(data.error || 'Erreur.', 'error');
+            } catch { showToast('Erreur reseau.', 'error'); }
         }
 
         function confirmResetNuggets() {
@@ -1131,7 +1127,7 @@
                     const res = await fetch('/admin/api/reset-nuggets', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
                     const data = await res.json();
                     if (data.ok) {
-                        showToast(`Pepites remises a zero (saison ${data.seasonId}).`);
+                        showToast('Pepites remises a zero (saison ' + data.seasonId + ').');
                         document.getElementById('nuggetsSeason').value = data.seasonId;
                         loadNuggets(data.seasonId);
                     } else showToast(data.error || 'Erreur.', 'error');
