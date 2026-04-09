@@ -282,7 +282,8 @@ const liveConfig = {
     pts_atk_win:  [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
     pts_atk_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]],
     pts_def_win:  [[2,4,5,5,5],[1,4,5,5,5],[1,2,6,6,6],[1,2,3,8,8],[1,2,3,5,8]],
-    pts_def_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]]
+    pts_def_lose: [[1,2,3,3,3],[1,2,3,3,3],[0,2,3,3,3],[0,0,3,4,4],[0,0,0,4,5]],
+    default_winrate_pool: null
 };
 
 async function loadSettings() {
@@ -327,6 +328,9 @@ async function loadSettings() {
 
         if (dbKeys.season_end_override !== undefined) {
             liveConfig.season_end_override = dbKeys.season_end_override || null;
+        }
+        if (dbKeys.default_winrate_pool !== undefined) {
+            liveConfig.default_winrate_pool = dbKeys.default_winrate_pool || null;
         }
 
         console.log('[Settings] Charges depuis la DB:', JSON.stringify(liveConfig, null, 2));
@@ -436,7 +440,7 @@ app.get('/', async (req, res) => {
         });
 
         const countRes = await pool.query('SELECT COUNT(*) as c FROM matches WHERE season_id = $1', [seasonId]);
-        res.render('index', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c) });
+        res.render('index', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c), pools: liveConfig.pools });
     } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
 });
 
@@ -476,7 +480,7 @@ app.get('/dev', async (req, res) => {
 app.get('/api/leaderboard/:seasonId', async (req, res) => {
     try {
         const seasonId = req.params.seasonId;
-        const query = `
+        const result = await pool.query(`
             SELECT 
                 COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
                 MAX(p.avatar_url) as avatar_url,
@@ -490,8 +494,30 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
             GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
             HAVING SUM(ss.wins) + SUM(ss.losses) > 0
             ORDER BY total_points DESC
-        `;
-        const result = await pool.query(query, [seasonId]);
+        `, [seasonId]);
+
+        // Build pool winrate map if a default pool is configured
+        const poolId = liveConfig.default_winrate_pool;
+        let poolWinrateMap = {};
+        if (poolId) {
+            const pw = await pool.query(`
+                SELECT
+                    COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                    SUM(CASE WHEN m.has_won = true AND mp.is_winner = true AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_wins,
+                    SUM(CASE WHEN NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_total
+                FROM players p
+                JOIN match_participants mp ON mp.player_id = p.id
+                JOIN matches m ON m.id = mp.match_id
+                WHERE m.season_id = $1 AND m.alliance_tier = $2
+                GROUP BY COALESCE(p.discord_id, p.dofus_pseudo::text)
+            `, [seasonId, poolId]);
+            for (const row of pw.rows) {
+                const w = Number(row.pool_wins) || 0;
+                const t = Number(row.pool_total) || 0;
+                poolWinrateMap[row.display_name] = t > 0 ? Math.round(w / t * 100) : 0;
+            }
+        }
+
         const players = result.rows.map((p, index) => {
             const wins = Number(p.wins) || 0;
             const losses = Number(p.losses) || 0;
@@ -500,17 +526,20 @@ app.get('/api/leaderboard/:seasonId', async (req, res) => {
             const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
             let rankChange = 0;
             if (prevRank !== null) rankChange = prevRank - currentRank;
+            const winrate = poolId && poolWinrateMap[p.dofus_pseudo] !== undefined
+                ? poolWinrateMap[p.dofus_pseudo]
+                : totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
             return {
                 dofus_pseudo: p.dofus_pseudo,
                 avatar_url: p.avatar_url || null,
                 total_points: p.total_points,
                 wins, losses,
-                winrate: totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0,
+                winrate,
                 rank_change: rankChange
             };
         });
         res.json(players);
-    } catch (error) { res.status(500).json({ error: 'Erreur serveur' }); }
+    } catch (error) { console.error(error); res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
 app.get('/api/matches/:seasonId', async (req, res) => {
@@ -656,7 +685,8 @@ app.get('/admin', adminAuth, async (req, res) => {
             ptsAtkWin: liveConfig.pts_atk_win,
             ptsAtkLose: liveConfig.pts_atk_lose,
             ptsDefWin: liveConfig.pts_def_win,
-            ptsDefLose: liveConfig.pts_def_lose
+            ptsDefLose: liveConfig.pts_def_lose,
+            defaultWinratePool: liveConfig.default_winrate_pool
         });
     } catch (e) { 
         console.error(e);
@@ -764,7 +794,6 @@ app.post('/admin/api/player-points', adminAuth, async (req, res) => {
             SELECT id, COALESCE(discord_nickname, dofus_pseudo) as name 
             FROM players WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1)
         `, [pseudo]);
-        console.log('[PlayerMatches] pseudo recu:', JSON.stringify(pseudo), 'found rows:', playerRes.rows.length);
         if (playerRes.rows.length === 0) return res.status(404).json({ error: 'Joueur introuvable.' });
 
         const playerId = playerRes.rows[0].id;
@@ -873,37 +902,18 @@ app.get('/admin/api/player-matches/:pseudo', adminAuth, async (req, res) => {
     try {
         const pseudo = req.params.pseudo;
         const seasonId = await ensureCurrentSeason();
-
-        const playerRes = await pool.query(`
-            SELECT p2.id FROM players p2
-            WHERE p2.discord_id = (
-                SELECT discord_id FROM players 
-                WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1)
-                AND discord_id IS NOT NULL
-                LIMIT 1
-            )
-            UNION
-            SELECT id FROM players
-            WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1)
-        `, [pseudo]);
-
-        const playerIds = playerRes.rows.map(r => r.id);
-        if (playerIds.length === 0) return res.json([]);
-
         const r = await pool.query(`
-            SELECT m.id, m.points_awarded, m.context, m.has_won, m.created_at, m.alliance_tier, m.cancelled,
+            SELECT DISTINCT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at, m.cancelled,
                 (SELECT json_agg(json_build_object('name', COALESCE(p2.discord_nickname, p2.dofus_pseudo), 'is_winner', mp2.is_winner))
-                 FROM match_participants mp2 JOIN players p2 ON p2.id = mp2.player_id
-                 WHERE mp2.match_id = m.id) as participants
+                 FROM match_participants mp2 JOIN players p2 ON p2.id = mp2.player_id WHERE mp2.match_id = m.id) as participants
             FROM matches m
+            JOIN match_participants mp ON mp.match_id = m.id
+            JOIN players p ON p.id = mp.player_id
             WHERE m.season_id = $1
-            AND m.id IN (
-                SELECT match_id FROM match_participants WHERE player_id = ANY($2::int[])
-            )
-            ORDER BY m.created_at DESC NULLS LAST
+            AND LOWER(COALESCE(p.discord_nickname, p.dofus_pseudo)) = LOWER($2)
+            ORDER BY m.created_at DESC NULLS LAST, m.id DESC
             LIMIT 25
-        `, [seasonId, playerIds]);
-
+        `, [seasonId, pseudo]);
         const matches = r.rows.map(m => {
             const poolObj = liveConfig.pools.find(p => p.id === m.alliance_tier);
             return {
@@ -915,10 +925,7 @@ app.get('/admin/api/player-matches/:pseudo', adminAuth, async (req, res) => {
             };
         });
         res.json(matches);
-    } catch (e) {
-        console.error('[PlayerMatches] ERROR:', e.message);
-        res.json([]);
-    }
+    } catch (e) { console.error(e); res.json([]); }
 });
 
 // 25 derniers matchs globaux
@@ -1012,6 +1019,18 @@ app.delete('/admin/api/match/:id', adminAuth, async (req, res) => {
         }
         await pool.query('UPDATE matches SET cancelled = true, points_awarded = 0 WHERE id = $1', [matchId]);
         res.json({ ok: true });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+
+// Sauvegarder le pool de winrate par défaut
+app.post('/admin/api/default-winrate-pool', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { pool_id } = req.body;
+        liveConfig.default_winrate_pool = pool_id || null;
+        await saveSetting('default_winrate_pool', pool_id || '');
+        res.json({ ok: true, pool_id: liveConfig.default_winrate_pool });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
