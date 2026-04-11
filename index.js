@@ -429,6 +429,9 @@ async function getLeaderboardPlayers(seasonId) {
             JOIN match_participants mp ON mp.player_id = p.id
             JOIN matches m ON m.id = mp.match_id
             WHERE m.season_id = $1 AND m.alliance_tier = $2
+            AND NOT COALESCE(m.cancelled, false)
+            AND (SELECT COUNT(*) FROM match_participants mp3 WHERE mp3.match_id = m.id AND mp3.is_winner = true) = 5
+            AND (SELECT COUNT(*) FROM match_participants mp4 WHERE mp4.match_id = m.id AND mp4.is_winner = false) = 5
             GROUP BY COALESCE(p.discord_id, p.dofus_pseudo::text)
         `, [seasonId, poolId]);
         for (const row of pw.rows) {
