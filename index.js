@@ -178,13 +178,13 @@ async function parseScreenWithAI(imageUrl) {
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
              - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
              - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
-             - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
+             - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal), mais peut être en plusieurs mots avec tirets (ex: mangeur-de-kraken, amateur-de-truite)
              - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
-             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
-             - EXCLURE les monstres, invocations, et PNJ
+             - EXCLURE absolument tout nom contenant "Do'", "Do ", ainsi que : Percepteur, Prisme, Gardien, Protecteur
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
              - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
+             - Fais bien attention à prendre en compte tous les pseudos dans les 2 équipes avant de faire le tri
              
              Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}` }
         ]);
@@ -205,7 +205,7 @@ async function parseScreenWithAI(imageUrl) {
             console.log('[Gemini] Repair result:', JSON.stringify(parsed));
         }
 
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
+        const excludePattern = /prisme|percepteur|gardien|protecteur|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
