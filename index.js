@@ -1417,9 +1417,13 @@ client.on('interactionCreate', async interaction => {
             session.hasWon = interaction.customId === 'result_win';
             const resultLabel = session.hasWon ? 'Victoire' : 'Défaite';
             const seenIds = new Set();
-            const poolOptions = liveConfig.pools
-                .filter(p => { if (seenIds.has(p.id)) return false; seenIds.add(p.id); return true; })
-                .map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
+            const uniquePools = liveConfig.pools.filter(p => {
+                if (!p.id || !p.name || seenIds.has(p.id)) return false;
+                seenIds.add(p.id);
+                return true;
+            });
+            console.log('[PvP] Pools disponibles:', uniquePools.map(p => p.id + ':' + p.name).join(', '));
+            const poolOptions = uniquePools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
             const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(poolOptions));
             const ctxLabel = session.context === 'attack' ? 'Attaque' : 'Défense';
             await interaction.update({ content: `**${ctxLabel}** — **${resultLabel}**. Adversaire ?`, components: [row] });
@@ -1500,7 +1504,10 @@ client.on('interactionCreate', async interaction => {
 
             const resultLabel = hasWon ? 'Victoire' : 'Défaite';
             const contextLabel = session.context === 'attack' ? 'Attaque' : 'Défense';
-            const allianceLine = `**${resultLabel}** vs **${session.allianceName || session.allianceTier}** (${contextLabel})`;
+            const myCount = hasWon ? session.winners.length : session.losers.length;
+            const enCount = hasWon ? session.losers.length : session.winners.length;
+            const scoreLabel = `${myCount}vs${enCount}`;
+            const allianceLine = `**${resultLabel}** vs **${session.allianceName || session.allianceTier}** (${contextLabel}) — ${scoreLabel}`;
 
             const multiGroups = {};
             const allAllyPseudos = hasWon ? session.winners : session.losers;
