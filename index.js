@@ -173,18 +173,28 @@ async function parseScreenWithAI(imageUrl) {
              IMPORTANT : Le screenshot peut ne montrer QU'UNE SEULE section (soit GAGNANTS, soit PERDANTS).
              Dans ce cas, remplis la section visible et laisse l'autre vide [].
              
+             CRUCIAL - SECTION :
+             - Si tu vois le titre "PERDANTS" ou "LOSERS", TOUS les noms en dessous vont dans "losers" UNIQUEMENT.
+             - Si tu vois le titre "GAGNANTS" ou "WINNERS", TOUS les noms en dessous vont dans "winners" UNIQUEMENT.
+             - Ne jamais mettre un nom dans la mauvaise section.
+             
+             CRUCIAL - DETECTION COMPLETE :
+             - Il DOIT y avoir jusqu'à 5 joueurs par section visible. Cherche TOUS les noms présents.
+             - Si tu ne vois que 3 ou 4 noms là où il devrait y en avoir 5, regarde plus attentivement toute la colonne.
+             - Le nombre de joueurs détectés est critique : il influe directement sur les points attribués.
+             
              Regles STRICTES :
              - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
              - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
              - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
-             - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
-             - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal), mais peut être en plusieurs mots avec tirets (ex: mangeur-de-kraken, amateur-de-truite)
-             - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
-             - EXCLURE absolument tout nom contenant "Do'", "Do ", ainsi que : Percepteur, Prisme, Gardien, Protecteur
+             - Extraire le NOM COMPLET tel qu'affiché
+             - Les pseudos peuvent être : un seul mot (ex: Bouff, Ketzal) OU plusieurs mots reliés par des tirets (ex: Raconte-pas-ta-vie, Mangeur-de-bouf, Jprotec-R)
+             - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse") — les exclure
+             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
+             - EXCLURE les monstres, invocations, et PNJ
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
              - Si tu vois plus de 5 pseudos dans une equipe, garde uniquement les 5 premiers
-             - Fais bien attention à prendre en compte tous les pseudos dans les 2 équipes avant de faire le tri
              
              Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}` }
         ]);
@@ -205,7 +215,7 @@ async function parseScreenWithAI(imageUrl) {
             console.log('[Gemini] Repair result:', JSON.stringify(parsed));
         }
 
-        const excludePattern = /prisme|percepteur|gardien|protecteur|\bdo['\s]/i;
+        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
@@ -1210,13 +1220,23 @@ client.on('messageCreate', async message => {
                  IMPORTANT : Le screenshot peut ne montrer QU'UNE SEULE section (soit GAGNANTS, soit PERDANTS).
                  Dans ce cas, remplis la section visible et laisse l'autre vide [].
                  
+                 CRUCIAL - SECTION :
+                 - Si tu vois le titre "PERDANTS" ou "LOSERS", TOUS les noms en dessous vont dans "losers" UNIQUEMENT.
+                 - Si tu vois le titre "GAGNANTS" ou "WINNERS", TOUS les noms en dessous vont dans "winners" UNIQUEMENT.
+                 - Ne jamais mettre un nom dans la mauvaise section.
+                 
+                 CRUCIAL - DETECTION COMPLETE :
+                 - Il DOIT y avoir jusqu'à 5 joueurs par section visible. Cherche TOUS les noms présents.
+                 - Si tu ne vois que 3 ou 4 noms là où il devrait y en avoir 5, regarde plus attentivement toute la colonne.
+                 - Le nombre de joueurs détectés est critique : il influe directement sur les points attribués.
+                 
                  Regles STRICTES :
                  - Les pseudos sous "GAGNANTS" ou "WINNERS" vont dans winners
                  - Les pseudos sous "PERDANTS" ou "LOSERS" vont dans losers
                  - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
-                 - Extraire le NOM COMPLET tel qu'affiché (tous les mots)
-                 - Les pseudos de JOUEURS sont TOUJOURS un seul mot sans espace (ex: Bouff, Lanfist, Ketzal)
-                 - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse", "Roy Do'Bey")
+                 - Extraire le NOM COMPLET tel qu'affiché
+                 - Les pseudos peuvent être : un seul mot (ex: Bouff, Ketzal) OU plusieurs mots reliés par des tirets (ex: Raconte-pas-ta-vie, Mangeur-de-bouf, Jprotec-R)
+                 - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse") — les exclure
                  - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
                  - EXCLURE les monstres, invocations, et PNJ
                  - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
@@ -1396,7 +1416,10 @@ client.on('interactionCreate', async interaction => {
         else if (interaction.customId === 'result_win' || interaction.customId === 'result_lose') {
             session.hasWon = interaction.customId === 'result_win';
             const resultLabel = session.hasWon ? 'Victoire' : 'Défaite';
-            const poolOptions = liveConfig.pools.map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
+            const seenIds = new Set();
+            const poolOptions = liveConfig.pools
+                .filter(p => { if (seenIds.has(p.id)) return false; seenIds.add(p.id); return true; })
+                .map(p => new StringSelectMenuOptionBuilder().setLabel(p.name).setValue(p.id));
             const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('select_alliance_bonus').setPlaceholder("Alliance Adverse").addOptions(poolOptions));
             const ctxLabel = session.context === 'attack' ? 'Attaque' : 'Défense';
             await interaction.update({ content: `**${ctxLabel}** — **${resultLabel}**. Adversaire ?`, components: [row] });
