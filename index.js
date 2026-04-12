@@ -871,7 +871,9 @@ app.get('/admin/api/multi-accounts', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json([]);
     try {
         const r = await pool.query(`
-            SELECT array_agg(COALESCE(p.discord_nickname, p.dofus_pseudo) ORDER BY p.id) as pseudos, COUNT(*) as count
+            SELECT 
+                array_agg(DISTINCT p.dofus_pseudo ORDER BY p.dofus_pseudo) as pseudos,
+                COUNT(*) as count
             FROM players p
             WHERE p.discord_id IS NOT NULL
             GROUP BY p.discord_id
