@@ -761,7 +761,7 @@
             const rows = container.querySelectorAll('.pool-row');
             if (rows.length >= MAX_POOLS) return;
             poolCounter++;
-            const id = 'pool_' + poolCounter;
+            const id = 'pool_' + Date.now();
             const div = document.createElement('div');
             div.className = 'pool-row pool-grid';
             div.style.cssText = 'grid-template-columns:1fr 100px 40px;margin-bottom:0.5rem;';
