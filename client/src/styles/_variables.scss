@@ -1,0 +1,20 @@
+:root {
+  --color-dark: #182429;
+  --color-darker: #0f1a1f;
+  --color-teal: #2a9d8f;
+  --color-teal-light: #3dbdad;
+  --color-yellow: #e9c46a;
+  --color-orange: #f4a261;
+  --color-red: #e76f51;
+
+  --gradient-gold: linear-gradient(135deg, var(--color-yellow) 0%, var(--color-orange) 100%);
+  --gradient-silver: linear-gradient(135deg, var(--color-teal) 0%, var(--color-teal-light) 100%);
+  --gradient-bronze: linear-gradient(135deg, var(--color-red) 0%, var(--color-orange) 100%);
+
+  --glow-gold: 0 0 30px rgba(233, 196, 106, 0.5);
+  --glow-silver: 0 0 30px rgba(42, 157, 143, 0.5);
+  --glow-bronze: 0 0 30px rgba(231, 111, 81, 0.5);
+
+  --font-display: 'Montserrat', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}

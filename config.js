@@ -20,5 +20,5 @@ module.exports = {
         defense: 5
     },
     STOP_WORDS: ['niveau', 'level', 'lvl', 'xp', 'oxp', 'orp', 'okp', 'kamas', 'butin', 'total', 'challenge', 'revanche', 'groupe', 'team', 'combat', 'fin'],
-    BANNED_WORDS: ['percepteur', 'prisme', 'prism', 'tax', 'collector', 'archimonstre', 'gardien', 'gagnant', 'gagnants', 'perdant', 'perdants', 'winners', 'losers', 'vs', 'nom', 'personnage', 'personage', 'character', 'name', 'exp', 'experience']
+    BANNED_WORDS: ['prisme', 'prism', 'tax', 'collector', 'archimonstre', 'gardien', 'gagnant', 'gagnants', 'perdant', 'perdants', 'winners', 'losers', 'vs', 'nom', 'personnage', 'personage', 'character', 'name', 'exp', 'experience']
 };
