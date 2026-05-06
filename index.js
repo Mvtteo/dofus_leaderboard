@@ -294,16 +294,25 @@ async function parsePrismeKamasWithAI(imageUrl) {
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
-        const result = await queueGemini([
-            { inlineData: { data: base64, mimeType: 'image/png' } },
-            { text: `Analyse cette image de transactions Dofus (achats de ressources/objets en kamas).
+        const stream = await ai.chat.completions.create({
+            model: AI_MODEL,
+            messages: [{ role: 'user', content: [
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+                { type: 'text', text: `Analyse cette image de transactions Dofus (achats de ressources/objets en kamas).
 Extrais le montant TOTAL en kamas dépensé.
 Si plusieurs lignes avec des prix sont visibles, additionne-les pour obtenir le total.
 Si un total est affiché directement, utilise-le.
 Les montants peuvent être formatés avec des espaces ou des virgules (ex: 19 498, 1 990).
 Réponds UNIQUEMENT avec un JSON valide : {"total_kamas": <nombre entier sans espace ni virgule>}
 Si tu ne peux pas déterminer le montant total, réponds : {"total_kamas": null}` }
-        ]);
+            ]}],
+            temperature: 0,
+            max_completion_tokens: 256,
+            stream: true,
+        });
+        let raw = '';
+        for await (const chunk of stream) { const d = chunk.choices?.[0]?.delta?.content; if (d) raw += d; }
+        const result = { text: raw };
 
         const text = getResponseText(result);
         const clean = text.replace(/```json\n?|```\n?/g, '').replace(/^#[^\n]*\n?/gm, '').trim();
