@@ -298,12 +298,22 @@ async function parsePrismeKamasWithAI(imageUrl) {
             model: AI_MODEL,
             messages: [{ role: 'user', content: [
                 { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
-                { type: 'text', text: `Analyse cette image de transactions Dofus (achats de ressources/objets en kamas).
-Liste TOUS les montants en kamas que tu vois dans l'image, un par un.
-Les montants sont toujours suivis du mot "kamas" ou "K" et peuvent contenir des espaces (ex: 19 498 kamas, 1 990 kamas).
-Ne compte PAS les heures/timestamps (ex: 08:54 n'est PAS un montant).
-Réponds UNIQUEMENT avec un JSON valide : {"amounts": [489, 490, 19498, 1990, 2418]}
-Si tu ne vois aucun montant, réponds : {"amounts": []}` }
+                { type: 'text', text: `Tu regardes un historique d'achats Dofus. Chaque ligne a ce format :
+[heure] [quantité] x [nom objet] (prix_unitaire kamas)
+
+Exemple : "[08:54] 3 x [Cuir d'Eskoglythe] (489 kamas)" signifie 3 achetés à 489 kamas chacun = 1467 kamas pour cette ligne.
+
+Pour CHAQUE ligne visible :
+1. Lis la quantité (le nombre avant le "x")
+2. Lis le prix unitaire entre parenthèses (ignore les espaces, ex: "19 498" = 19498)
+3. Calcule quantité × prix unitaire
+
+IGNORE les heures/timestamps (ex: 08:54).
+
+Retourne la liste des totaux par ligne dans un JSON :
+{"amounts": [1467, 490, 58494, 1990, 2418]}
+
+Si tu ne vois aucune ligne d'achat, réponds : {"amounts": []}` }
             ]}],
             temperature: 0,
             max_completion_tokens: 256,
