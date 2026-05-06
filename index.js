@@ -321,6 +321,7 @@ Si tu ne vois aucune ligne d'achat, réponds : {"amounts": []}` }
         });
         let raw = '';
         for await (const chunk of stream) { const d = chunk.choices?.[0]?.delta?.content; if (d) raw += d; }
+        console.log('[Prismes] Réponse brute:', raw);
 
         const clean = raw.replace(/```json\n?|```\n?/g, '').replace(/^#[^\n]*\n?/gm, '').trim();
         let parsed;
