@@ -314,21 +314,32 @@ Réponds UNIQUEMENT : {"amounts":[489,490,19498,1990,2418]}` }
         for await (const chunk of stream) { const d = chunk.choices?.[0]?.delta?.content; if (d) raw += d; }
         console.log('[Prismes] Réponse brute:', raw);
 
-        const clean = raw.replace(/```json\n?|```\n?/g, '').replace(/^#[^\n]*\n?/gm, '').trim();
+        // Nettoie le JSON : retire markdown, trailing commas, texte parasite
+        const clean = raw
+            .replace(/```json\n?|```\n?/g, '')
+            .replace(/^#[^\n]*\n?/gm, '')
+            .replace(/,(\s*[\]}])/g, '$1')
+            .trim();
+
         let parsed;
         try {
             parsed = JSON.parse(clean);
         } catch {
-            const jsonMatch = clean.match(/\{[\s\S]*?\}/);
+            // Tente d'extraire le premier objet JSON valide
+            const jsonMatch = clean.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-                try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = null; }
+                const fixed = jsonMatch[0].replace(/,(\s*[\]}])/g, '$1');
+                try { parsed = JSON.parse(fixed); } catch { parsed = null; }
             }
+            // Fallback : greppe tous les nombres dans le tableau amounts
             if (!parsed) {
-                // fallback : extrait les totaux depuis le markdown du modèle (ex: "= **489**" ou "Total : 489")
-                const totals = [...raw.matchAll(/=\s*\*{0,2}([\d\s]+)\*{0,2}/g)]
-                    .map(m => parseInt(m[1].replace(/\s/g, '')))
-                    .filter(n => !isNaN(n) && n > 0);
-                parsed = { amounts: totals };
+                const arrayMatch = raw.match(/"amounts"\s*:\s*\[([\s\S]*?)\]/);
+                if (arrayMatch) {
+                    const nums = [...arrayMatch[1].matchAll(/\d+/g)].map(m => parseInt(m[0])).filter(n => n > 0);
+                    parsed = { amounts: nums };
+                } else {
+                    parsed = { amounts: [] };
+                }
             }
         }
         const amounts = Array.isArray(parsed?.amounts) ? parsed.amounts.map(Number).filter(n => !isNaN(n) && n > 0) : [];
