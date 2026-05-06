@@ -314,35 +314,35 @@ Réponds UNIQUEMENT : {"amounts":[489,490,19498,1990,2418]}` }
         for await (const chunk of stream) { const d = chunk.choices?.[0]?.delta?.content; if (d) raw += d; }
         console.log('[Prismes] Réponse brute:', raw);
 
-        // Nettoie le JSON : retire markdown, trailing commas, texte parasite
-        const clean = raw
-            .replace(/```json\n?|```\n?/g, '')
-            .replace(/^#[^\n]*\n?/gm, '')
-            .replace(/,(\s*[\]}])/g, '$1')
-            .trim();
+        // Extraction directe : cherche le tableau "amounts" dans le texte brut, peu importe le format JSON
+        let amounts = [];
 
-        let parsed;
-        try {
-            parsed = JSON.parse(clean);
-        } catch {
-            // Tente d'extraire le premier objet JSON valide
-            const jsonMatch = clean.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const fixed = jsonMatch[0].replace(/,(\s*[\]}])/g, '$1');
-                try { parsed = JSON.parse(fixed); } catch { parsed = null; }
-            }
-            // Fallback : greppe tous les nombres dans le tableau amounts
-            if (!parsed) {
-                const arrayMatch = raw.match(/"amounts"\s*:\s*\[([\s\S]*?)\]/);
-                if (arrayMatch) {
-                    const nums = [...arrayMatch[1].matchAll(/\d+/g)].map(m => parseInt(m[0])).filter(n => n > 0);
-                    parsed = { amounts: nums };
-                } else {
-                    parsed = { amounts: [] };
-                }
-            }
+        // Stratégie 1 : extraire directement les nombres entre crochets après "amounts"
+        const arrayMatch = raw.match(/"amounts"\s*:\s*\[([^\]]*)\]/);
+        if (arrayMatch) {
+            amounts = [...arrayMatch[1].matchAll(/\d+/g)].map(m => parseInt(m[0])).filter(n => n > 0);
         }
-        const amounts = Array.isArray(parsed?.amounts) ? parsed.amounts.map(Number).filter(n => !isNaN(n) && n > 0) : [];
+
+        // Stratégie 2 : JSON.parse sur le texte nettoyé
+        if (amounts.length === 0) {
+            try {
+                const clean = raw.replace(/```json\n?|```\n?/g, '').replace(/,(\s*[\]}])/g, '$1').trim();
+                const obj = JSON.parse(clean);
+                if (Array.isArray(obj?.amounts)) amounts = obj.amounts.map(Number).filter(n => n > 0);
+            } catch {}
+        }
+
+        // Stratégie 3 : cherche un objet JSON dans le texte et le parse
+        if (amounts.length === 0) {
+            try {
+                const m = raw.match(/\{[^{}]*"amounts"[^{}]*\}/s);
+                if (m) {
+                    const obj = JSON.parse(m[0].replace(/,(\s*[\]}])/g, '$1'));
+                    if (Array.isArray(obj?.amounts)) amounts = obj.amounts.map(Number).filter(n => n > 0);
+                }
+            } catch {}
+        }
+
         const total_kamas = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) : null;
         console.log('[Prismes] Montants détectés:', amounts, '→ total:', total_kamas);
         return { total_kamas };
