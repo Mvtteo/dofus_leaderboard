@@ -306,8 +306,16 @@ Si tu ne peux pas déterminer le montant total, réponds : {"total_kamas": null}
         ]);
 
         const text = getResponseText(result);
-        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
-        return JSON.parse(clean);
+        const clean = text.replace(/```json\n?|```\n?/g, '').replace(/^#[^\n]*\n?/gm, '').trim();
+        try {
+            return JSON.parse(clean);
+        } catch {
+            const match = clean.match(/\{[\s\S]*?\}/);
+            if (match) return JSON.parse(match[0]);
+            const numMatch = clean.match(/\d[\d\s.,]*/);
+            if (numMatch) return { total_kamas: parseInt(numMatch[0].replace(/[\s.,]/g, '')) };
+            return { total_kamas: null };
+        }
     } catch (error) {
         console.error('Erreur Gemini Prismes:', error.message);
         return null;
