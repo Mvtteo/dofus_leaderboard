@@ -250,6 +250,10 @@
         .match-table thead th { text-align:left; padding:0.5rem 0.6rem; font-size:0.65rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; border-bottom:1px solid var(--border-subtle); }
         .match-table tbody td { padding:0.6rem 0.6rem; font-size:0.8rem; border-bottom:1px solid rgba(255,255,255,0.02); vertical-align:middle; }
         .match-table tbody tr:hover { background:var(--bg-card-hover); }
+        .badge-prisme { padding:0.2rem 0.55rem; border-radius:999px; font-size:0.7rem; font-weight:600; display:inline-block; }
+        .badge-prisme.pending { background:rgba(233,196,106,0.12); color:var(--gold); border:1px solid rgba(233,196,106,0.25); }
+        .badge-prisme.validated { background:rgba(42,157,143,0.12); color:var(--accent-bright); border:1px solid var(--border-medium); }
+        .badge-prisme.rejected { background:rgba(231,111,81,0.08); color:var(--red); border:1px solid rgba(231,111,81,0.2); }
         .match-win { color:var(--accent-bright); font-weight:700; }
         .match-lose { color:var(--red); font-weight:700; }
         .match-cancelled { opacity:0.4; text-decoration:line-through; }
@@ -352,6 +356,7 @@
             <button class="tab-btn active" onclick="switchTab(event, 'saison')">Saison &amp; Pépites</button>
             <button class="tab-btn" onclick="switchTab(event, 'bareme')">Barème &amp; Pools</button>
             <button class="tab-btn" onclick="switchTab(event, 'joueurs')">Joueurs</button>
+            <button class="tab-btn" onclick="switchTab(event, 'prismes')">Prismes</button>
         </div>
 
         <!-- ===== TAB 1 : SAISON & PEPITES ===== -->
@@ -667,6 +672,32 @@
                 </div>
             </div>
         </div>
+
+        <!-- ===== TAB 4 : PRISMES ===== -->
+        <div class="tab-panel" id="tab-prismes">
+            <div class="dash-grid">
+                <div class="card card-full">
+                    <div class="card-title">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 2 7 12 22 22 7 12 2"/>
+                        </svg>
+                        Prismes — Demandes
+                        <span id="prismesCount" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);font-weight:500;"></span>
+                    </div>
+                    <div style="display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
+                        <select id="prismesStatusFilter" class="form-select" style="width:auto;min-width:140px;" onchange="loadPrismes()">
+                            <option value="pending">En attente</option>
+                            <option value="validated">Validées</option>
+                            <option value="rejected">Rejetées</option>
+                            <option value="">Toutes</option>
+                        </select>
+                        <input id="prismesPlayerFilter" class="form-input" style="width:auto;flex:1;min-width:150px;max-width:260px;" placeholder="Filtrer par joueur..." oninput="loadPrismes()">
+                        <button class="btn" onclick="validateSelectedPrismes()" style="background:rgba(42,157,143,0.12);color:var(--accent-bright);border:1px solid var(--border-medium);">Valider la sélection</button>
+                    </div>
+                    <div id="prismesTableContainer"><div class="empty-state">Sélectionnez l'onglet pour charger.</div></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- CONFIRM DIALOG -->
@@ -690,6 +721,7 @@
             document.getElementById('tab-' + name).classList.add('active');
             e.currentTarget.classList.add('active');
             if (name === 'joueurs') { loadMultiAccounts(); loadRecentMatches(1); }
+            if (name === 'prismes') { loadPrismes(); }
         }
 
         // ===== TOAST =====
@@ -1144,6 +1176,87 @@
                     } else showToast(data.error || 'Erreur.', 'error');
                 } catch { showToast('Erreur reseau.', 'error'); }
             });
+        }
+
+        // ===== PRISMES =====
+        async function loadPrismes() {
+            const status = document.getElementById('prismesStatusFilter').value;
+            const player = document.getElementById('prismesPlayerFilter').value;
+            const container = document.getElementById('prismesTableContainer');
+            const countSpan = document.getElementById('prismesCount');
+            container.innerHTML = '<div class="empty-state">Chargement...</div>';
+            const params = new URLSearchParams();
+            if (status) params.set('status', status);
+            if (player.trim()) params.set('player', player.trim());
+            try {
+                const res = await fetch('/admin/api/prismes?' + params);
+                const rows = await res.json();
+                countSpan.textContent = rows.length + ' demande(s)';
+                if (rows.length === 0) { container.innerHTML = '<div class="empty-state">Aucune demande.</div>'; return; }
+                let html = '<div style="overflow-x:auto;"><table class="match-table"><thead><tr>';
+                html += '<th><input type="checkbox" id="selectAllPrismes" onchange="toggleAllPrismes(this)"></th>';
+                html += '<th>Joueur</th><th>Kamas</th><th>Image</th><th>Date</th><th>Statut</th><th>Actions</th>';
+                html += '</tr></thead><tbody>';
+                rows.forEach(r => {
+                    const isPending = r.status === 'pending';
+                    const date = new Date(r.created_at).toLocaleDateString('fr-FR');
+                    const badge = `<span class="badge-prisme ${r.status}">${r.status === 'pending' ? 'En attente' : r.status === 'validated' ? 'Validée' : 'Rejetée'}</span>`;
+                    const kamasStr = r.total_kamas != null ? parseInt(r.total_kamas).toLocaleString('fr-FR') + ' k' : '<span style="color:var(--text-muted)">?</span>';
+                    const imgLink = r.image_url ? `<a href="${escapeHTML(r.image_url)}" target="_blank" style="color:var(--accent-bright);text-decoration:none;font-size:0.8rem;">Voir</a>` : '<span style="color:var(--text-muted)">—</span>';
+                    const valBy = r.validated_by ? `<br><span style="font-size:0.7rem;color:var(--text-muted);">par ${escapeHTML(r.validated_by)}</span>` : '';
+                    html += `<tr>
+                        <td>${isPending ? `<input type="checkbox" class="prisme-check" value="${r.id}">` : ''}</td>
+                        <td>${escapeHTML(r.player_name || '—')}</td>
+                        <td>${kamasStr}</td>
+                        <td>${imgLink}</td>
+                        <td style="color:var(--text-muted);font-size:0.8rem;">${date}</td>
+                        <td>${badge}${valBy}</td>
+                        <td>${isPending ? `<button class="btn btn-sm" onclick="validatePrisme(${r.id})" style="background:rgba(42,157,143,0.12);color:var(--accent-bright);border:1px solid var(--border-medium);margin-right:0.25rem;">✓</button><button class="btn btn-sm btn-danger" onclick="rejectPrisme(${r.id})">✗</button>` : ''}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            } catch { container.innerHTML = '<div class="empty-state">Erreur chargement.</div>'; }
+        }
+
+        async function validatePrisme(id) {
+            try {
+                const res = await fetch(`/admin/api/prismes/${id}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await res.json();
+                if (data.ok) { showToast('Demande validée.'); loadPrismes(); }
+                else showToast(data.error || 'Erreur.', 'error');
+            } catch { showToast('Erreur réseau.', 'error'); }
+        }
+
+        async function rejectPrisme(id) {
+            openConfirm('Rejeter cette demande ?', async () => {
+                try {
+                    const res = await fetch(`/admin/api/prismes/${id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                    const data = await res.json();
+                    if (data.ok) { showToast('Demande rejetée.'); loadPrismes(); }
+                    else showToast(data.error || 'Erreur.', 'error');
+                } catch { showToast('Erreur réseau.', 'error'); }
+            });
+        }
+
+        async function validateSelectedPrismes() {
+            const checked = [...document.querySelectorAll('.prisme-check:checked')].map(c => parseInt(c.value));
+            if (checked.length === 0) return showToast('Aucune demande sélectionnée.', 'error');
+            openConfirm(`Valider ${checked.length} demande(s) ?`, async () => {
+                try {
+                    const res = await fetch('/admin/api/prismes/bulk-validate', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: checked })
+                    });
+                    const data = await res.json();
+                    if (data.ok) { showToast(`${data.count} demande(s) validée(s).`); loadPrismes(); }
+                    else showToast(data.error || 'Erreur.', 'error');
+                } catch { showToast('Erreur réseau.', 'error'); }
+            });
+        }
+
+        function toggleAllPrismes(cb) {
+            document.querySelectorAll('.prisme-check').forEach(c => c.checked = cb.checked);
         }
     </script>
     <% } %>

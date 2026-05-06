@@ -262,7 +262,36 @@ async function parseNuggetsWithAI(imageUrl) {
 }
 
 // ============================================
-// 3. SERVEUR WEB (SITE)
+// 3. IA : LECTURE DES PRISMES
+// ============================================
+async function parsePrismeKamasWithAI(imageUrl) {
+    try {
+        const response = await fetch(imageUrl);
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+
+        const result = await queueGemini([
+            { inlineData: { data: base64, mimeType: 'image/png' } },
+            { text: `Analyse cette image de transactions Dofus (achats de ressources/objets en kamas).
+Extrais le montant TOTAL en kamas dépensé.
+Si plusieurs lignes avec des prix sont visibles, additionne-les pour obtenir le total.
+Si un total est affiché directement, utilise-le.
+Les montants peuvent être formatés avec des espaces ou des virgules (ex: 19 498, 1 990).
+Réponds UNIQUEMENT avec un JSON valide : {"total_kamas": <nombre entier sans espace ni virgule>}
+Si tu ne peux pas déterminer le montant total, réponds : {"total_kamas": null}` }
+        ]);
+
+        const text = getResponseText(result);
+        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
+        return JSON.parse(clean);
+    } catch (error) {
+        console.error('Erreur Gemini Prismes:', error.message);
+        return null;
+    }
+}
+
+// ============================================
+// 4. SERVEUR WEB (SITE)
 // ============================================
 const app = express();
 app.set('trust proxy', 1);
@@ -1024,6 +1053,62 @@ app.post('/admin/api/default-winrate-pool', adminAuth, async (req, res) => {
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
+// --- ADMIN PRISMES ---
+app.get('/admin/api/prismes', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { status, player } = req.query;
+        const conditions = [];
+        const values = [];
+        if (status) { conditions.push(`status = $${values.length + 1}`); values.push(status); }
+        if (player) { conditions.push(`LOWER(player_name) LIKE $${values.length + 1}`); values.push(`%${player.toLowerCase()}%`); }
+        const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+        const result = await pool.query(
+            `SELECT * FROM prism_requests ${where} ORDER BY created_at DESC`,
+            values
+        );
+        res.json(result.rows);
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+app.post('/admin/api/prismes/bulk-validate', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Aucun ID fourni.' });
+        const safeIds = ids.map(Number).filter(n => Number.isInteger(n) && n > 0);
+        await pool.query(
+            `UPDATE prism_requests SET status = 'validated', validated_at = NOW(), validated_by = 'Admin' WHERE id = ANY($1) AND status = 'pending'`,
+            [safeIds]
+        );
+        res.json({ ok: true, count: safeIds.length });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+app.post('/admin/api/prismes/:id/validate', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { id } = req.params;
+        await pool.query(
+            `UPDATE prism_requests SET status = 'validated', validated_at = NOW(), validated_by = 'Admin' WHERE id = $1 AND status = 'pending'`,
+            [id]
+        );
+        res.json({ ok: true });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+app.post('/admin/api/prismes/:id/reject', adminAuth, async (req, res) => {
+    if (!req.adminAuth) return res.status(401).json({ error: 'Non autorisé.' });
+    try {
+        const { id } = req.params;
+        await pool.query(
+            `UPDATE prism_requests SET status = 'rejected', validated_at = NOW(), validated_by = 'Admin' WHERE id = $1 AND status = 'pending'`,
+            [id]
+        );
+        res.json({ ok: true });
+    } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
 app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${config.WEB_PORT}`); });
 
 // ============================================
@@ -1041,7 +1126,19 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS has_won BOOLEAN DEFAULT true`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL`);
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS cancelled BOOLEAN DEFAULT false`);
-        
+        await pool.query(`CREATE TABLE IF NOT EXISTS prism_requests (
+            id SERIAL PRIMARY KEY,
+            player_name VARCHAR(255),
+            discord_user_id TEXT,
+            discord_message_id TEXT,
+            image_url TEXT,
+            total_kamas INTEGER,
+            status VARCHAR(20) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT NOW(),
+            validated_at TIMESTAMP,
+            validated_by VARCHAR(255)
+        )`);
+
         const migCheck = await pool.query("SELECT value FROM settings WHERE key = 'nuggets_migrated'");
         if (migCheck.rows.length === 0) {
             console.log('[Migration] Report bank_nuggets vers season_stats...');
@@ -1186,6 +1283,25 @@ client.on('messageCreate', async message => {
                 await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${displayName}.`);
             }
         } catch (e) { console.error(e); await msgRef.edit('Erreur technique.'); }
+        return;
+    }
+
+    // --- LOGIQUE PRISMES ---
+    if (config.PRISMES_CHANNEL_ID && message.channel.id === config.PRISMES_CHANNEL_ID) {
+        const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
+        if (attachments.size === 0) return;
+        try {
+            const playerName = message.member ? message.member.displayName : message.author.username;
+            for (const [, attachment] of attachments) {
+                const parsed = await parsePrismeKamasWithAI(attachment.url);
+                const kamas = parsed?.total_kamas ?? null;
+                await pool.query(
+                    `INSERT INTO prism_requests (player_name, discord_user_id, discord_message_id, image_url, total_kamas) VALUES ($1, $2, $3, $4, $5)`,
+                    [playerName, message.author.id, message.id, attachment.url, kamas]
+                );
+            }
+            await message.react('✅');
+        } catch (e) { console.error('[Prismes] Erreur:', e); }
         return;
     }
 
