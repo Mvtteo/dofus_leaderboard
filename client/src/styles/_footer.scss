@@ -1,0 +1,20 @@
+.footer {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.footer-dot {
+  width: 3px;
+  height: 3px;
+  background: var(--color-teal);
+  border-radius: 50%;
+}

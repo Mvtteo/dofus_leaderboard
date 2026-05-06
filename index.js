@@ -1,10 +1,3 @@
-// --- VERTEX AI CREDENTIALS ---
-if (process.env.GCP_CREDENTIALS) {
-    const fs = require('fs');
-    fs.writeFileSync('/tmp/sa.json', Buffer.from(process.env.GCP_CREDENTIALS, 'base64'));
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = '/tmp/sa.json';
-}
-
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -17,54 +10,85 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (error) => {
     console.error('[CRASH] Uncaught Exception:', error);
 });
-const { 
-    Client, 
-    GatewayIntentBits, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
+const {
+    Client,
+    GatewayIntentBits,
+    ActionRowBuilder,
+    ButtonBuilder,
     ButtonStyle,
     EmbedBuilder,
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    StringSelectMenuBuilder, 
+    StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
-    Events 
+    Events
 } = require('discord.js');
-const { GoogleGenAI } = require('@google/genai');
+const { OpenAI } = require('openai');
 
 // --- IMPORTS ---
 const { pool } = require('./db');
 const config = require('./config');
 
-// --- GOOGLE GEN AI (Vertex AI) ---
-const GEMINI_TIMEOUT_MS = 60000;
-const GEMINI_MAX_RETRIES = 3;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+// --- GROQ AI ---
+const AI_TIMEOUT_MS = 60000;
+const AI_MAX_RETRIES = 3;
+const AI_MODEL = process.env.AI_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
 
-const ai = new GoogleGenAI({
-    vertexai: true,
-    project: process.env.GCP_PROJECT_ID,
-    location: 'us-central1'
-});
+let ai = null;
+if (process.env.GROQ_API_KEY) {
+    ai = new OpenAI({
+        baseURL: 'https://api.groq.com/openai/v1',
+        apiKey: process.env.GROQ_API_KEY,
+    });
+} else {
+    console.warn('[AI] GROQ_API_KEY manquante — analyse d\'images désactivée');
+}
 
-async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
+// Convertit le format parts Gemini → content OpenAI
+function partsToContent(parts) {
+    return parts.map(part => {
+        if (part.inlineData) {
+            return {
+                type: 'image_url',
+                image_url: { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` }
+            };
+        }
+        return { type: 'text', text: part.text };
+    });
+}
+
+async function callGemini(parts, retries = AI_MAX_RETRIES) {
+    if (!ai) throw new Error('AI non configurée (GROQ_API_KEY manquante)');
+    const content = partsToContent(parts);
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             const result = await Promise.race([
-                ai.models.generateContent({
-                    model: GEMINI_MODEL,
-                    contents: [{ role: 'user', parts }]
-                }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini timeout (60s)')), GEMINI_TIMEOUT_MS))
+                (async () => {
+                    const stream = await ai.chat.completions.create({
+                        model: AI_MODEL,
+                        messages: [{ role: 'user', content }],
+                        temperature: 1,
+                        max_completion_tokens: 1024,
+                        top_p: 1,
+                        stream: true,
+                    });
+                    let text = '';
+                    for await (const chunk of stream) {
+                        const delta = chunk.choices?.[0]?.delta?.content;
+                        if (delta) text += delta;
+                    }
+                    return { text };
+                })(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('AI timeout (60s)')), AI_TIMEOUT_MS))
             ]);
             return result;
         } catch (err) {
             const isRetryable = err.status === 503 || err.message?.includes('timeout') || err.message?.includes('fetch failed') || err.message?.includes('ECONNRESET') || err.message?.includes('ETIMEDOUT') || err.type === 'system';
-            console.log(`[Gemini] Tentative ${attempt}/${retries} echouee: ${err.message || err.status}`);
+            console.log(`[AI] Tentative ${attempt}/${retries} echouee: ${err.message || err.status}`);
             if (attempt < retries && isRetryable) {
                 const delay = attempt * 10000;
-                console.log(`[Gemini] Retry dans ${delay/1000}s...`);
+                console.log(`[AI] Retry dans ${delay/1000}s...`);
                 await new Promise(r => setTimeout(r, delay));
             } else {
                 throw err;
@@ -73,7 +97,7 @@ async function callGemini(parts, retries = GEMINI_MAX_RETRIES) {
     }
 }
 
-// --- GEMINI QUEUE ---
+// --- AI QUEUE ---
 const geminiQueue = [];
 let geminiProcessing = false;
 
@@ -97,7 +121,7 @@ async function processGeminiQueue() {
                 if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
             } catch (err) {
                 if ((err.status === 429 || err.message?.includes('429')) && item.retries < 3) {
-                    console.log(`[Queue] 429 reçu, pause 15s puis retry (${item.retries + 1}/3)...`);
+                    console.log(`[AI] 429 reçu, pause 15s puis retry (${item.retries + 1}/3)...`);
                     await new Promise(r => setTimeout(r, 15000));
                     geminiQueue.unshift({ ...item, retries: item.retries + 1 });
                 } else {
@@ -153,7 +177,7 @@ function clearSessionTimeout(userId) {
 
 // Helper : extrait le texte de la réponse
 function getResponseText(result) {
-    return result?.text || result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return result?.text || '';
 }
 
 // ============================================
@@ -189,8 +213,8 @@ async function parseScreenWithAI(imageUrl) {
              - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
              - Extraire le NOM COMPLET tel qu'affiché
              - Les pseudos peuvent être : un seul mot (ex: Bouff, Ketzal) OU plusieurs mots reliés par des tirets (ex: Raconte-pas-ta-vie, Mangeur-de-bouf, Jprotec-R)
-             - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse") — les exclure
-             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
+             - Les Percepteurs ont TOUJOURS "Do'" dans leur nom (ex: "Despera Do'Trakisse") — les exclure
+             - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Prisme, Gardien, Protecteur
              - EXCLURE les monstres, invocations, et PNJ
              - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
              - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
@@ -215,7 +239,7 @@ async function parseScreenWithAI(imageUrl) {
             console.log('[Gemini] Repair result:', JSON.stringify(parsed));
         }
 
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
+        const excludePattern = /prisme|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));
@@ -299,7 +323,8 @@ app.set('view engine', 'ejs');
 app.set('views', __dirname);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'dist'), { index: false }));
+app.use(express.static(__dirname, { index: false }));
 app.use('/assets', express.static(path.join(__dirname, 'web/assets')));
 
 // --- ADMIN AUTH ---
@@ -505,15 +530,30 @@ async function getLeaderboardPlayers(seasonId) {
     });
 }
 
-app.get('/', async (req, res) => {
+app.get('/api/seasons', (req, res) => {
     try {
         const { seasons, currentSeason } = getSeasons();
-        const seasonId = await ensureCurrentSeason();
+        res.json({ seasons, currentSeason });
+    } catch (e) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
 
-        const players = await getLeaderboardPlayers(seasonId);
-        const countRes = await pool.query('SELECT COUNT(*) as c FROM matches WHERE season_id = $1', [seasonId]);
-        res.render('index', { players, seasons, currentSeason, totalCombats: parseInt(countRes.rows[0].c), pools: liveConfig.pools, defaultWinratePool: liveConfig.default_winrate_pool });
-    } catch (error) { console.error(error); res.status(500).send('Erreur serveur'); }
+app.get('/api/config', (req, res) => {
+    res.json({ pools: liveConfig.pools, defaultWinratePool: liveConfig.default_winrate_pool });
+});
+
+app.get('/api/season-info/:seasonId', async (req, res) => {
+    try {
+        const seasonId = req.params.seasonId;
+        const countRes = await pool.query(
+            'SELECT COUNT(*) as c FROM matches WHERE season_id = $1 AND NOT COALESCE(cancelled, false)',
+            [seasonId]
+        );
+        res.json({ totalCombats: parseInt(countRes.rows[0].c) });
+    } catch (e) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.get('/dev', async (req, res) => {
@@ -1354,8 +1394,8 @@ client.on('messageCreate', async message => {
                  - MAXIMUM 5 joueurs par equipe (un combat AvA est 5v5 max)
                  - Extraire le NOM COMPLET tel qu'affiché
                  - Les pseudos peuvent être : un seul mot (ex: Bouff, Ketzal) OU plusieurs mots reliés par des tirets (ex: Raconte-pas-ta-vie, Mangeur-de-bouf, Jprotec-R)
-                 - Les Percepteurs ont TOUJOURS un nom en deux mots avec Do' au milieu (ex: "Despera Do'Trakisse") — les exclure
-                 - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Percepteur, Prisme, Gardien, Protecteur
+                 - Les Percepteurs ont TOUJOURS "Do'" dans leur nom (ex: "Despera Do'Trakisse") — les exclure
+                 - EXCLURE absolument tout nom contenant "Do'", "Do ", "Dofus", ainsi que : Prisme, Gardien, Protecteur
                  - EXCLURE les monstres, invocations, et PNJ
                  - IGNORER : niveaux, XP, kamas, butin, classes, objets, sorts
                  - Ne prendre QUE les noms qui apparaissent dans les colonnes GAGNANTS/PERDANTS
@@ -1394,7 +1434,7 @@ client.on('messageCreate', async message => {
         const preFilterWinCount = parsed.winners ? parsed.winners.length : 0;
         const preFilterLoseCount = parsed.losers ? parsed.losers.length : 0;
 
-        const excludePattern = /prisme|percepteur|gardien|protecteur|dofus|\bdo['\s]/i;
+        const excludePattern = /prisme|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const isNPC = (n) => excludePattern.test(n) || hasAccents(n) || n.includes(' ');
         if (parsed.winners) parsed.winners = parsed.winners.filter(n => !isNPC(n));

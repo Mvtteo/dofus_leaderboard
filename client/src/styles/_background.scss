@@ -1,0 +1,78 @@
+.bg-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bg-gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(42, 157, 143, 0.08) 0%, transparent 50%),
+    linear-gradient(180deg, var(--color-darker) 0%, var(--color-dark) 40%, var(--color-darker) 100%);
+}
+
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(42, 157, 143, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 157, 143, 0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 70%);
+}
+
+.streak {
+  position: absolute;
+  width: 140%;
+  height: 1px;
+  left: -20%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%, rgba(42, 157, 143, 0) 15%,
+    rgba(42, 157, 143, 0.15) 35%, rgba(61, 189, 173, 0.25) 50%,
+    rgba(42, 157, 143, 0.15) 65%, rgba(42, 157, 143, 0) 85%,
+    transparent 100%
+  );
+  box-shadow: 0 0 30px 8px rgba(42, 157, 143, 0.05), 0 0 80px 20px rgba(42, 157, 143, 0.02);
+  pointer-events: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -3px 0;
+    background: linear-gradient(
+      90deg, transparent 0%, transparent 30%,
+      rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.03) 55%, transparent 70%, transparent 100%
+    );
+    filter: blur(3px);
+  }
+}
+
+.streak2 {
+  position: absolute;
+  width: 120%;
+  height: 1px;
+  left: -10%;
+  background: linear-gradient(
+    90deg, transparent 0%, rgba(42, 157, 143, 0) 20%,
+    rgba(42, 157, 143, 0.06) 40%, rgba(61, 189, 173, 0.1) 50%,
+    rgba(42, 157, 143, 0.06) 60%, rgba(42, 157, 143, 0) 80%,
+    transparent 100%
+  );
+  box-shadow: 0 0 20px 5px rgba(42, 157, 143, 0.02);
+  pointer-events: none;
+}
+
+.magic-mist {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 300px;
+  background: linear-gradient(to top, rgba(42, 157, 143, 0.04) 0%, transparent 100%);
+  pointer-events: none;
+}

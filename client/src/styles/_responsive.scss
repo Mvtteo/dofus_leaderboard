@@ -1,0 +1,46 @@
+@media (max-width: 900px) {
+  .header-inner {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .header-stats {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .podium-cards { gap: 10px; }
+}
+
+@media (max-width: 600px) {
+  .header { padding: 12px 16px; }
+  .brand-title { font-size: 1.1rem; }
+  .brand-sub { display: none; }
+  .main-content { padding: 24px 16px; }
+
+  .podium-cards {
+    grid-template-columns: 1fr;
+    max-width: 300px;
+  }
+
+  .col-winrate { display: none; }
+  .col-perco, .cell-perco { display: none; }
+
+  .leaderboard-table th,
+  .leaderboard-table td { padding: 10px 12px; }
+
+  .player-avatar { width: 32px; height: 32px; font-size: 0.75rem; }
+  .player-name { font-size: 0.8rem; }
+
+  .stats-grid { grid-template-columns: 1fr; }
+  .pool-stats { grid-template-columns: repeat(2, 1fr); }
+
+  .fc-teams { grid-template-columns: 1fr; gap: 6px; }
+  .fc-sep { display: none; }
+  .fc-team.right { text-align: left; }
+
+  .search-container.expanded { width: 180px; }
+  .search-container.expanded input { width: 120px; }
+}

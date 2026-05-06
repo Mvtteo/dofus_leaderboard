@@ -1,0 +1,45 @@
+.main-content {
+  position: relative;
+  z-index: 10;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.tabs-bar {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 28px;
+  padding: 4px;
+  border-radius: 50px;
+  background: rgba(42, 157, 143, 0.04);
+  border: 1px solid rgba(42, 157, 143, 0.08);
+}
+
+.tab-btn {
+  padding: 8px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-radius: 50px;
+  transition: all 0.25s;
+
+  &:hover { color: rgba(255, 255, 255, 0.4); }
+
+  &.on {
+    color: #fff;
+    background: rgba(42, 157, 143, 0.12);
+    border: 1px solid rgba(42, 157, 143, 0.2);
+    box-shadow: 0 0 16px rgba(42, 157, 143, 0.08);
+  }
+}
+
+.panel {
+  display: none;
+
+  &.on { display: block; }
+}
