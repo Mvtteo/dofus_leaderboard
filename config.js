@@ -6,7 +6,8 @@ module.exports = {
     PROFILE_CHANNEL_ID: process.env.PROFILE_CHANNEL_ID || process.env.CHANNEL_ID,
     OWNER_ID: process.env.OWNER_ID,
     
-    NUGGETS_CHANNEL_ID: process.env.NUGGETS_CHANNEL_ID, 
+    NUGGETS_CHANNEL_ID: process.env.NUGGETS_CHANNEL_ID,
+    PRISMES_CHANNEL_ID: process.env.PRISMES_CHANNEL_ID,
 
     // Pools dynamiques (max 5) - valeurs par defaut si rien en DB
     DEFAULT_POOLS: [
