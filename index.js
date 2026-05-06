@@ -299,12 +299,11 @@ async function parsePrismeKamasWithAI(imageUrl) {
             messages: [{ role: 'user', content: [
                 { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
                 { type: 'text', text: `Analyse cette image de transactions Dofus (achats de ressources/objets en kamas).
-Extrais le montant TOTAL en kamas dépensé.
-Si plusieurs lignes avec des prix sont visibles, additionne-les pour obtenir le total.
-Si un total est affiché directement, utilise-le.
-Les montants peuvent être formatés avec des espaces ou des virgules (ex: 19 498, 1 990).
-Réponds UNIQUEMENT avec un JSON valide : {"total_kamas": <nombre entier sans espace ni virgule>}
-Si tu ne peux pas déterminer le montant total, réponds : {"total_kamas": null}` }
+Liste TOUS les montants en kamas que tu vois dans l'image, un par un.
+Les montants sont toujours suivis du mot "kamas" ou "K" et peuvent contenir des espaces (ex: 19 498 kamas, 1 990 kamas).
+Ne compte PAS les heures/timestamps (ex: 08:54 n'est PAS un montant).
+Réponds UNIQUEMENT avec un JSON valide : {"amounts": [489, 490, 19498, 1990, 2418]}
+Si tu ne vois aucun montant, réponds : {"amounts": []}` }
             ]}],
             temperature: 0,
             max_completion_tokens: 256,
@@ -312,19 +311,19 @@ Si tu ne peux pas déterminer le montant total, réponds : {"total_kamas": null}
         });
         let raw = '';
         for await (const chunk of stream) { const d = chunk.choices?.[0]?.delta?.content; if (d) raw += d; }
-        const result = { text: raw };
 
-        const text = getResponseText(result);
-        const clean = text.replace(/```json\n?|```\n?/g, '').replace(/^#[^\n]*\n?/gm, '').trim();
+        const clean = raw.replace(/```json\n?|```\n?/g, '').replace(/^#[^\n]*\n?/gm, '').trim();
+        let parsed;
         try {
-            return JSON.parse(clean);
+            parsed = JSON.parse(clean);
         } catch {
             const match = clean.match(/\{[\s\S]*?\}/);
-            if (match) return JSON.parse(match[0]);
-            const numMatch = clean.match(/\d[\d\s.,]*/);
-            if (numMatch) return { total_kamas: parseInt(numMatch[0].replace(/[\s.,]/g, '')) };
-            return { total_kamas: null };
+            parsed = match ? JSON.parse(match[0]) : { amounts: [] };
         }
+        const amounts = Array.isArray(parsed.amounts) ? parsed.amounts.map(Number).filter(n => !isNaN(n) && n > 0) : [];
+        const total_kamas = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) : null;
+        console.log('[Prismes] Montants détectés:', amounts, '→ total:', total_kamas);
+        return { total_kamas };
     } catch (error) {
         console.error('Erreur Gemini Prismes:', error.message);
         return null;
