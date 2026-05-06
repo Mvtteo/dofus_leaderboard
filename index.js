@@ -296,27 +296,18 @@ async function parsePrismeKamasWithAI(imageUrl) {
 
         const stream = await ai.chat.completions.create({
             model: AI_MODEL,
-            messages: [{ role: 'user', content: [
-                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
-                { type: 'text', text: `Tu regardes un historique d'achats Dofus. Chaque ligne a ce format :
-[heure] [quantité] x [nom objet] (prix_unitaire kamas)
-
-Exemple : "[08:54] 3 x [Cuir d'Eskoglythe] (489 kamas)" signifie 3 achetés à 489 kamas chacun = 1467 kamas pour cette ligne.
-
-Pour CHAQUE ligne visible :
-1. Lis la quantité (le nombre avant le "x")
-2. Lis le prix unitaire entre parenthèses (ignore les espaces, ex: "19 498" = 19498)
-3. Calcule quantité × prix unitaire
-
-IGNORE les heures/timestamps (ex: 08:54).
-
-Retourne la liste des totaux par ligne dans un JSON :
-{"amounts": [1467, 490, 58494, 1990, 2418]}
-
-Si tu ne vois aucune ligne d'achat, réponds : {"amounts": []}` }
-            ]}],
+            messages: [
+                { role: 'system', content: 'Réponds UNIQUEMENT avec du JSON brut valide. Zéro texte, zéro markdown, zéro explication.' },
+                { role: 'user', content: [
+                    { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+                    { type: 'text', text: `Historique d'achats Dofus. Format de chaque ligne : [heure] [qté] x [objet] (prix kamas)
+Pour chaque ligne : calcule qté × prix (ignore les espaces dans les nombres, ex "19 498" = 19498).
+Ignore les timestamps/heures.
+Réponds UNIQUEMENT : {"amounts":[489,490,19498,1990,2418]}` }
+                ]}
+            ],
             temperature: 0,
-            max_completion_tokens: 256,
+            max_completion_tokens: 128,
             stream: true,
         });
         let raw = '';
@@ -328,10 +319,19 @@ Si tu ne vois aucune ligne d'achat, réponds : {"amounts": []}` }
         try {
             parsed = JSON.parse(clean);
         } catch {
-            const match = clean.match(/\{[\s\S]*?\}/);
-            parsed = match ? JSON.parse(match[0]) : { amounts: [] };
+            const jsonMatch = clean.match(/\{[\s\S]*?\}/);
+            if (jsonMatch) {
+                try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = null; }
+            }
+            if (!parsed) {
+                // fallback : extrait les totaux depuis le markdown du modèle (ex: "= **489**" ou "Total : 489")
+                const totals = [...raw.matchAll(/=\s*\*{0,2}([\d\s]+)\*{0,2}/g)]
+                    .map(m => parseInt(m[1].replace(/\s/g, '')))
+                    .filter(n => !isNaN(n) && n > 0);
+                parsed = { amounts: totals };
+            }
         }
-        const amounts = Array.isArray(parsed.amounts) ? parsed.amounts.map(Number).filter(n => !isNaN(n) && n > 0) : [];
+        const amounts = Array.isArray(parsed?.amounts) ? parsed.amounts.map(Number).filter(n => !isNaN(n) && n > 0) : [];
         const total_kamas = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) : null;
         console.log('[Prismes] Montants détectés:', amounts, '→ total:', total_kamas);
         return { total_kamas };
