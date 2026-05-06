@@ -254,6 +254,18 @@
         .badge-prisme.pending { background:rgba(233,196,106,0.12); color:var(--gold); border:1px solid rgba(233,196,106,0.25); }
         .badge-prisme.validated { background:rgba(42,157,143,0.12); color:var(--accent-bright); border:1px solid var(--border-medium); }
         .badge-prisme.rejected { background:rgba(231,111,81,0.08); color:var(--red); border:1px solid rgba(231,111,81,0.2); }
+        .prisme-check {
+            appearance:none; -webkit-appearance:none;
+            width:15px; height:15px; border:1.5px solid var(--border-medium);
+            border-radius:4px; background:var(--bg-input); cursor:pointer;
+            position:relative; transition:all 0.15s ease; vertical-align:middle; flex-shrink:0; display:inline-block;
+        }
+        .prisme-check:hover { border-color:var(--accent); }
+        .prisme-check:checked { background:var(--accent); border-color:var(--accent); }
+        .prisme-check:checked::after {
+            content:''; position:absolute; left:4px; top:1px; width:4px; height:8px;
+            border:2px solid #fff; border-top:none; border-left:none; transform:rotate(45deg);
+        }
         .match-win { color:var(--accent-bright); font-weight:700; }
         .match-lose { color:var(--red); font-weight:700; }
         .match-cancelled { opacity:0.4; text-decoration:line-through; }
@@ -1194,7 +1206,7 @@
                 countSpan.textContent = rows.length + ' demande(s)';
                 if (rows.length === 0) { container.innerHTML = '<div class="empty-state">Aucune demande.</div>'; return; }
                 let html = '<div style="overflow-x:auto;"><table class="match-table"><thead><tr>';
-                html += '<th><input type="checkbox" id="selectAllPrismes" onchange="toggleAllPrismes(this)"></th>';
+                html += '<th><input type="checkbox" class="prisme-check" id="selectAllPrismes" onchange="toggleAllPrismes(this)"></th>';
                 html += '<th>Joueur</th><th>Kamas</th><th>Image</th><th>Date</th><th>Statut</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 rows.forEach(r => {
