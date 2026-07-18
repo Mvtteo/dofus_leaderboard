@@ -69,7 +69,8 @@ async function callGemini(parts, retries = AI_MAX_RETRIES) {
                         model: AI_MODEL,
                         messages: [{ role: 'user', content }],
                         temperature: 1,
-                        max_completion_tokens: 1024,
+                        max_completion_tokens: 2048,
+                        reasoning_format: 'hidden',
                         top_p: 1,
                         stream: true,
                     });
@@ -180,6 +181,39 @@ function getResponseText(result) {
     return result?.text || '';
 }
 
+// Helper : isole le JSON final d'une réponse IA, en ignorant tout raisonnement
+// <think>...</think> résiduel (au cas où reasoning_format: 'hidden' ne le filtrerait pas).
+function extractWinnersLosersJSON(rawText) {
+    let clean = rawText.replace(/```json\n?|```\n?/g, '').trim();
+
+    const thinkEnd = clean.lastIndexOf('</think>');
+    if (thinkEnd !== -1) {
+        clean = clean.slice(thinkEnd + '</think>'.length).trim();
+    } else if (clean.includes('<think>')) {
+        // Raisonnement jamais fermé : la réponse a été tronquée avant le JSON final.
+        clean = '';
+    }
+
+    if (clean) {
+        try {
+            return JSON.parse(clean);
+        } catch {
+            const braceMatch = clean.match(/\{[\s\S]*\}/);
+            if (braceMatch) {
+                try { return JSON.parse(braceMatch[0]); } catch {}
+            }
+        }
+    }
+
+    console.log('[Gemini] JSON invalide, tentative repair...');
+    const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
+    const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
+    const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
+    const parsed = { winners: extract(wSection), losers: extract(lSection) };
+    console.log('[Gemini] Repair result:', JSON.stringify(parsed));
+    return parsed;
+}
+
 // ============================================
 // 1. IA : LECTURE DES SCREENS PVP
 // ============================================
@@ -224,20 +258,8 @@ async function parseScreenWithAI(imageUrl) {
         ]);
         
         const text = getResponseText(result);
-        const clean = text.replace(/```json\n?|```\n?/g, '').trim();
-        console.log('[Gemini] Reponse brute:', clean);
-        
-        let parsed;
-        try {
-            parsed = JSON.parse(clean);
-        } catch (jsonErr) {
-            console.log('[Gemini] JSON invalide, tentative repair...');
-            const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
-            const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
-            const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
-            parsed = { winners: extract(wSection), losers: extract(lSection) };
-            console.log('[Gemini] Repair result:', JSON.stringify(parsed));
-        }
+        console.log('[Gemini] Reponse brute:', text);
+        const parsed = extractWinnersLosersJSON(text);
 
         const excludePattern = /prisme|gardien|protecteur|dofus|\bdo['\s]/i;
         const hasAccents = (str) => str !== str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -1443,20 +1465,8 @@ client.on('messageCreate', async message => {
             ]);
 
             const text = getResponseText(geminiResult);
-            const clean = text.replace(/```json\n?|```\n?/g, '').trim();
-            console.log('[Gemini] Image', id, 'reponse:', clean);
-
-            let parsed;
-            try {
-                parsed = JSON.parse(clean);
-            } catch (jsonErr) {
-                console.log('[Gemini] JSON invalide, tentative repair...');
-                const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
-                const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
-                const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
-                parsed = { winners: extract(wSection), losers: extract(lSection) };
-                console.log('[Gemini] Repair result:', JSON.stringify(parsed));
-            }
+            console.log('[Gemini] Image', id, 'reponse:', text);
+            const parsed = extractWinnersLosersJSON(text);
 
             if (parsed.winners) allParsedWinners.push(...parsed.winners);
             if (parsed.losers) allParsedLosers.push(...parsed.losers);
