@@ -2,17 +2,15 @@ services:
   db:
     image: postgres:15
     restart: always
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: dofus_user
-      POSTGRES_PASSWORD: grepallusi0
-      POSTGRES_DB: dofus_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - dofus_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    # 👇 C'est ICI qu'il faut le mettre (dans le service db) 👇
-    ports:
-      - "5432:5432"
-
   bot:
     build: .
     restart: always
@@ -20,6 +18,5 @@ services:
       - db
     env_file:
       - .env
-
 volumes:
   dofus_data:
