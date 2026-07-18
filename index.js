@@ -33,7 +33,7 @@ const config = require('./config');
 // --- GROQ AI ---
 const AI_TIMEOUT_MS = 60000;
 const AI_MAX_RETRIES = 3;
-const AI_MODEL = process.env.AI_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
+const AI_MODEL = process.env.AI_MODEL || 'qwen/qwen3.6-27b';
 
 let ai = null;
 if (process.env.GROQ_API_KEY) {
