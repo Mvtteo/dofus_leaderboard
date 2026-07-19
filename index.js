@@ -45,7 +45,7 @@ if (process.env.GROQ_API_KEY) {
     console.warn('[AI] GROQ_API_KEY manquante — analyse d\'images désactivée');
 }
 
-// Convertit le format parts Gemini → content OpenAI
+// Convertit le format parts (image/texte) → content OpenAI
 function partsToContent(parts) {
     return parts.map(part => {
         if (part.inlineData) {
@@ -58,7 +58,7 @@ function partsToContent(parts) {
     });
 }
 
-async function callGemini(parts, retries = AI_MAX_RETRIES) {
+async function callClassifier(parts, retries = AI_MAX_RETRIES) {
     if (!ai) throw new Error('AI non configurée (GROQ_API_KEY manquante)');
     const content = partsToContent(parts);
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -70,6 +70,7 @@ async function callGemini(parts, retries = AI_MAX_RETRIES) {
                         messages: [{ role: 'user', content }],
                         temperature: 1,
                         max_completion_tokens: 2048,
+                        reasoning_effort: 'none',
                         reasoning_format: 'hidden',
                         top_p: 1,
                         stream: true,
@@ -99,40 +100,40 @@ async function callGemini(parts, retries = AI_MAX_RETRIES) {
 }
 
 // --- AI QUEUE ---
-const geminiQueue = [];
-let geminiProcessing = false;
+const classifierQueue = [];
+let classifierProcessing = false;
 
-async function queueGemini(parts) {
+async function queueClassifier(parts) {
     return new Promise((resolve, reject) => {
-        geminiQueue.push({ parts, resolve, reject, retries: 0 });
-        processGeminiQueue();
+        classifierQueue.push({ parts, resolve, reject, retries: 0 });
+        processClassifierQueue();
     });
 }
 
-async function processGeminiQueue() {
-    if (geminiProcessing || geminiQueue.length === 0) return;
-    geminiProcessing = true;
+async function processClassifierQueue() {
+    if (classifierProcessing || classifierQueue.length === 0) return;
+    classifierProcessing = true;
     try {
-        while (geminiQueue.length > 0) {
-            const item = geminiQueue.shift();
+        while (classifierQueue.length > 0) {
+            const item = classifierQueue.shift();
             const { parts, resolve, reject } = item;
             try {
-                const result = await callGemini(parts);
+                const result = await callClassifier(parts);
                 resolve(result);
-                if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
+                if (classifierQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
             } catch (err) {
                 if ((err.status === 429 || err.message?.includes('429')) && item.retries < 3) {
                     console.log(`[AI] 429 reçu, pause 15s puis retry (${item.retries + 1}/3)...`);
                     await new Promise(r => setTimeout(r, 15000));
-                    geminiQueue.unshift({ ...item, retries: item.retries + 1 });
+                    classifierQueue.unshift({ ...item, retries: item.retries + 1 });
                 } else {
                     reject(err);
-                    if (geminiQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
+                    if (classifierQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
                 }
             }
         }
     } finally {
-        geminiProcessing = false;
+        classifierProcessing = false;
     }
 }
 
@@ -181,6 +182,20 @@ function getResponseText(result) {
     return result?.text || '';
 }
 
+// Helper : extrait le délai d'attente réel renvoyé par le provider IA (ex: "Please
+// try again in 35m28.464s") plutôt que d'afficher un délai fixe potentiellement faux.
+function formatRetryDelay(error) {
+    const raw = error?.error?.message || error?.message || '';
+    const match = raw.match(/try again in\s*(?:([\d.]+)h)?\s*(?:([\d.]+)m)?\s*(?:([\d.]+)s)?/i);
+    if (!match || (!match[1] && !match[2] && !match[3])) return null;
+    const [, h, m, s] = match;
+    const parts = [];
+    if (h) parts.push(`${Math.round(parseFloat(h))}h`);
+    if (m) parts.push(`${Math.round(parseFloat(m))}min`);
+    if (s && !h) parts.push(`${Math.round(parseFloat(s))}s`);
+    return parts.join(' ');
+}
+
 // Helper : isole le JSON final d'une réponse IA, en ignorant tout raisonnement
 // <think>...</think> résiduel (au cas où reasoning_format: 'hidden' ne le filtrerait pas).
 function extractWinnersLosersJSON(rawText) {
@@ -205,12 +220,12 @@ function extractWinnersLosersJSON(rawText) {
         }
     }
 
-    console.log('[Gemini] JSON invalide, tentative repair...');
+    console.log('[AI] JSON invalide, tentative repair...');
     const wSection = clean.match(/"winners"\s*:\s*\[?([\s\S]*?)\s*"losers"/);
     const lSection = clean.match(/"losers"\s*:\s*\[?([\s\S]*?)(\]|})\s*$/);
     const extract = (m) => m ? (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, '')) : [];
     const parsed = { winners: extract(wSection), losers: extract(lSection) };
-    console.log('[Gemini] Repair result:', JSON.stringify(parsed));
+    console.log('[AI] Repair result:', JSON.stringify(parsed));
     return parsed;
 }
 
@@ -223,7 +238,7 @@ async function parseScreenWithAI(imageUrl) {
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
         
-        const result = await queueGemini([
+        const result = await queueClassifier([
             { inlineData: { data: base64, mimeType: "image/png" } },
             { text: `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
              Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
@@ -258,7 +273,7 @@ async function parseScreenWithAI(imageUrl) {
         ]);
         
         const text = getResponseText(result);
-        console.log('[Gemini] Reponse brute:', text);
+        console.log('[AI] Reponse brute:', text);
         const parsed = extractWinnersLosersJSON(text);
 
         const excludePattern = /prisme|gardien|protecteur|dofus|\bdo['\s]/i;
@@ -271,7 +286,7 @@ async function parseScreenWithAI(imageUrl) {
 
         return parsed;
     } catch (error) {
-        console.error("Erreur Gemini PvP:", error.message);
+        console.error("Erreur AI PvP:", error.message);
         return null;
     }
 }
@@ -285,7 +300,7 @@ async function parseNuggetsWithAI(imageUrl) {
         const buffer = await response.arrayBuffer();
         const base64 = Buffer.from(buffer).toString('base64');
 
-        const result = await queueGemini([
+        const result = await queueClassifier([
             { inlineData: { data: base64, mimeType: "image/png" } },
             { text: `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.` }
         ]);
@@ -302,7 +317,7 @@ async function parseNuggetsWithAI(imageUrl) {
         return null;
 
     } catch (error) { 
-        console.error("Erreur Gemini Pepites:", error.message);
+        console.error("Erreur AI Pepites:", error.message);
         return null; 
     }
 }
@@ -330,6 +345,8 @@ Réponds UNIQUEMENT : {"amounts":[489,490,19498,1990,2418]}` }
             ],
             temperature: 0,
             max_completion_tokens: 128,
+            reasoning_effort: 'none',
+            reasoning_format: 'hidden',
             stream: true,
         });
         let raw = '';
@@ -369,7 +386,7 @@ Réponds UNIQUEMENT : {"amounts":[489,490,19498,1990,2418]}` }
         console.log('[Prismes] Montants détectés:', amounts, '→ total:', total_kamas);
         return { total_kamas };
     } catch (error) {
-        console.error('Erreur Gemini Prismes:', error.message);
+        console.error('Erreur AI Prismes:', error.message);
         return null;
     }
 }
@@ -1413,7 +1430,7 @@ client.on('messageCreate', async message => {
     console.log('[PvP] Upload detecté de', message.author.username, '-', attachments.size, 'image(s)');
     let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null, percepteurDetected: false };
     const msgRef = await message.reply(`Analyse PvP en cours...`);
-    console.log('[PvP] Message reply envoyé, debut analyse Gemini...');
+    console.log('[PvP] Message reply envoyé, debut analyse AI...');
 
     try {
         let allParsedWinners = [];
@@ -1430,7 +1447,7 @@ client.on('messageCreate', async message => {
             const buffer = await response.arrayBuffer();
             const base64 = Buffer.from(buffer).toString('base64');
 
-            const geminiResult = await queueGemini([
+            const classifierResult = await queueClassifier([
                 { inlineData: { data: base64, mimeType: attachment.contentType || "image/png" } },
                 { text: `Analyse ce screenshot de fin de combat Dofus (Alliance vs Alliance).
                  Extrait UNIQUEMENT les pseudos des joueurs HUMAINS.
@@ -1464,8 +1481,8 @@ client.on('messageCreate', async message => {
                  Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}` }
             ]);
 
-            const text = getResponseText(geminiResult);
-            console.log('[Gemini] Image', id, 'reponse:', text);
+            const text = getResponseText(classifierResult);
+            console.log('[AI] Image', id, 'reponse:', text);
             const parsed = extractWinnersLosersJSON(text);
 
             if (parsed.winners) allParsedWinners.push(...parsed.winners);
@@ -1523,15 +1540,25 @@ client.on('messageCreate', async message => {
         console.error('[PvP] Erreur:', error);
         let msg;
         if (error.status === 503 || error.message?.includes('503')) {
-            msg = "Gemini indisponible (503). Réessayez dans quelques secondes.";
+            msg = "IA indisponible (503). Réessayez dans quelques secondes.";
         } else if (error.status === 429 || error.message?.includes('429')) {
-            msg = "Limite de requêtes Gemini atteinte (429). Réessayez dans 30 secondes.";
+            const isDailyQuota = error?.error?.type === 'tokens' || /tokens per day|TPD/i.test(error?.error?.message || error.message || '');
+            const retryDelay = formatRetryDelay(error);
+            if (isDailyQuota) {
+                msg = retryDelay
+                    ? `Quota IA journalier épuisé. Réessayez dans ${retryDelay}.`
+                    : "Quota IA journalier épuisé. Réessayez plus tard.";
+            } else {
+                msg = retryDelay
+                    ? `Limite de requêtes IA atteinte. Réessayez dans ${retryDelay}.`
+                    : "Limite de requêtes IA atteinte. Réessayez dans quelques secondes.";
+            }
         } else if (error.message?.includes('timeout')) {
-            msg = "Timeout Gemini (60s dépassé). Réessayez.";
+            msg = "Timeout IA (60s dépassé). Réessayez.";
         } else if (error.message?.includes('fetch failed') || error.message?.includes('ECONNRESET') || error.message?.includes('ETIMEDOUT')) {
             msg = "Erreur réseau. Vérifiez la connexion et réessayez.";
         } else if (error.message?.includes('JSON')) {
-            msg = "Réponse Gemini illisible. Réessayez avec un screenshot plus net.";
+            msg = "Réponse IA illisible. Réessayez avec un screenshot plus net.";
         } else {
             msg = `Erreur inattendue : ${error.message || error.status || 'inconnue'}`;
         }
