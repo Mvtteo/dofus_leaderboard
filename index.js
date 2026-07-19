@@ -157,6 +157,22 @@ const activeSessions = new Map();
 const sessionTimeouts = new Map();
 const SESSION_TIMEOUT_MS = 2 * 60 * 1000;
 
+// Messages Discord "analyse en cours" en attente d'une réponse IA. Si le
+// conteneur est tué (redeploy) pendant l'analyse, on les édite avant de
+// mourir au lieu de les laisser bloqués sur "en cours" pour toujours.
+const inFlightReplies = new Set();
+let shuttingDown = false;
+
+process.on('SIGTERM', async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[Shutdown] SIGTERM reçu, ${inFlightReplies.size} message(s) en cours à notifier...`);
+    await Promise.all([...inFlightReplies].map(async (msgRef) => {
+        try { await msgRef.edit({ content: 'Bot redémarré pendant l\'analyse. Réessayez.', components: [] }); } catch {}
+    }));
+    process.exit(0);
+});
+
 function setSessionTimeout(userId, msgRef) {
     clearSessionTimeout(userId);
     const timer = setTimeout(async () => {
@@ -1374,6 +1390,7 @@ client.on('messageCreate', async message => {
         const attachments = message.attachments.filter(a => a.contentType && a.contentType.startsWith('image/'));
         if (attachments.size === 0) return;
         const msgRef = await message.reply('Analyse pépites...');
+        inFlightReplies.add(msgRef);
         try {
             for (const [id, attachment] of attachments) {
                 const imgResponse = await fetch(attachment.url);
@@ -1409,6 +1426,7 @@ client.on('messageCreate', async message => {
                 await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${displayName}.`);
             }
         } catch (e) { console.error(e); try { await msgRef.edit(buildAIErrorMessage(e)); } catch {} }
+        finally { inFlightReplies.delete(msgRef); }
         return;
     }
 
@@ -1443,6 +1461,7 @@ client.on('messageCreate', async message => {
     console.log('[PvP] Upload detecté de', message.author.username, '-', attachments.size, 'image(s)');
     let userSession = activeSessions.get(message.author.id) || { winners: [], losers: [], context: null, allianceTier: null, percepteurDetected: false };
     const msgRef = await message.reply(`Analyse PvP en cours...`);
+    inFlightReplies.add(msgRef);
     console.log('[PvP] Message reply envoyé, debut analyse AI...');
 
     try {
@@ -1553,6 +1572,8 @@ client.on('messageCreate', async message => {
         console.error('[PvP] Erreur:', error);
         const msg = buildAIErrorMessage(error);
         try { await msgRef.edit({ content: msg, components: [] }); } catch {}
+    } finally {
+        inFlightReplies.delete(msgRef);
     }
 });
 
