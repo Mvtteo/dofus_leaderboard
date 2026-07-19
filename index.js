@@ -105,32 +105,27 @@ let classifierProcessing = false;
 
 async function queueClassifier(parts) {
     return new Promise((resolve, reject) => {
-        classifierQueue.push({ parts, resolve, reject, retries: 0 });
+        classifierQueue.push({ parts, resolve, reject });
         processClassifierQueue();
     });
 }
 
+// Sur erreur (429 compris) on annule immédiatement la demande au lieu de
+// retenter en boucle : un quota journalier épuisé ne se débloque pas en 45s,
+// autant prévenir tout de suite dans le salon plutôt que faire attendre pour rien.
 async function processClassifierQueue() {
     if (classifierProcessing || classifierQueue.length === 0) return;
     classifierProcessing = true;
     try {
         while (classifierQueue.length > 0) {
-            const item = classifierQueue.shift();
-            const { parts, resolve, reject } = item;
+            const { parts, resolve, reject } = classifierQueue.shift();
             try {
                 const result = await callClassifier(parts);
                 resolve(result);
-                if (classifierQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
             } catch (err) {
-                if ((err.status === 429 || err.message?.includes('429')) && item.retries < 3) {
-                    console.log(`[AI] 429 reçu, pause 15s puis retry (${item.retries + 1}/3)...`);
-                    await new Promise(r => setTimeout(r, 15000));
-                    classifierQueue.unshift({ ...item, retries: item.retries + 1 });
-                } else {
-                    reject(err);
-                    if (classifierQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
-                }
+                reject(err);
             }
+            if (classifierQueue.length > 0) await new Promise(r => setTimeout(r, 1000));
         }
     } finally {
         classifierProcessing = false;
