@@ -209,16 +209,18 @@ function formatRetryDelay(error) {
 
 // Helper : message d'erreur utilisateur uniforme pour tous les flux IA (PvP, pépites, prismes)
 function buildAIErrorMessage(error) {
-    if (error.status === 503 || error.message?.includes('503')) {
-        return "IA indisponible (503). Réessayez dans quelques secondes.";
-    }
-    if (error.status === 429 || error.message?.includes('429')) {
+    // Statuts identifiés par le code HTTP structuré (.status) en priorité — un .includes('503')
+    // naïf peut faire un faux positif sur des nombres du message (ex: "Requested 5034").
+    if (error.status === 429 || /\b429\b/.test(error.message || '')) {
         const isDailyQuota = error?.error?.type === 'tokens' || /tokens per day|TPD/i.test(error?.error?.message || error.message || '');
         const retryDelay = formatRetryDelay(error);
         if (isDailyQuota) {
-            return retryDelay ? `Quota IA journalier épuisé. Réessayez dans ${retryDelay}.` : "Quota IA journalier épuisé. Réessayez plus tard.";
+            return retryDelay ? `Quota IA épuisé. Réessayez dans ${retryDelay}.` : "Quota IA épuisé. Réessayez plus tard.";
         }
-        return retryDelay ? `Limite de requêtes IA atteinte. Réessayez dans ${retryDelay}.` : "Limite de requêtes IA atteinte. Réessayez dans quelques secondes.";
+        return retryDelay ? `Limite IA atteinte. Réessayez dans ${retryDelay}.` : "Limite IA atteinte. Réessayez dans quelques secondes.";
+    }
+    if (error.status === 503 || /\b503\b/.test(error.message || '')) {
+        return "IA indisponible (503). Réessayez dans quelques secondes.";
     }
     if (error.message?.includes('timeout')) {
         return "Timeout IA (60s dépassé). Réessayez.";
