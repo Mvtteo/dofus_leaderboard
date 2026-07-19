@@ -196,6 +196,31 @@ function formatRetryDelay(error) {
     return parts.join(' ');
 }
 
+// Helper : message d'erreur utilisateur uniforme pour tous les flux IA (PvP, pépites, prismes)
+function buildAIErrorMessage(error) {
+    if (error.status === 503 || error.message?.includes('503')) {
+        return "IA indisponible (503). Réessayez dans quelques secondes.";
+    }
+    if (error.status === 429 || error.message?.includes('429')) {
+        const isDailyQuota = error?.error?.type === 'tokens' || /tokens per day|TPD/i.test(error?.error?.message || error.message || '');
+        const retryDelay = formatRetryDelay(error);
+        if (isDailyQuota) {
+            return retryDelay ? `Quota IA journalier épuisé. Réessayez dans ${retryDelay}.` : "Quota IA journalier épuisé. Réessayez plus tard.";
+        }
+        return retryDelay ? `Limite de requêtes IA atteinte. Réessayez dans ${retryDelay}.` : "Limite de requêtes IA atteinte. Réessayez dans quelques secondes.";
+    }
+    if (error.message?.includes('timeout')) {
+        return "Timeout IA (60s dépassé). Réessayez.";
+    }
+    if (error.message?.includes('fetch failed') || error.message?.includes('ECONNRESET') || error.message?.includes('ETIMEDOUT')) {
+        return "Erreur réseau. Vérifiez la connexion et réessayez.";
+    }
+    if (error.message?.includes('JSON')) {
+        return "Réponse IA illisible. Réessayez avec un screenshot plus net.";
+    }
+    return `Erreur inattendue : ${error.message || error.status || 'inconnue'}`;
+}
+
 // Helper : isole le JSON final d'une réponse IA, en ignorant tout raisonnement
 // <think>...</think> résiduel (au cas où reasoning_format: 'hidden' ne le filtrerait pas).
 function extractWinnersLosersJSON(rawText) {
@@ -295,100 +320,89 @@ async function parseScreenWithAI(imageUrl) {
 // 2. IA : LECTURE DES PEPITES
 // ============================================
 async function parseNuggetsWithAI(imageUrl) {
-    try {
-        const response = await fetch(imageUrl);
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
+    const response = await fetch(imageUrl);
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
 
-        const result = await queueClassifier([
-            { inlineData: { data: base64, mimeType: "image/png" } },
-            { text: `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.` }
-        ]);
+    const result = await queueClassifier([
+        { inlineData: { data: base64, mimeType: "image/png" } },
+        { text: `Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot.` }
+    ]);
 
-        const text = getResponseText(result);
-        
-        const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
-        const match = text.match(regex);
+    const text = getResponseText(result);
 
-        if (match && match[1]) {
-            return { alliance_amount: parseInt(match[1]) };
-        }
-        
-        return null;
+    const regex = /et\s*(\d+)\s*ont\s*été\s*ajoutées/i;
+    const match = text.match(regex);
 
-    } catch (error) { 
-        console.error("Erreur AI Pepites:", error.message);
-        return null; 
+    if (match && match[1]) {
+        return { alliance_amount: parseInt(match[1]) };
     }
+
+    return null;
 }
 
 // ============================================
 // 3. IA : LECTURE DES PRISMES
 // ============================================
 async function parsePrismeKamasWithAI(imageUrl) {
-    try {
-        const response = await fetch(imageUrl);
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
+    const response = await fetch(imageUrl);
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
 
-        const stream = await ai.chat.completions.create({
-            model: AI_MODEL,
-            messages: [
-                { role: 'system', content: 'Réponds UNIQUEMENT avec du JSON brut valide. Zéro texte, zéro markdown, zéro explication.' },
-                { role: 'user', content: [
-                    { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
-                    { type: 'text', text: `Historique d'achats Dofus. Format de chaque ligne : [heure] [qté] x [objet] (prix kamas)
+    const stream = await ai.chat.completions.create({
+        model: AI_MODEL,
+        messages: [
+            { role: 'system', content: 'Réponds UNIQUEMENT avec du JSON brut valide. Zéro texte, zéro markdown, zéro explication.' },
+            { role: 'user', content: [
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+                { type: 'text', text: `Historique d'achats Dofus. Format de chaque ligne : [heure] [qté] x [objet] (prix kamas)
 Pour chaque ligne : calcule qté × prix (ignore les espaces dans les nombres, ex "19 498" = 19498).
 Ignore les timestamps/heures.
 Réponds UNIQUEMENT : {"amounts":[489,490,19498,1990,2418]}` }
-                ]}
-            ],
-            temperature: 0,
-            max_completion_tokens: 128,
-            reasoning_effort: 'none',
-            reasoning_format: 'hidden',
-            stream: true,
-        });
-        let raw = '';
-        for await (const chunk of stream) { const d = chunk.choices?.[0]?.delta?.content; if (d) raw += d; }
-        console.log('[Prismes] Réponse brute:', raw);
+            ]}
+        ],
+        temperature: 0,
+        max_completion_tokens: 128,
+        reasoning_effort: 'none',
+        reasoning_format: 'hidden',
+        stream: true,
+    });
+    let raw = '';
+    for await (const chunk of stream) { const d = chunk.choices?.[0]?.delta?.content; if (d) raw += d; }
+    console.log('[Prismes] Réponse brute:', raw);
 
-        // Extraction directe : cherche le tableau "amounts" dans le texte brut, peu importe le format JSON
-        let amounts = [];
+    // Extraction directe : cherche le tableau "amounts" dans le texte brut, peu importe le format JSON
+    let amounts = [];
 
-        // Stratégie 1 : extraire directement les nombres entre crochets après "amounts"
-        const arrayMatch = raw.match(/"amounts"\s*:\s*\[([^\]]*)\]/);
-        if (arrayMatch) {
-            amounts = [...arrayMatch[1].matchAll(/\d+/g)].map(m => parseInt(m[0])).filter(n => n > 0);
-        }
-
-        // Stratégie 2 : JSON.parse sur le texte nettoyé
-        if (amounts.length === 0) {
-            try {
-                const clean = raw.replace(/```json\n?|```\n?/g, '').replace(/,(\s*[\]}])/g, '$1').trim();
-                const obj = JSON.parse(clean);
-                if (Array.isArray(obj?.amounts)) amounts = obj.amounts.map(Number).filter(n => n > 0);
-            } catch {}
-        }
-
-        // Stratégie 3 : cherche un objet JSON dans le texte et le parse
-        if (amounts.length === 0) {
-            try {
-                const m = raw.match(/\{[^{}]*"amounts"[^{}]*\}/s);
-                if (m) {
-                    const obj = JSON.parse(m[0].replace(/,(\s*[\]}])/g, '$1'));
-                    if (Array.isArray(obj?.amounts)) amounts = obj.amounts.map(Number).filter(n => n > 0);
-                }
-            } catch {}
-        }
-
-        const total_kamas = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) : null;
-        console.log('[Prismes] Montants détectés:', amounts, '→ total:', total_kamas);
-        return { total_kamas };
-    } catch (error) {
-        console.error('Erreur AI Prismes:', error.message);
-        return null;
+    // Stratégie 1 : extraire directement les nombres entre crochets après "amounts"
+    const arrayMatch = raw.match(/"amounts"\s*:\s*\[([^\]]*)\]/);
+    if (arrayMatch) {
+        amounts = [...arrayMatch[1].matchAll(/\d+/g)].map(m => parseInt(m[0])).filter(n => n > 0);
     }
+
+    // Stratégie 2 : JSON.parse sur le texte nettoyé
+    if (amounts.length === 0) {
+        try {
+            const clean = raw.replace(/```json\n?|```\n?/g, '').replace(/,(\s*[\]}])/g, '$1').trim();
+            const obj = JSON.parse(clean);
+            if (Array.isArray(obj?.amounts)) amounts = obj.amounts.map(Number).filter(n => n > 0);
+        } catch {}
+    }
+
+    // Stratégie 3 : cherche un objet JSON dans le texte et le parse
+    if (amounts.length === 0) {
+        try {
+            const m = raw.match(/\{[^{}]*"amounts"[^{}]*\}/s);
+            if (m) {
+                const obj = JSON.parse(m[0].replace(/,(\s*[\]}])/g, '$1'));
+                if (Array.isArray(obj?.amounts)) amounts = obj.amounts.map(Number).filter(n => n > 0);
+            }
+        } catch {}
+    }
+
+    const total_kamas = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) : null;
+    console.log('[Prismes] Montants détectés:', amounts, '→ total:', total_kamas);
+    return { total_kamas };
 }
 
 // ============================================
@@ -1399,7 +1413,7 @@ client.on('messageCreate', async message => {
                 await updateSeasonStats(playerId, seasonId, { nuggets: playerShare });
                 await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${displayName}.`);
             }
-        } catch (e) { console.error(e); await msgRef.edit('Erreur technique.'); }
+        } catch (e) { console.error(e); try { await msgRef.edit(buildAIErrorMessage(e)); } catch {} }
         return;
     }
 
@@ -1418,7 +1432,11 @@ client.on('messageCreate', async message => {
                 );
             }
             await message.react('✅');
-        } catch (e) { console.error('[Prismes] Erreur:', e); }
+        } catch (e) {
+            console.error('[Prismes] Erreur:', e);
+            try { await message.reply(buildAIErrorMessage(e)); } catch {}
+            try { await message.react('❌'); } catch {}
+        }
         return;
     }
 
@@ -1538,30 +1556,7 @@ client.on('messageCreate', async message => {
         }
     } catch (error) {
         console.error('[PvP] Erreur:', error);
-        let msg;
-        if (error.status === 503 || error.message?.includes('503')) {
-            msg = "IA indisponible (503). Réessayez dans quelques secondes.";
-        } else if (error.status === 429 || error.message?.includes('429')) {
-            const isDailyQuota = error?.error?.type === 'tokens' || /tokens per day|TPD/i.test(error?.error?.message || error.message || '');
-            const retryDelay = formatRetryDelay(error);
-            if (isDailyQuota) {
-                msg = retryDelay
-                    ? `Quota IA journalier épuisé. Réessayez dans ${retryDelay}.`
-                    : "Quota IA journalier épuisé. Réessayez plus tard.";
-            } else {
-                msg = retryDelay
-                    ? `Limite de requêtes IA atteinte. Réessayez dans ${retryDelay}.`
-                    : "Limite de requêtes IA atteinte. Réessayez dans quelques secondes.";
-            }
-        } else if (error.message?.includes('timeout')) {
-            msg = "Timeout IA (60s dépassé). Réessayez.";
-        } else if (error.message?.includes('fetch failed') || error.message?.includes('ECONNRESET') || error.message?.includes('ETIMEDOUT')) {
-            msg = "Erreur réseau. Vérifiez la connexion et réessayez.";
-        } else if (error.message?.includes('JSON')) {
-            msg = "Réponse IA illisible. Réessayez avec un screenshot plus net.";
-        } else {
-            msg = `Erreur inattendue : ${error.message || error.status || 'inconnue'}`;
-        }
+        const msg = buildAIErrorMessage(error);
         try { await msgRef.edit({ content: msg, components: [] }); } catch {}
     }
 });
