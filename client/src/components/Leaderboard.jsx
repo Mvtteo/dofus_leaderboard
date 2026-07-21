@@ -6,6 +6,7 @@ function isNazolas(pseudo) {
 }
 
 function Avatar({ player }) {
+  if (isNazolas(player.dofus_pseudo)) return <img src="/assets/dog.jpeg" alt={player.dofus_pseudo} />;
   return player.avatar_url
     ? <img src={player.avatar_url} alt={player.dofus_pseudo} />
     : <>{player.dofus_pseudo.charAt(0).toUpperCase()}</>;
