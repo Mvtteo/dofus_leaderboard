@@ -141,6 +141,8 @@
 
   .pod-card.gold & { font-size: 17px; }
   .pod-card.bronze & { font-size: 13px; }
+
+  .pod-card:hover &.name-easter-egg { color: #ff6ec7; }
 }
 
 .pod-score {
