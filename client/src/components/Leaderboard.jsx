@@ -1,6 +1,10 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
 import { perco, wrColor, wrClass, C, LEVEL_COLORS, LEVEL_GRADIENTS, LEVEL_OPACITY } from '../utils/helpers';
 
+function isNazolas(pseudo) {
+  return pseudo?.toLowerCase() === 'nazolas';
+}
+
 function Avatar({ player }) {
   return player.avatar_url
     ? <img src={player.avatar_url} alt={player.dofus_pseudo} />
@@ -60,7 +64,7 @@ function PodiumCard({ player, allPlayers, cls, lbl, animDelay }) {
     >
       <div className="pod-rank-label">{lbl}</div>
       <div className="pod-avatar"><Avatar player={player} /></div>
-      <div className="pod-player-name">{player.dofus_pseudo}</div>
+      <div className={`pod-player-name${isNazolas(player.dofus_pseudo) ? ' name-easter-egg' : ''}`}>{player.dofus_pseudo}</div>
       <div className="pod-score">{parseInt(player.total_points).toLocaleString()} pts</div>
       <div className="pod-wr-bar">
         <div className={`pod-wr-fill ${wrClass(w)}`} style={{ width: `${w}%` }} />
@@ -196,7 +200,7 @@ function LeaderboardTable({ filteredPlayers, allPlayers, pools, defaultWinratePo
                   <td className="cell-player">
                     <div className="player-info">
                       <div className="player-avatar"><Avatar player={player} /></div>
-                      <span className="player-name">{player.dofus_pseudo}</span>
+                      <span className={`player-name${isNazolas(player.dofus_pseudo) ? ' name-easter-egg' : ''}`}>{player.dofus_pseudo}</span>
                     </div>
                   </td>
                   <td className="cell-perco"><PercoRingSmall level={pc} /></td>
