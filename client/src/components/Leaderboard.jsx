@@ -167,13 +167,15 @@ function LeaderboardTable({ filteredPlayers, allPlayers, pools, defaultWinratePo
                 WINRATE
                 {poolName && <span style={{ fontSize: '0.6em', opacity: 0.6 }}> vs {poolName}</span>}
               </th>
+              <th className="col-atk">ATTAQUE</th>
+              <th className="col-def">DÉFENSE</th>
               <th className="col-score">SCORE</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.length === 0 ? (
               <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.2)' }}>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.2)' }}>
                   Aucun joueur trouvé.
                 </td>
               </tr>
@@ -207,6 +209,8 @@ function LeaderboardTable({ filteredPlayers, allPlayers, pools, defaultWinratePo
                     </div>
                     <span className="winrate-detail">{player.wins}V / {player.losses}D</span>
                   </td>
+                  <td className="cell-atk">{(player.atk_points || 0).toLocaleString()}</td>
+                  <td className="cell-def">{(player.def_points || 0).toLocaleString()}</td>
                   <td className="cell-score">
                     <span className="score-value">{parseInt(player.total_points).toLocaleString()}</span>
                     <span className="score-label">pts</span>

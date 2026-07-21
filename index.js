@@ -574,6 +574,8 @@ async function getLeaderboardPlayers(seasonId) {
             COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
             MAX(p.avatar_url) as avatar_url,
             SUM(ss.points) as total_points,
+            SUM(ss.atk_points) as atk_points,
+            SUM(ss.def_points) as def_points,
             SUM(ss.wins) as wins,
             SUM(ss.losses) as losses,
             MIN(ss.previous_rank) as previous_rank
@@ -629,6 +631,8 @@ async function getLeaderboardPlayers(seasonId) {
             dofus_pseudo: p.dofus_pseudo,
             avatar_url: p.avatar_url || null,
             total_points: parseInt(p.total_points),
+            atk_points: parseInt(p.atk_points) || 0,
+            def_points: parseInt(p.def_points) || 0,
             wins: displayWins, losses: displayLosses, winrate, rank_change: rankChange
         };
     });
@@ -1270,6 +1274,8 @@ client.once(Events.ClientReady, async () => {
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS has_won BOOLEAN DEFAULT true`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL`);
         await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS cancelled BOOLEAN DEFAULT false`);
+        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS atk_points INTEGER DEFAULT 0`);
+        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS def_points INTEGER DEFAULT 0`);
         await pool.query(`CREATE TABLE IF NOT EXISTS prism_requests (
             id SERIAL PRIMARY KEY,
             player_name VARCHAR(255),
@@ -1735,7 +1741,7 @@ client.on('interactionCreate', async interaction => {
                         }
 
                         if (shouldCountStats) {
-                            await updateSeasonStats(pData.id, seasonId, { points: pts, wins: isWinner ? 1 : 0, losses: isWinner ? 0 : 1 });
+                            await updateSeasonStats(pData.id, seasonId, { points: pts, wins: isWinner ? 1 : 0, losses: isWinner ? 0 : 1, context: session.context });
                             if (isWinner) paid.push(pName);
                             else defeated.push(pName);
                         } else {
@@ -1807,15 +1813,19 @@ async function snapshotRanks(seasonId) {
     `, [seasonId]);
 }
 
-async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0, nuggets=0 }) {
+async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0, nuggets=0, context=null }) {
+    const atkPoints = context === 'attack' ? points : 0;
+    const defPoints = context === 'defense' ? points : 0;
     await pool.query(`
-        INSERT INTO season_stats (player_id, season_id, points, wins, losses, nuggets) VALUES ($1,$2,$3,$4,$5,$6)
-        ON CONFLICT (player_id, season_id) DO UPDATE SET 
+        INSERT INTO season_stats (player_id, season_id, points, wins, losses, nuggets, atk_points, def_points) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        ON CONFLICT (player_id, season_id) DO UPDATE SET
         points = season_stats.points + EXCLUDED.points,
         wins = season_stats.wins + EXCLUDED.wins,
         losses = season_stats.losses + EXCLUDED.losses,
-        nuggets = season_stats.nuggets + EXCLUDED.nuggets
-    `, [pid, sid, points, wins, losses, nuggets]);
+        nuggets = season_stats.nuggets + EXCLUDED.nuggets,
+        atk_points = season_stats.atk_points + EXCLUDED.atk_points,
+        def_points = season_stats.def_points + EXCLUDED.def_points
+    `, [pid, sid, points, wins, losses, nuggets, atkPoints, defPoints]);
 }
 
 client.login(process.env.DISCORD_TOKEN);

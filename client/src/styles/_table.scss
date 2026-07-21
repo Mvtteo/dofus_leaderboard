@@ -30,6 +30,8 @@
     &.col-rank { width: 80px; text-align: center; }
     &.col-winrate { width: 180px; }
     &.col-perco { width: 60px; text-align: center; }
+    &.col-atk { width: 100px; text-align: right; }
+    &.col-def { width: 100px; text-align: right; }
     &.col-score { text-align: right; }
   }
 
@@ -37,6 +39,14 @@
 }
 
 .cell-perco { text-align: center; }
+
+.cell-atk, .cell-def {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
 
 .player-row {
   border-bottom: 1px solid rgba(255, 255, 255, 0.02);
