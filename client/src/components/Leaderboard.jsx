@@ -6,8 +6,13 @@ function isNazolas(pseudo) {
 }
 
 const barkAudio = typeof Audio !== 'undefined' ? new Audio('/assets/bark.mp3') : null;
+const BARK_LIMIT = 3;
+const BARK_STORAGE_KEY = 'nazolas_bark_count';
 function playBark() {
   if (!barkAudio) return;
+  const count = parseInt(sessionStorage.getItem(BARK_STORAGE_KEY) || '0', 10);
+  if (count >= BARK_LIMIT) return;
+  sessionStorage.setItem(BARK_STORAGE_KEY, String(count + 1));
   barkAudio.currentTime = 0;
   barkAudio.play().catch(() => {});
 }
