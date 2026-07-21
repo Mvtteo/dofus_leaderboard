@@ -5,6 +5,13 @@ function isNazolas(pseudo) {
   return pseudo?.toLowerCase() === 'nazolas';
 }
 
+const barkAudio = typeof Audio !== 'undefined' ? new Audio('/assets/bark.mp3') : null;
+function playBark() {
+  if (!barkAudio) return;
+  barkAudio.currentTime = 0;
+  barkAudio.play().catch(() => {});
+}
+
 function Avatar({ player }) {
   if (isNazolas(player.dofus_pseudo)) return <img src="/assets/dog.jpeg" alt={player.dofus_pseudo} />;
   return player.avatar_url
@@ -62,6 +69,7 @@ function PodiumCard({ player, allPlayers, cls, lbl, animDelay }) {
     <div
       className={`pod-card ${cls}${visible ? ' visible' : ''}`}
       style={{ transitionDelay: `${animDelay}s` }}
+      onMouseEnter={isNazolas(player.dofus_pseudo) ? playBark : undefined}
     >
       <div className="pod-rank-label">{lbl}</div>
       <div className="pod-avatar"><Avatar player={player} /></div>
@@ -190,7 +198,11 @@ function LeaderboardTable({ filteredPlayers, allPlayers, pools, defaultWinratePo
               const pc = perco(parseInt(player.total_points), rk);
               const rowCls = rk <= 3 ? `top-${rk}` : '';
               return (
-                <tr key={player.dofus_pseudo} className={`player-row ${rowCls} visible`}>
+                <tr
+                  key={player.dofus_pseudo}
+                  className={`player-row ${rowCls} visible`}
+                  onMouseEnter={isNazolas(player.dofus_pseudo) ? playBark : undefined}
+                >
                   <td className="cell-rank">
                     <div className="rank-badge">
                       {rk <= 3
