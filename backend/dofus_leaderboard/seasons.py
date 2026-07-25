@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-INITIAL_DATE = datetime(2026, 2, 1)
+INITIAL_DATE = datetime(2026, 7, 25)  # nouvelle base : on repart de la saison 1
 DAYS_PER_SEASON = 14
 
 

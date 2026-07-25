@@ -14,6 +14,7 @@ export default defineConfig({
       '/admin/login': 'http://localhost:3000',
       '/admin/logout': 'http://localhost:3000',
       '/web': 'http://localhost:3000',
+      '/assets': 'http://localhost:3000',
     },
   },
   build: {

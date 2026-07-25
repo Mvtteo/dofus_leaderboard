@@ -1,20 +1,27 @@
 .footer {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 24px;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.2);
-  font-weight: 600;
-  letter-spacing: 1px;
+  border-top: 1px solid var(--rule);
 }
 
-.footer-dot {
-  width: 3px;
-  height: 3px;
-  background: var(--color-teal);
-  border-radius: 50%;
+.footer-inner {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footer-brand {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.footer-updated {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--muted-2);
 }

@@ -1,9 +1,10 @@
 export default function Footer() {
   return (
     <footer className="footer">
-      <span>NEMESIS — ALLIANCE PVP TRACKER</span>
-      <span className="footer-dot" />
-      <span>Mise à jour : {new Date().toLocaleString('fr-FR')}</span>
+      <div className="footer-inner">
+        <span className="footer-brand">Nemesis — Alliance PvP Tracker</span>
+        <span className="footer-updated">MAJ {new Date().toLocaleString('fr-FR')}</span>
+      </div>
     </footer>
   );
 }

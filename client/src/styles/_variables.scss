@@ -1,20 +1,24 @@
 :root {
-  --color-dark: #182429;
-  --color-darker: #0f1a1f;
-  --color-teal: #2a9d8f;
-  --color-teal-light: #3dbdad;
-  --color-yellow: #e9c46a;
-  --color-orange: #f4a261;
-  --color-red: #e76f51;
+  --bg: #0d0e0c;
+  --bg-raise: #111310;
+  --bg-row-1: #111410;
+  --hover-row: #14170f;
+  --hover-table: #15170f;
+  --ink: #f2efe6;
+  --ink-2: #b9b8ac;
+  --muted: #8b9080;
+  --muted-2: #6f7468;
+  --rule: rgba(242, 239, 230, 0.14);
+  --rule-soft: rgba(242, 239, 230, 0.09);
+  --seg-empty: rgba(242, 239, 230, 0.12);
 
-  --gradient-gold: linear-gradient(135deg, var(--color-yellow) 0%, var(--color-orange) 100%);
-  --gradient-silver: linear-gradient(135deg, var(--color-teal) 0%, var(--color-teal-light) 100%);
-  --gradient-bronze: linear-gradient(135deg, var(--color-red) 0%, var(--color-orange) 100%);
+  // Palette "cobalt" (défaut du prototype)
+  --accent: #4d6bff;
+  --accent2: #ff5c2b;
+  --mid: #c9b8ff;
+  --soft: rgba(77, 107, 255, 0.3);
 
-  --glow-gold: 0 0 30px rgba(233, 196, 106, 0.5);
-  --glow-silver: 0 0 30px rgba(42, 157, 143, 0.5);
-  --glow-bronze: 0 0 30px rgba(231, 111, 81, 0.5);
-
-  --font-display: 'Montserrat', sans-serif;
+  --font-display: 'Anton', sans-serif;
+  --font-sans: 'Archivo', 'Helvetica Neue', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }

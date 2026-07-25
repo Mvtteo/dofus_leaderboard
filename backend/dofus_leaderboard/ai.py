@@ -51,7 +51,10 @@ Regles STRICTES :
 
 Reponds UNIQUEMENT en JSON valide : {"winners": [], "losers": []}"""
 
-NUGGETS_PROMPT = "Transcris tout le texte visible sur cette image de chat Dofus, mot pour mot."
+NUGGETS_PROMPT = """Cette image est une capture d'écran du chat Dofus. Cherche une ligne annonçant
+l'ajout de pépites à l'alliance, du type "X pépites ont été ajoutées" (ou une formulation proche).
+
+Réponds UNIQUEMENT en JSON valide : {"alliance_amount": <nombre entier, ou null si aucune ligne de ce type>}"""
 
 PRISMES_PROMPT = """Historique d'achats Dofus. Format de chaque ligne : [heure] [qté] x [objet] (prix kamas)
 Pour chaque ligne : calcule qté × prix (ignore les espaces dans les nombres, ex "19 498" = 19498).
@@ -66,9 +69,10 @@ async def _fetch_image_base64(image_url: str) -> str:
         return base64.b64encode(response.content).decode()
 
 
-async def _call_classifier_once(base64_image: str, prompt: str, mime_type: str = "image/png") -> str:
+async def _call_classifier_once(base64_image: str, prompt: str, mime_type: str = "image/png", json_mode: bool = True) -> str:
     if _client is None:
         raise RuntimeError("AI non configurée (GROQ_API_KEY manquante)")
+    extra_kwargs = {"response_format": {"type": "json_object"}} if json_mode else {}
     stream = await _client.chat.completions.create(
         model=settings.AI_MODEL,
         messages=[
@@ -86,6 +90,7 @@ async def _call_classifier_once(base64_image: str, prompt: str, mime_type: str =
         reasoning_format="hidden",
         top_p=1,
         stream=True,
+        **extra_kwargs,
     )
     text = ""
     async for chunk in stream:
@@ -104,9 +109,9 @@ _worker_task: asyncio.Task | None = None
 async def _worker():
     queue = _queue
     while True:
-        base64_image, prompt, mime_type, future = await queue.get()
+        base64_image, prompt, mime_type, json_mode, future = await queue.get()
         try:
-            text = await _call_with_retries(base64_image, prompt, mime_type)
+            text = await _call_with_retries(base64_image, prompt, mime_type, json_mode)
             if not future.done():
                 future.set_result(text)
         except Exception as exc:  # noqa: BLE001 - propagated to caller via future
@@ -118,11 +123,15 @@ async def _worker():
             await asyncio.sleep(1)
 
 
-async def _call_with_retries(base64_image: str, prompt: str, mime_type: str, retries: int = AI_MAX_RETRIES) -> str:
+async def _call_with_retries(
+    base64_image: str, prompt: str, mime_type: str, json_mode: bool = True, retries: int = AI_MAX_RETRIES
+) -> str:
     last_error: Exception | None = None
     for attempt in range(1, retries + 1):
         try:
-            return await asyncio.wait_for(_call_classifier_once(base64_image, prompt, mime_type), timeout=AI_TIMEOUT_S)
+            return await asyncio.wait_for(
+                _call_classifier_once(base64_image, prompt, mime_type, json_mode), timeout=AI_TIMEOUT_S
+            )
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             message = str(exc)
@@ -140,7 +149,7 @@ async def _call_with_retries(base64_image: str, prompt: str, mime_type: str, ret
     raise last_error  # pragma: no cover
 
 
-async def queue_classifier(base64_image: str, prompt: str, mime_type: str = "image/png") -> str:
+async def queue_classifier(base64_image: str, prompt: str, mime_type: str = "image/png", json_mode: bool = True) -> str:
     global _queue, _worker_task
     if _queue is None:
         _queue = asyncio.Queue()
@@ -148,7 +157,7 @@ async def queue_classifier(base64_image: str, prompt: str, mime_type: str = "ima
         _worker_task = asyncio.create_task(_worker())
 
     future: asyncio.Future = asyncio.get_event_loop().create_future()
-    await _queue.put((base64_image, prompt, mime_type, future))
+    await _queue.put((base64_image, prompt, mime_type, json_mode, future))
     return await future
 
 
@@ -170,11 +179,19 @@ async def parse_screen_with_ai(image_url: str) -> dict | None:
 async def parse_nuggets_with_ai(image_url: str) -> dict | None:
     base64_image = await _fetch_image_base64(image_url)
     text = await queue_classifier(base64_image, NUGGETS_PROMPT)
+    logger.info("[Pepites] Reponse brute: %s", text)
 
-    match = re.search(r"et\s*(\d+)\s*ont\s*été\s*ajoutées", text, re.IGNORECASE)
-    if match:
-        return {"alliance_amount": int(match.group(1))}
-    return None
+    try:
+        import json
+
+        clean = re.sub(r"```json\n?|```\n?", "", text).strip()
+        obj = json.loads(clean)
+        amount = obj.get("alliance_amount")
+        return {"alliance_amount": int(amount)} if amount else None
+    except (json.JSONDecodeError, TypeError, ValueError):
+        # Filet de sécurité si le modèle n'a malgré tout pas renvoyé de JSON exploitable.
+        match = re.search(r"et\s*(\d+)\s*ont\s*été\s*ajoutées", text, re.IGNORECASE)
+        return {"alliance_amount": int(match.group(1))} if match else None
 
 
 async def parse_prisme_kamas_with_ai(image_url: str) -> dict:
@@ -198,6 +215,7 @@ async def parse_prisme_kamas_with_ai(image_url: str) -> dict:
         max_completion_tokens=128,
         reasoning_effort="none",
         reasoning_format="hidden",
+        response_format={"type": "json_object"},
         stream=True,
     )
     raw = ""

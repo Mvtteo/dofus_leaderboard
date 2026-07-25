@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: #0d0e0c; color: #f2efe6; -webkit-font-smoothing: antialiased; }
+  a { color: #f2efe6; text-decoration: none; }
+  a:hover { color: #b9b8ac; }
+  @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0d0e0c; font-family: 'Archivo', 'Helvetica Neue', sans-serif; padding-bottom: 0;">
+
+  <header style="position: sticky; top: 0; z-index: 30; background: #0d0e0c; border-bottom: 1px solid rgba(242,239,230,0.14);">
+    <div style="max-width: 1360px; margin: 0 auto; padding: 16px 32px; display: flex; align-items: center; gap: 26px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <img src="web/assets/logo_nemesis_round.png" alt="Nemesis" style="width: 32px; height: 32px; object-fit: contain;">
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <span style="font-family: 'Anton', sans-serif; font-size: 27px; line-height: 1; letter-spacing: 0.02em; text-transform: uppercase;">Nemesis</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.24em; color: #6f7468; text-transform: uppercase; white-space: nowrap;">Alliance PvP</span>
+        </div>
+      </div>
+
+      <div style="flex: 1;"></div>
+
+      <div style="display: flex; align-items: center; gap: 22px;">
+        <div style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #f2efe6;">{{ playerCount }}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #6f7468;">Joueurs</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #f2efe6;">{{ totalCombats }}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #6f7468;">Combats</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; border: 1px solid rgba(242,239,230,0.16); padding: 7px 12px; width: 190px;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6f7468;">&#9906;</span>
+          <input type="text" placeholder="RECHERCHER" value="{{ search }}" onInput="{{ onSearch }}" style="border: none; outline: none; background: transparent; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; color: #f2efe6; width: 100%; text-transform: uppercase;">
+        </div>
+        <select value="{{ selectedSeason }}" onChange="{{ onSeasonChange }}" style="appearance: none; background: {{ accent }}; color: #0d0e0c; border: none; padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;">
+          <sc-for list="{{ seasons }}" as="s" hint-placeholder-count="3">
+            <option value="{{ s.id }}">{{ s.label }}</option>
+          </sc-for>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <div style="overflow: hidden; border-bottom: 1px solid rgba(242,239,230,0.14); background: #111310;">
+    <div style="display: flex; width: max-content; animation: ticker 42s linear infinite;">
+      <sc-for list="{{ ticker }}" as="t" hint-placeholder-count="12">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 9px 20px; border-right: 1px solid rgba(242,239,230,0.08); white-space: nowrap;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.16em; color: {{ t.color }};">{{ t.tag }}</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #b9b8ac;">{{ t.text }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <nav style="border-bottom: 1px solid rgba(242,239,230,0.14);">
+    <div style="max-width: 1360px; margin: 0 auto; padding: 0 32px; display: flex;">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onClick }}" style="background: {{ t.bg }}; color: {{ t.color }}; border: none; border-right: 1px solid rgba(242,239,230,0.14); padding: 13px 26px; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;">{{ t.label }}</button>
+      </sc-for>
+    </div>
+  </nav>
+
+  <main style="max-width: 1360px; margin: 0 auto; padding: 0 32px 90px;">
+
+    <sc-if value="{{ isRanking }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <section style="padding: 44px 0 34px; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 30px; border-bottom: 1px solid rgba(242,239,230,0.14);">
+          <div>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.28em; text-transform: uppercase; color: {{ accent }};">{{ seasonLabel }} — Alliance</span>
+            <h1 style="margin: 10px 0 0; font-family: 'Anton', sans-serif; font-size: 96px; line-height: 0.86; letter-spacing: -0.01em; text-transform: uppercase; color: #f2efe6;">Classement<br><span style="color: transparent; -webkit-text-stroke: 1.5px {{ accent2 }};">de l'alliance</span></h1>
+          </div>
+          <p style="margin: 0; max-width: 260px; font-size: 12px; line-height: 1.7; color: #8b9080; text-wrap: pretty;">Points d'attaque et de défense agrégés par compte. Rafraîchi toutes les 15 s depuis le bot.</p>
+        </section>
+
+        <section style="display: flex; flex-direction: column;">
+          <sc-for list="{{ podium }}" as="p" hint-placeholder-count="3">
+            <div style="display: grid; grid-template-columns: 132px minmax(0,1fr) 190px 150px; align-items: center; gap: 26px; padding: 24px 26px 24px 0; border-bottom: 1px solid rgba(242,239,230,0.14); background: {{ p.rowBg }};" style-hover="background: #14170f;">
+              <span style="font-family: 'Anton', sans-serif; font-size: 92px; line-height: 0.78; color: {{ p.accent }}; text-align: right;">{{ p.rank }}</span>
+              <div style="display: flex; align-items: center; gap: 18px; min-width: 0;">
+              <div style="width: 58px; height: 58px; flex-shrink: 0; border: 1px solid {{ p.accent }}; background: #15170f; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                <img src="{{ p.avatar }}" alt="{{ p.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 7px; min-width: 0;">
+                <span style="font-family: 'Anton', sans-serif; font-size: 38px; line-height: 0.9; text-transform: uppercase; letter-spacing: 0.005em; color: #f2efe6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ p.name }}</span>
+                <div style="display: flex; align-items: center; gap: 14px;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #8b9080;">{{ p.record }}</span>
+                </div>
+              </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #6f7468;">Winrate</span>
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: {{ p.wrColor }};">{{ p.wr }}%</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px;">
+                  <sc-for list="{{ p.segs }}" as="s" hint-placeholder-count="10">
+                    <div style="height: 7px; background: {{ s.color }};"></div>
+                  </sc-for>
+                </div>
+                <div style="display: flex; gap: 16px;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b9080;">ATK {{ p.atk }}</span>
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8b9080;">DEF {{ p.def }}</span>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-family: 'Anton', sans-serif; font-size: 46px; line-height: 0.9; color: {{ p.accent }};">{{ p.points }}</div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.22em; color: #6f7468; margin-top: 4px;">POINTS</div>
+              </div>
+            </div>
+          </sc-for>
+        </section>
+
+        <section style="margin-top: 46px;">
+          <div style="display: grid; grid-template-columns: 72px minmax(160px,1fr) 180px 84px 84px 112px; align-items: center; gap: 14px; padding: 10px 18px; background: #f2efe6;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #0d0e0c;">Rang</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #0d0e0c;">Joueur</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #0d0e0c;">Winrate {{ poolSuffix }}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #0d0e0c; text-align: right;">Atk</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #0d0e0c; text-align: right;">Def</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #0d0e0c; text-align: right;">Score</span>
+          </div>
+
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12">
+            <div style="display: grid; grid-template-columns: 72px minmax(160px,1fr) 180px 84px 84px 112px; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid rgba(242,239,230,0.09);" style-hover="background: #15170f;">
+              <div style="display: flex; align-items: baseline; gap: 7px;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: {{ r.rankColor }};">{{ r.rank }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; color: {{ r.deltaColor }};">{{ r.delta }}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                <div style="width: 26px; height: 26px; flex-shrink: 0; border: 1px solid rgba(242,239,230,0.16); background: #15170f; overflow: hidden;">
+                  <img src="{{ r.avatar }}" alt="{{ r.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <span style="font-family: 'Archivo', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0.01em; text-transform: uppercase; color: #f2efe6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.name }}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="flex: 1; display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px;">
+                  <sc-for list="{{ r.segs }}" as="s" hint-placeholder-count="10">
+                    <div style="height: 5px; background: {{ s.color }};"></div>
+                  </sc-for>
+                </div>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: {{ r.wrColor }}; min-width: 30px; text-align: right;">{{ r.wr }}%</span>
+              </div>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b9080; text-align: right;">{{ r.atk }}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8b9080; text-align: right;">{{ r.def }}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: #f2efe6; text-align: right;">{{ r.points }}</span>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 52px 18px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f7468;">Aucun joueur trouvé</div>
+          </sc-if>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 18px 0 0;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #6f7468;">{{ pageInfo }}</span>
+            <div style="display: flex; gap: 4px;">
+              <sc-for list="{{ pages }}" as="pg" hint-placeholder-count="4">
+                <button onClick="{{ pg.onClick }}" style="min-width: 30px; height: 30px; border: 1px solid {{ pg.border }}; background: {{ pg.bg }}; color: {{ pg.color }}; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; cursor: pointer;" style-hover="border-color: {{ accent }};">{{ pg.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFeed }}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 44px 0 0;">
+        <h1 style="margin: 0 0 28px; font-family: 'Anton', sans-serif; font-size: 72px; line-height: 0.88; text-transform: uppercase;">Derniers<br><span style="color: transparent; -webkit-text-stroke: 1.5px {{ accent }};">combats</span></h1>
+        <div style="display: flex; flex-direction: column;">
+          <sc-for list="{{ matches }}" as="m" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 108px minmax(0,1fr) 1fr 118px; align-items: center; gap: 24px; padding: 20px 0; border-top: 1px solid rgba(242,239,230,0.14);" style-hover="background: #14170f;">
+              <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 8.5px; font-weight: 700; letter-spacing: 0.16em; padding: 4px 7px; background: {{ m.accent }}; color: #0d0e0c;">{{ m.outcome }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.16em; color: #8b9080;">{{ m.context }} · {{ m.time }}</span>
+              </div>
+              <div style="min-width: 0;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: #6f7468;">Adversaire</span>
+                <div style="font-family: 'Anton', sans-serif; font-size: 34px; line-height: 1; text-transform: uppercase; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ m.alliance }}</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: {{ accent }};">Gagnants</span>
+                  <sc-for list="{{ m.winners }}" as="n" hint-placeholder-count="3">
+                    <span style="font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em;">{{ n }}</span>
+                  </sc-for>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: {{ accent2 }};">Perdants</span>
+                  <sc-for list="{{ m.losers }}" as="n" hint-placeholder-count="3">
+                    <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; color: #8b9080;">{{ n }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <span style="font-family: 'Anton', sans-serif; font-size: 34px; text-align: right; color: {{ m.accent }};">+{{ m.points }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isStats }}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 44px 0 0;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 30px; border-bottom: 1px solid rgba(242,239,230,0.14); padding-bottom: 30px;">
+          <div>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.26em; text-transform: uppercase; color: #6f7468;">Winrate global</span>
+            <div style="font-family: 'Anton', sans-serif; font-size: 140px; line-height: 0.82; color: {{ accent }}; margin-top: 8px;">{{ globalWr }}%</div>
+          </div>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.06em; color: #8b9080; text-align: right;">{{ globalRecord }}</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0,1fr));">
+          <sc-for list="{{ pools }}" as="p" hint-placeholder-count="3">
+            <div style="border-right: 1px solid rgba(242,239,230,0.14); border-bottom: 1px solid rgba(242,239,230,0.14); padding: 26px 24px; display: flex; flex-direction: column; gap: 20px;">
+              <div>
+                <div style="font-family: 'Anton', sans-serif; font-size: 30px; line-height: 1; text-transform: uppercase;">{{ p.name }}</div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{ p.wrColor }}; margin-top: 6px;">{{ p.winrate }}% WR · {{ p.total }} combats</div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: {{ p.atkColor }};">{{ p.atk_winrate }}%</div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: #6f7468; margin-top: 3px;">WR attaque</div>
+                </div>
+                <div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 18px; color: {{ p.defColor }};">{{ p.def_winrate }}%</div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: #6f7468; margin-top: 3px;">WR défense</div>
+                </div>
+                <div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 18px;">{{ p.total_points }}</div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: #6f7468; margin-top: 3px;">Points</div>
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(242,239,230,0.09); padding-top: 14px;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #6f7468;">MVP</span>
+                <sc-for list="{{ p.top_players }}" as="tp" hint-placeholder-count="3">
+                  <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                    <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em;">{{ tp.name }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: {{ accent }};">{{ tp.wins }}V</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="padding: 30px 0 0;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase; color: #6f7468;">Distribution horaire</span>
+          <div style="display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; align-items: end; height: 170px; margin-top: 20px;">
+            <sc-for list="{{ hours }}" as="h" hint-placeholder-count="24">
+              <div style="height: {{ h.height }}; background: {{ h.color }};" style-hover="background: {{ accent2 }};"></div>
+            </sc-for>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; margin-top: 8px; border-top: 1px solid rgba(242,239,230,0.14); padding-top: 8px;">
+            <sc-for list="{{ hours }}" as="h" hint-placeholder-count="24">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 8px; color: #6f7468; text-align: center;">{{ h.label }}</span>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+
+  <footer style="border-top: 1px solid rgba(242,239,230,0.14);">
+    <div style="max-width: 1360px; margin: 0 auto; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-family: 'Anton', sans-serif; font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: #6f7468;">Nemesis — Alliance PvP Tracker</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; color: #6f7468;">{{ updatedAt }}</span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;palette&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;cobalt&quot;, &quot;lime&quot;, &quot;glacier&quot;, &quot;magenta&quot;], &quot;default&quot;: &quot;cobalt&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Style&quot;}, &quot;rowsPerPage&quot;: {&quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 12, &quot;min&quot;: 6, &quot;max&quot;: 24, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Classement&quot;}, &quot;showRankChange&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Classement&quot;}}">
+const PLAYERS = [
+  ['Nazolas', 412, 268, 144, 51, 19], ['Bellarox', 388, 201, 187, 47, 21],
+  ['Kaelthorn', 341, 190, 151, 40, 22], ['Ilyriane', 318, 122, 196, 38, 25],
+  ['Grimjaw', 296, 178, 118, 35, 24], ['Sylvenaar', 271, 133, 138, 33, 26],
+  ['Torvald', 254, 160, 94, 31, 25], ['Nyxaline', 238, 96, 142, 29, 27],
+  ['Drakhanys', 219, 141, 78, 27, 26], ['Peluchette', 205, 88, 117, 26, 28],
+  ['Vorkun', 188, 119, 69, 23, 27], ['Maelysse', 174, 71, 103, 22, 29],
+  ['Zephyros', 161, 97, 64, 20, 28], ['Ombrelune', 148, 60, 88, 19, 30],
+  ['Fenrikh', 136, 86, 50, 17, 29], ['Astarielle', 124, 52, 72, 16, 31],
+  ['Brulevent', 112, 70, 42, 14, 30], ['Kalizra', 99, 41, 58, 13, 32],
+  ['Morgrym', 87, 55, 32, 11, 31], ['Solenne', 78, 33, 45, 10, 30],
+  ['Harkoniel', 66, 42, 24, 9, 32], ['Nixie', 54, 22, 32, 7, 30],
+  ['Thalgrim', 43, 27, 16, 6, 29], ['Elarra', 31, 13, 18, 4, 28],
+].map(([name, points, atk, def, wins, losses], i) => ({
+  dofus_pseudo: name, total_points: points, atk_points: atk, def_points: def,
+  wins, losses, winrate: Math.round(wins / (wins + losses) * 100),
+  rank_change: [2, 0, -1, 3, 0, 1, -2, 0, 4, -1, 0, 2, -3, 1, 0, 0, -1, 2, 0, -2, 1, 0, 0, 3][i],
+}));
+
+const MATCHES = [
+  { id: 1, alliance: 'Ostentatio', points: 12, context: 'attack', has_won: true, mins: 4, winners: ['Nazolas', 'Kaelthorn', 'Grimjaw'], losers: ['Vhalor', 'Sindria'] },
+  { id: 2, alliance: 'Ébène', points: 8, context: 'defense', has_won: false, mins: 26, winners: ['Yldrim', 'Cassiane'], losers: ['Ilyriane', 'Torvald', 'Nyxaline'] },
+  { id: 3, alliance: 'Kaliptus', points: 15, context: 'attack', has_won: true, mins: 71, winners: ['Bellarox', 'Sylvenaar', 'Drakhanys', 'Maelysse'], losers: ['Orvenn'] },
+  { id: 4, alliance: 'Ostentatio', points: 10, context: 'defense', has_won: true, mins: 143, winners: ['Zephyros', 'Fenrikh'], losers: ['Praxel', 'Nuhia', 'Serkhan'] },
+  { id: 5, alliance: 'Nihil', points: 6, context: 'attack', has_won: false, mins: 320, winners: ['Ardanel', 'Tiphae'], losers: ['Peluchette', 'Vorkun'] },
+  { id: 6, alliance: 'Kaliptus', points: 14, context: 'attack', has_won: true, mins: 490, winners: ['Nazolas', 'Bellarox', 'Ombrelune'], losers: ['Kryzel', 'Malienn'] },
+];
+
+const POOLS = [
+  { name: 'Ostentatio', total: 148, wins: 92, losses: 56, winrate: 62, total_points: 1184, atk_winrate: 68, def_winrate: 54,
+    top_players: [{ name: 'Nazolas', wins: 24 }, { name: 'Kaelthorn', wins: 19 }, { name: 'Grimjaw', wins: 15 }] },
+  { name: 'Kaliptus', total: 96, wins: 51, losses: 45, winrate: 53, total_points: 742, atk_winrate: 58, def_winrate: 47,
+    top_players: [{ name: 'Bellarox', wins: 17 }, { name: 'Sylvenaar', wins: 12 }, { name: 'Maelysse', wins: 9 }] },
+  { name: 'Ébène', total: 61, wins: 25, losses: 36, winrate: 41, total_points: 388, atk_winrate: 45, def_winrate: 37,
+    top_players: [{ name: 'Ilyriane', wins: 11 }, { name: 'Torvald', wins: 8 }, { name: 'Nyxaline', wins: 6 }] },
+];
+
+const HOURS = [2, 1, 0, 0, 0, 0, 1, 3, 6, 9, 12, 14, 18, 16, 13, 15, 21, 27, 34, 41, 38, 29, 17, 8];
+const SEASONS = [{ id: 7, label: 'Saison 7 — en cours' }, { id: 6, label: 'Saison 6' }, { id: 5, label: 'Saison 5' }];
+const DIM = 'rgba(242,239,230,0.12)';
+const PALETTES = {
+  cobalt: { accent: '#4d6bff', accent2: '#ff5c2b', mid: '#c9b8ff', soft: 'rgba(77,107,255,0.3)' },
+  lime: { accent: '#d9f24b', accent2: '#ff4a1f', mid: '#e2a33c', soft: 'rgba(217,242,75,0.28)' },
+  glacier: { accent: '#6fe3d2', accent2: '#ff5c7a', mid: '#a9d8c4', soft: 'rgba(111,227,210,0.28)' },
+  magenta: { accent: '#ff3d81', accent2: '#ffd447', mid: '#ff9bbe', soft: 'rgba(255,61,129,0.28)' },
+};
+
+class Component extends DCLogic {
+  state = { tab: 'classement', search: '', season: 7, page: 1 };
+
+  perco(pts, rk) {
+    if (rk <= 10) return 4;
+    if (pts >= 175) return 3;
+    if (pts >= 125) return 2;
+    if (pts >= 75) return 1;
+    return 0;
+  }
+  pal() { return PALETTES[this.props.palette ?? 'cobalt'] || PALETTES.cobalt; }
+  wrColor(w) { const p = this.pal(); return w >= 60 ? p.accent : w >= 45 ? p.mid : p.accent2; }
+  segs(w, color) {
+    const filled = Math.round(w / 10);
+    return Array.from({ length: 10 }, (_, i) => ({ color: i < filled ? color : DIM }));
+  }
+  ago(m) { return m < 60 ? m + ' MIN' : m < 1440 ? Math.floor(m / 60) + ' H' : Math.floor(m / 1440) + ' J'; }
+  num(n) { return n.toLocaleString('fr-FR'); }
+
+  renderVals() {
+    const pal = this.pal();
+    const LIME = pal.accent, ORANGE = pal.accent2, AMBER = pal.mid;
+    const rowsPerPage = this.props.rowsPerPage ?? 12;
+    const all = PLAYERS;
+    const q = this.state.search.trim().toLowerCase();
+    const filtered = q ? all.filter(p => p.dofus_pseudo.toLowerCase().includes(q)) : all;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+    const page = Math.min(this.state.page, totalPages);
+    const slice = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+    const showDelta = this.props.showRankChange ?? true;
+
+    const rowOf = p => {
+      const rank = all.indexOf(p) + 1;
+      const pc = this.perco(p.total_points, rank);
+      const d = p.rank_change;
+      const wc = this.wrColor(p.winrate);
+      return {
+        rank, name: p.dofus_pseudo,
+        avatar: p.avatar_url || 'web/assets/avatar_placeholder_' + ((rank - 1) % 6 + 1) + '.png',
+        points: this.num(p.total_points), atk: this.num(p.atk_points), def: this.num(p.def_points),
+        wr: p.winrate, wrColor: wc, segs: this.segs(p.winrate, wc),
+        record: p.wins + 'V / ' + p.losses + 'D', perco: pc + '/4',
+        rankColor: rank <= 3 ? LIME : '#8b9080',
+        delta: !showDelta || !d ? '' : (d > 0 ? '\u2191' + d : '\u2193' + Math.abs(d)),
+        deltaColor: d > 0 ? LIME : ORANGE,
+      };
+    };
+
+    const podium = filtered.slice(0, 3).map((p, i) => {
+      const r = rowOf(p);
+      r.accent = [LIME, '#f2efe6', ORANGE][i];
+      r.rowBg = i === 0 ? '#111410' : 'transparent';
+      return r;
+    });
+
+    const pages = [];
+    const from = Math.max(1, page - 2), to = Math.min(totalPages, page + 2);
+    for (let i = from; i <= to; i++) {
+      const on = i === page;
+      pages.push({
+        label: String(i), onClick: () => this.setState({ page: i }),
+        bg: on ? LIME : 'transparent', color: on ? '#0d0e0c' : '#8b9080',
+        border: on ? LIME : 'rgba(242,239,230,0.16)',
+      });
+    }
+
+    const tabs = [['classement', 'Classement'], ['activite', 'Activité'], ['stats', 'Stats']].map(([id, label]) => {
+      const on = this.state.tab === id;
+      return { label, onClick: () => this.setState({ tab: id }), bg: on ? '#f2efe6' : 'transparent', color: on ? '#0d0e0c' : '#8b9080' };
+    });
+
+    const tW = POOLS.reduce((a, p) => a + p.wins, 0), tL = POOLS.reduce((a, p) => a + p.losses, 0);
+    const maxH = Math.max(...HOURS);
+
+    const tickerItems = MATCHES.map(m => ({
+      tag: m.has_won ? 'VICTOIRE' : 'DÉFAITE',
+      color: m.has_won ? LIME : ORANGE,
+      text: (m.context === 'defense' ? 'DEF' : 'ATK') + ' vs ' + m.alliance.toUpperCase() + '  +' + m.points + ' PTS  ' + this.ago(m.mins),
+    }));
+
+    return {
+      accent: pal.accent, accent2: pal.accent2,
+      playerCount: all.length, totalCombats: 305,
+      seasons: SEASONS, selectedSeason: this.state.season,
+      seasonLabel: SEASONS.find(s => s.id === this.state.season).label.split(' —')[0],
+      onSeasonChange: e => this.setState({ season: parseInt(e.target.value), page: 1 }),
+      search: this.state.search,
+      onSearch: e => this.setState({ search: e.target.value, page: 1 }),
+      tabs,
+      ticker: tickerItems.concat(tickerItems),
+      isRanking: this.state.tab === 'classement',
+      isFeed: this.state.tab === 'activite',
+      isStats: this.state.tab === 'stats',
+      podium, rows: slice.map(rowOf), pages,
+      isEmpty: filtered.length === 0,
+      poolSuffix: '· vs Ostentatio',
+      pageInfo: filtered.length + ' joueurs — page ' + page + ' / ' + totalPages,
+      matches: MATCHES.map(m => ({
+        ...m, accent: m.has_won ? LIME : ORANGE,
+        outcome: m.has_won ? 'VICTOIRE' : 'DÉFAITE',
+        context: m.context === 'defense' ? 'DÉFENSE' : 'ATTAQUE',
+        time: this.ago(m.mins),
+      })),
+      pools: POOLS.map(p => ({ ...p, wrColor: this.wrColor(p.winrate), atkColor: this.wrColor(p.atk_winrate), defColor: this.wrColor(p.def_winrate) })),
+      globalWr: Math.round(tW / (tW + tL) * 100),
+      globalRecord: tW + 'V / ' + tL + 'D — ' + (tW + tL) + ' COMBATS',
+      hours: HOURS.map((v, i) => ({
+        height: Math.max(Math.round(v / maxH * 100), 2) + '%',
+        color: v >= maxH * 0.7 ? LIME : pal.soft,
+        label: i % 3 === 0 ? i + 'H' : '',
+      })),
+      updatedAt: 'MAJ ' + new Date().toLocaleString('fr-FR'),
+    };
+  }
+}
+</script>
+</body>
+</html>

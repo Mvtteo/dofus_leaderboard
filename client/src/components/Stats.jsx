@@ -1,41 +1,37 @@
 import { useState, useEffect } from 'react';
 import { wrColor } from '../utils/helpers';
 
-const LEVEL_COLORS = ['', '#5ec4b6', '#2a9d8f', '#e9c46a', '#e9c46a'];
-
 function PoolCard({ pool: p }) {
   return (
     <div className="pool-card">
-      <div className="pool-name">
-        {p.name}
-        <span className="wr-badge" style={{ background: 'rgba(42,157,143,0.1)', color: wrColor(p.winrate) }}>
-          {p.winrate}% WR
-        </span>
+      <div>
+        <div className="pool-name">{p.name}</div>
+        <div className="pool-sub" style={{ color: wrColor(p.winrate) }}>{p.winrate}% WR · {p.total} combats</div>
       </div>
-      <div className="pool-stats">
-        <div className="pool-stat"><div className="v">{p.total}</div><div className="l">Combats</div></div>
-        <div className="pool-stat">
-          <div className="v" style={{ color: wrColor(p.atk_winrate) }}>{p.atk_winrate}%</div>
-          <div className="l">WR Attaque</div>
+      <div className="pool-figures">
+        <div>
+          <div className="pool-fig-value" style={{ color: wrColor(p.atk_winrate) }}>{p.atk_winrate}%</div>
+          <div className="pool-fig-label">WR attaque</div>
         </div>
-        <div className="pool-stat">
-          <div className="v" style={{ color: wrColor(p.def_winrate) }}>{p.def_winrate}%</div>
-          <div className="l">WR Défense</div>
+        <div>
+          <div className="pool-fig-value" style={{ color: wrColor(p.def_winrate) }}>{p.def_winrate}%</div>
+          <div className="pool-fig-label">WR défense</div>
         </div>
-        <div className="pool-stat"><div className="v">{p.total_points}</div><div className="l">Points</div></div>
+        <div>
+          <div className="pool-fig-value">{p.total_points}</div>
+          <div className="pool-fig-label">Points</div>
+        </div>
       </div>
       {p.top_players.length > 0 && (
-        <>
-          <div className="st-label" style={{ marginBottom: '6px' }}>MVP vs {p.name}</div>
-          <div className="pool-top">
-            {p.top_players.map((tp, i) => (
-              <div key={tp.name} className="player">
-                <span style={{ color: LEVEL_COLORS[3 - i > 0 ? 3 - i : 1] }}>{i + 1}.</span>
-                <b>{tp.name}</b> — {tp.wins}W
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="pool-mvp">
+          <span className="pool-mvp-label">MVP</span>
+          {p.top_players.map(tp => (
+            <div key={tp.name} className="pool-mvp-row">
+              <span>{tp.name}</span>
+              <span className="w">{tp.wins}V</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -62,35 +58,35 @@ export default function Stats({ selectedSeason }) {
   const tG = tW + tL;
   const gWr = tG > 0 ? Math.round(tW / tG * 100) : 0;
   const mH = Math.max(...data.hours, 1);
-  const hTotal = data.hours.reduce((a, b) => a + b, 0) || 1;
 
   return (
-    <div id="statsContent">
-      <div className="stats-grid">
-        <div className="stat-card full">
-          <div className="st-label">Winrate global</div>
-          <div className="st-big" style={{ color: wrColor(gWr) }}>{gWr}%</div>
-          <div className="st-sub">{tW}V / {tL}D — {tG} combats</div>
+    <div className="stats-page">
+      <div className="global-wr-row">
+        <div>
+          <span className="global-wr-label">Winrate global</span>
+          <div className="global-wr-value" style={{ color: wrColor(gWr) }}>{gWr}%</div>
         </div>
+        <span className="global-wr-record">{tW}V / {tL}D — {tG} COMBATS</span>
       </div>
 
-      {data.pools.map(p => <PoolCard key={p.name} pool={p} />)}
+      <div className="pools-grid">
+        {data.pools.map(p => <PoolCard key={p.name} pool={p} />)}
+      </div>
 
-      <div className="stat-card full">
-        <div className="st-label">Distribution horaire</div>
+      <div className="hours-section">
+        <span className="hours-label">Distribution horaire</span>
         <div className="hours-chart">
           {data.hours.map((v, i) => (
             <div
               key={i}
-              className="hour-bar"
+              className={`hour-bar${v >= mH * 0.7 ? ' peak' : ''}`}
               style={{ height: `${Math.max(Math.round(v / mH * 100), 2)}%` }}
-              data-v={Math.round(v / hTotal * 100)}
             />
           ))}
         </div>
         <div className="hours-labels">
           {Array.from({ length: 24 }, (_, i) => (
-            <span key={i}>{i % 3 === 0 ? `${i}h` : ''}</span>
+            <span key={i}>{i % 3 === 0 ? `${i}H` : ''}</span>
           ))}
         </div>
       </div>

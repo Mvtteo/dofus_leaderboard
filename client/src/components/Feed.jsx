@@ -1,44 +1,33 @@
 import { useState, useEffect } from 'react';
 import { ago } from '../utils/helpers';
 
-function MatchCard({ match: m, index: i }) {
+function MatchRow({ match: m }) {
   const w = m.has_won;
   return (
-    <div className={`feed-card ${w ? 'win' : 'lose'}`} style={{ '--d': `${i * 0.04}s` }}>
-      <div className="fc-top">
-        <div className="fc-tags">
-          <span className={`fc-badge ${m.context === 'defense' ? 'def' : 'atk'}`}>
-            {m.context === 'defense' ? 'DEF' : 'ATK'}
-          </span>
-          <span className={`fc-badge ${w ? 'w' : 'l'}`}>
-            {w ? 'Victoire' : 'Défaite'}
-          </span>
-        </div>
-        <span className="fc-time">{ago(m.created_at)}</span>
+    <div className="feed-row">
+      <div className="feed-outcome">
+        <span className={`feed-chip ${w ? 'win' : 'lose'}`}>{w ? 'VICTOIRE' : 'DÉFAITE'}</span>
+        <span className="feed-context">{m.context === 'defense' ? 'DÉFENSE' : 'ATTAQUE'} · {ago(m.created_at)}</span>
       </div>
-      <div className="fc-vs">vs <b>{m.alliance || 'Inconnu'}</b></div>
-      <div className="fc-teams">
-        <div className="fc-team">
-          <div className="fc-team-label w">Gagnants</div>
+      <div className="feed-adversary">
+        <span className="feed-adversary-label">Adversaire</span>
+        <div className="feed-alliance">{m.alliance || 'Inconnu'}</div>
+      </div>
+      <div className="feed-teams">
+        <div className="feed-team">
+          <span className="feed-team-label win">Gagnants</span>
           {m.winners.length
-            ? m.winners.map(n => <div key={n} className="fc-player">{n}</div>)
-            : <div className="fc-player">-</div>}
+            ? m.winners.map(n => <span key={n} className="feed-player">{n}</span>)
+            : <span className="feed-player">-</span>}
         </div>
-        <div className="fc-sep">
-          <div className="vl" />
-          VS
-          <div className="vl" />
-        </div>
-        <div className="fc-team right">
-          <div className="fc-team-label l">Perdants</div>
+        <div className="feed-team">
+          <span className="feed-team-label lose">Perdants</span>
           {m.losers.length
-            ? m.losers.map(n => <div key={n} className="fc-player">{n}</div>)
-            : <div className="fc-player">-</div>}
+            ? m.losers.map(n => <span key={n} className="feed-player lose">{n}</span>)
+            : <span className="feed-player lose">-</span>}
         </div>
       </div>
-      <div className="fc-bottom">
-        <span className={`fc-pts ${w ? 'w' : 'l'}`}>+{m.points} pts</span>
-      </div>
+      <span className={`feed-points ${w ? 'win' : 'lose'}`}>+{m.points}</span>
     </div>
   );
 }
@@ -56,13 +45,16 @@ export default function Feed({ selectedSeason }) {
       .catch(() => setStatus('error'));
   }, [selectedSeason]);
 
-  if (status === 'loading') return <div className="feed"><div className="feed-empty">Chargement…</div></div>;
-  if (status === 'error') return <div className="feed"><div className="feed-empty">Erreur de chargement.</div></div>;
-  if (!matches.length) return <div className="feed"><div className="feed-empty">Aucun combat enregistré.</div></div>;
-
   return (
-    <div className="feed">
-      {matches.map((m, i) => <MatchCard key={m.id} match={m} index={i} />)}
+    <div className="feed-page">
+      <h1 className="feed-title">Derniers<br /><span className="feed-outline">combats</span></h1>
+      {status === 'loading' && <div className="feed-empty">Chargement…</div>}
+      {status === 'error' && <div className="feed-empty">Erreur de chargement.</div>}
+      {status === 'ok' && (
+        matches.length
+          ? <div className="feed-list">{matches.map(m => <MatchRow key={m.id} match={m} />)}</div>
+          : <div className="feed-empty">Aucun combat enregistré.</div>
+      )}
     </div>
   );
 }

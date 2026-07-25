@@ -1,46 +1,44 @@
-@media (max-width: 900px) {
-  .header-inner {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 16px;
-  }
+@media (max-width: 1280px) {
+  .fight-row { grid-template-columns: 100px minmax(0, 1fr) 150px 120px; gap: 18px; }
 
-  .header-stats {
-    order: 3;
-    width: 100%;
-    justify-content: center;
-  }
+  $grid-sm: 50px minmax(0, 1fr) 140px 70px 70px 90px;
+  .table-head, .table-row { grid-template-columns: $grid-sm; gap: 10px; }
 
-  .podium-cards { gap: 10px; }
+  .hero-title { font-size: 72px; }
 }
 
-@media (max-width: 600px) {
-  .header { padding: 12px 16px; }
-  .brand-title { font-size: 1.1rem; }
+@media (max-width: 1000px) {
+  .header-inner { flex-wrap: wrap; gap: 14px; padding: 14px 20px; }
+  .header-spacer { display: none; }
+  .header-actions { width: 100%; flex-wrap: wrap; }
+
+  .fight-row { grid-template-columns: 1fr; gap: 12px; text-align: left; }
+  .fight-rank { text-align: left; }
+  .fight-score { text-align: left; }
+
+  .feed-row { grid-template-columns: 1fr; gap: 12px; }
+  .feed-alliance { font-size: 26px; }
+  .feed-points { text-align: left; }
+
+  .pools-grid { grid-template-columns: 1fr; }
+  .pool-card { border-right: none; }
+
+  .global-wr-row { grid-template-columns: 1fr; }
+  .global-wr-record { text-align: left; }
+  .global-wr-value { font-size: 90px; }
+}
+
+@media (max-width: 640px) {
   .brand-sub { display: none; }
-  .main-content { padding: 24px 16px; }
+  .main-content, .tabs-bar { padding-left: 16px; padding-right: 16px; }
+  .header-inner { padding: 12px 16px; }
 
-  .podium-cards {
-    grid-template-columns: 1fr;
-    max-width: 300px;
-  }
+  .search-box { width: 120px; }
 
-  .col-winrate { display: none; }
-  .col-perco, .cell-perco { display: none; }
+  .hero-title { font-size: 48px; }
+  .feed-title, .stats-title { font-size: 40px; }
 
-  .leaderboard-table th,
-  .leaderboard-table td { padding: 10px 12px; }
-
-  .player-avatar { width: 32px; height: 32px; font-size: 0.75rem; }
-  .player-name { font-size: 0.8rem; }
-
-  .stats-grid { grid-template-columns: 1fr; }
-  .pool-stats { grid-template-columns: repeat(2, 1fr); }
-
-  .fc-teams { grid-template-columns: 1fr; gap: 6px; }
-  .fc-sep { display: none; }
-  .fc-team.right { text-align: left; }
-
-  .search-container.expanded { width: 180px; }
-  .search-container.expanded input { width: 120px; }
+  $grid-xs: 36px minmax(0, 1fr) 70px;
+  .table-head, .table-row { grid-template-columns: $grid-xs; }
+  .col-atk, .col-def, .cell-atk, .cell-def { display: none; }
 }

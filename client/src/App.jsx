@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import Background from './components/Background';
 import Header from './components/Header';
+import Ticker from './components/Ticker';
 import Leaderboard from './components/Leaderboard';
 import Feed from './components/Feed';
 import Stats from './components/Stats';
@@ -59,7 +59,6 @@ export default function App() {
 
   return (
     <>
-      <Background />
       <Header
         playerCount={players.length}
         totalCombats={totalCombats}
@@ -69,7 +68,8 @@ export default function App() {
         search={search}
         onSearch={setSearch}
       />
-      <main className="main-content">
+      <Ticker selectedSeason={selectedSeason} />
+      <nav className="tabs-nav">
         <div className="tabs-bar">
           {tabs.map(t => (
             <button
@@ -81,13 +81,15 @@ export default function App() {
             </button>
           ))}
         </div>
-
+      </nav>
+      <main className="main-content">
         <div className={`panel${activeTab === 'classement' ? ' on' : ''}`}>
           <Leaderboard
             filteredPlayers={filteredPlayers}
             allPlayers={players}
             pools={pools}
             defaultWinratePool={defaultWinratePool}
+            seasonId={selectedSeason}
           />
         </div>
 
