@@ -1,4 +1,4 @@
-# OGRE Prismes & Ressources - Admin Debt Tracker
+# NEMESIS Prismes & Ressources - Admin Debt Tracker
 
 ## Overview
 Bot tracks player purchases in dedicated channel. Extracts total kamas from screenshots. Admin panel manages pending validations with checkboxes and player filters. Images deleted after validation.
@@ -120,7 +120,7 @@ Bot tracks player purchases in dedicated channel. Extracts total kamas from scre
 - Discord.js listeners: `src/discord/listeners.js`
 - File storage/deletion: `src/services/file-storage.js`
 - DB migrations: `migrations/`
-- Existing OGRE components: screenshot handling, image storage
+- Existing NEMESIS components: screenshot handling, image storage
 
 ## Workflow Summary
 

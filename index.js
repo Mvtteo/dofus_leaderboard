@@ -523,7 +523,10 @@ async function saveSetting(key, value) {
 loadSettings();
 
 function getSeasons() {
-    const INITIAL_DATE = new Date('2026-02-01T00:00:00'); 
+    // Nouvelle base (sakura) : la saison 1 redémarre le 25/07, comme sur le backend Python
+    // qui l'a migrée — sinon ce calcul retombe sur "Saison 13" alors que les données
+    // migrées (matchs, season_stats) vivent sous season_id=1.
+    const INITIAL_DATE = new Date('2026-07-25T00:00:00');
     const DAYS_PER_SEASON = 14;
     const now = new Date();
     const seasons = [];
@@ -569,21 +572,27 @@ function getSeasons() {
 }
 
 async function getLeaderboardPlayers(seasonId) {
+    // season_stats a EXACTEMENT une ligne par (account_id, season_id) — pas de SUM/GROUP BY
+    // nécessaire ici. Le pseudo de repli passe par une sous-requête corrélée plutôt qu'un JOIN
+    // characters : un JOIN dupliquerait la ligne season_stats pour chaque perso du compte et
+    // gonflerait artificiellement les totaux (piège déjà rencontré en portant cette requête).
     const result = await pool.query(`
-        SELECT 
-            COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as dofus_pseudo,
-            MAX(p.avatar_url) as avatar_url,
-            SUM(ss.points) as total_points,
-            SUM(ss.atk_points) as atk_points,
-            SUM(ss.def_points) as def_points,
-            SUM(ss.wins) as wins,
-            SUM(ss.losses) as losses,
-            MIN(ss.previous_rank) as previous_rank
-        FROM players p
-        JOIN season_stats ss ON ss.player_id = p.id
-        WHERE ss.season_id = $1
-        GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-        HAVING SUM(ss.wins) + SUM(ss.losses) > 0
+        SELECT
+            a.id as account_id,
+            COALESCE(
+                a.discord_nickname, a.discord_username,
+                (SELECT MIN(c.dofus_pseudo) FROM characters c WHERE c.account_id = a.id)
+            ) as dofus_pseudo,
+            a.avatar_url,
+            ss.points as total_points,
+            ss.atk_points as atk_points,
+            ss.def_points as def_points,
+            ss.wins as wins,
+            ss.losses as losses,
+            ss.previous_rank as previous_rank
+        FROM accounts a
+        JOIN season_stats ss ON ss.account_id = a.id
+        WHERE ss.season_id = $1 AND (ss.wins + ss.losses) > 0
         ORDER BY total_points DESC
     `, [seasonId]);
 
@@ -592,25 +601,26 @@ async function getLeaderboardPlayers(seasonId) {
     if (poolId) {
         const pw = await pool.query(`
             SELECT
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
+                a.id as account_id,
                 SUM(CASE WHEN m.has_won = true AND mp.is_winner = true AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_wins,
                 SUM(CASE WHEN m.has_won = false AND mp.is_winner = false AND NOT COALESCE(m.cancelled, false) THEN 1 ELSE 0 END) as pool_losses
-            FROM players p
-            JOIN match_participants mp ON mp.player_id = p.id
+            FROM accounts a
+            JOIN characters c ON c.account_id = a.id
+            JOIN match_participants mp ON mp.character_id = c.id
             JOIN matches m ON m.id = mp.match_id
             WHERE m.season_id = $1 AND m.alliance_tier = $2
             AND NOT COALESCE(m.cancelled, false)
             AND (SELECT COUNT(*) FROM match_participants mp3 WHERE mp3.match_id = m.id AND mp3.is_winner = true) = 5
             AND (SELECT COUNT(*) FROM match_participants mp4 WHERE mp4.match_id = m.id AND mp4.is_winner = false) = 5
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo::text)
+            GROUP BY a.id
         `, [seasonId, poolId]);
         for (const row of pw.rows) {
             const w = Number(row.pool_wins) || 0;
             const l = Number(row.pool_losses) || 0;
             const t = w + l;
-            poolWinrateMap[row.display_name] = t > 0 ? Math.round(w / t * 100) : null;
-            poolWinrateMap[row.display_name + '_w'] = w;
-            poolWinrateMap[row.display_name + '_l'] = l;
+            poolWinrateMap[row.account_id] = t > 0 ? Math.round(w / t * 100) : null;
+            poolWinrateMap[row.account_id + '_w'] = w;
+            poolWinrateMap[row.account_id + '_l'] = l;
         }
     }
 
@@ -621,12 +631,12 @@ async function getLeaderboardPlayers(seasonId) {
         const prevRank = p.previous_rank ? Number(p.previous_rank) : null;
         let rankChange = 0;
         if (prevRank !== null) rankChange = prevRank - (index + 1);
-        const hasPoolData = poolId && poolWinrateMap[p.dofus_pseudo] !== null && poolWinrateMap[p.dofus_pseudo] !== undefined;
+        const hasPoolData = poolId && poolWinrateMap[p.account_id] !== null && poolWinrateMap[p.account_id] !== undefined;
         const winrate = hasPoolData
-            ? poolWinrateMap[p.dofus_pseudo]
+            ? poolWinrateMap[p.account_id]
             : totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
-        const displayWins = hasPoolData ? poolWinrateMap[p.dofus_pseudo + '_w'] : wins;
-        const displayLosses = hasPoolData ? poolWinrateMap[p.dofus_pseudo + '_l'] : losses;
+        const displayWins = hasPoolData ? poolWinrateMap[p.account_id + '_w'] : wins;
+        const displayLosses = hasPoolData ? poolWinrateMap[p.account_id + '_l'] : losses;
         return {
             dofus_pseudo: p.dofus_pseudo,
             avatar_url: p.avatar_url || null,
@@ -669,16 +679,17 @@ app.get('/dev', async (req, res) => {
         const { seasons, currentSeason } = getSeasons();
         const seasonId = await ensureCurrentSeason();
         const query = `
-            SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.discord_username), MAX(p.dofus_pseudo)) as display_name,
-                MAX(p.avatar_url) as avatar_url,
-                SUM(ss.points) as total_points, SUM(ss.wins) as wins, SUM(ss.losses) as losses,
-                MIN(ss.previous_rank) as previous_rank
-            FROM players p
-            JOIN season_stats ss ON ss.player_id = p.id
-            WHERE ss.season_id = $1
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-            HAVING SUM(ss.wins) + SUM(ss.losses) > 0
+            SELECT
+                COALESCE(
+                    a.discord_nickname, a.discord_username,
+                    (SELECT MIN(c.dofus_pseudo) FROM characters c WHERE c.account_id = a.id)
+                ) as display_name,
+                a.avatar_url,
+                ss.points as total_points, ss.wins as wins, ss.losses as losses,
+                ss.previous_rank as previous_rank
+            FROM accounts a
+            JOIN season_stats ss ON ss.account_id = a.id
+            WHERE ss.season_id = $1 AND (ss.wins + ss.losses) > 0
             ORDER BY total_points DESC
         `;
         const result = await pool.query(query, [seasonId]);
@@ -712,12 +723,13 @@ app.get('/api/matches/:seasonId', async (req, res) => {
         const matchesRes = await pool.query(`
             SELECT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at,
                    json_agg(json_build_object(
-                       'name', COALESCE(p.discord_nickname, p.dofus_pseudo),
+                       'name', COALESCE(a.discord_nickname, c.dofus_pseudo),
                        'is_winner', mp.is_winner
                    )) as participants
             FROM matches m
             LEFT JOIN match_participants mp ON mp.match_id = m.id
-            LEFT JOIN players p ON p.id = mp.player_id
+            LEFT JOIN characters c ON c.id = mp.character_id
+            LEFT JOIN accounts a ON a.id = c.account_id
             WHERE m.season_id = $1
             GROUP BY m.id
             ORDER BY m.created_at DESC NULLS LAST, m.id DESC
@@ -762,15 +774,16 @@ app.get('/api/stats/:seasonId', async (req, res) => {
         `, [seasonId]);
 
         const topPlayers = await pool.query(`
-            SELECT 
+            SELECT
                 m.alliance_tier,
-                COALESCE(p.discord_nickname, p.dofus_pseudo) as name,
+                COALESCE(a.discord_nickname, a.discord_username, MIN(c.dofus_pseudo)) as name,
                 COUNT(*) as wins
             FROM matches m
             JOIN match_participants mp ON mp.match_id = m.id
-            JOIN players p ON p.id = mp.player_id
+            JOIN characters c ON c.id = mp.character_id
+            JOIN accounts a ON a.id = c.account_id
             WHERE m.season_id = $1 AND mp.is_winner = true AND m.has_won = true
-            GROUP BY m.alliance_tier, COALESCE(p.discord_nickname, p.dofus_pseudo)
+            GROUP BY m.alliance_tier, a.id
             ORDER BY m.alliance_tier, wins DESC
         `, [seasonId]);
 
@@ -826,17 +839,18 @@ app.get('/admin', adminAuth, async (req, res) => {
         const seasonId = await ensureCurrentSeason();
 
         const nuggetsRes = await pool.query(`
-            SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.dofus_pseudo)) as name, 
-                SUM(ss.nuggets) as nuggets 
+            SELECT
+                COALESCE(a.discord_nickname, MIN(c.dofus_pseudo)) as name,
+                ss.nuggets as nuggets
             FROM season_stats ss
-            JOIN players p ON p.id = ss.player_id
-            WHERE ss.season_id = $1 AND ss.nuggets > 0 
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+            JOIN accounts a ON a.id = ss.account_id
+            LEFT JOIN characters c ON c.account_id = a.id
+            WHERE ss.season_id = $1 AND ss.nuggets > 0
+            GROUP BY a.id, ss.nuggets
             ORDER BY nuggets DESC
         `, [seasonId]);
 
-        res.render('admin', { 
+        res.render('admin', {
             authenticated: true, error: null,
             settings: liveConfig,
             pools: liveConfig.pools,
@@ -920,9 +934,10 @@ app.get('/admin/api/players', adminAuth, async (req, res) => {
     try {
         const seasonId = await ensureCurrentSeason();
         const r = await pool.query(`
-            SELECT DISTINCT COALESCE(p.discord_nickname, p.dofus_pseudo) as name
-            FROM players p
-            JOIN season_stats ss ON ss.player_id = p.id
+            SELECT DISTINCT COALESCE(a.discord_nickname, a.discord_username, c.dofus_pseudo) as name
+            FROM accounts a
+            JOIN season_stats ss ON ss.account_id = a.id
+            LEFT JOIN characters c ON c.account_id = a.id
             WHERE ss.season_id = $1
             AND (ss.wins + ss.losses) > 0
             ORDER BY name
@@ -936,11 +951,16 @@ app.get('/admin/api/player-stats/:pseudo', adminAuth, async (req, res) => {
     try {
         const pseudo = req.params.pseudo;
         const seasonId = await ensureCurrentSeason();
+        // Pas de JOIN characters ici : season_stats n'a qu'UNE ligne par compte, un JOIN
+        // characters dupliquerait cette ligne et fausserait la somme si un compte a
+        // plusieurs persos (piège déjà rencontré en portant cette requête).
         const r = await pool.query(`
-            SELECT COALESCE(SUM(ss.points), 0) as points
-            FROM players p
-            LEFT JOIN season_stats ss ON ss.player_id = p.id AND ss.season_id = $2
-            WHERE LOWER(COALESCE(p.discord_nickname, p.dofus_pseudo)) = LOWER($1)
+            SELECT COALESCE(ss.points, 0) as points
+            FROM accounts a
+            LEFT JOIN season_stats ss ON ss.account_id = a.id AND ss.season_id = $2
+            WHERE a.discord_id = $1
+               OR LOWER(a.discord_nickname) = LOWER($1) OR LOWER(a.discord_username) = LOWER($1)
+               OR EXISTS (SELECT 1 FROM characters c WHERE c.account_id = a.id AND LOWER(c.dofus_pseudo) = LOWER($1))
         `, [pseudo, seasonId]);
         res.json({ points: parseInt(r.rows[0]?.points) || 0 });
     } catch { res.json({ points: 0 }); }
@@ -953,22 +973,27 @@ app.post('/admin/api/player-points', adminAuth, async (req, res) => {
         const pts = parseInt(points);
         if (!pseudo || isNaN(pts)) return res.status(400).json({ error: 'Pseudo ou points invalides.' });
 
-        const playerRes = await pool.query(`
-            SELECT id, COALESCE(discord_nickname, dofus_pseudo) as name 
-            FROM players WHERE LOWER(COALESCE(discord_nickname, dofus_pseudo)) = LOWER($1)
+        const accountRes = await pool.query(`
+            SELECT a.id, COALESCE(a.discord_nickname, a.discord_username, MIN(c.dofus_pseudo)) as name
+            FROM accounts a
+            LEFT JOIN characters c ON c.account_id = a.id
+            WHERE a.discord_id = $1
+               OR LOWER(a.discord_nickname) = LOWER($1) OR LOWER(a.discord_username) = LOWER($1)
+               OR EXISTS (SELECT 1 FROM characters c2 WHERE c2.account_id = a.id AND LOWER(c2.dofus_pseudo) = LOWER($1))
+            GROUP BY a.id
         `, [pseudo]);
-        if (playerRes.rows.length === 0) return res.status(404).json({ error: 'Joueur introuvable.' });
+        if (accountRes.rows.length === 0) return res.status(404).json({ error: 'Joueur introuvable.' });
 
-        const playerId = playerRes.rows[0].id;
-        const playerName = playerRes.rows[0].name;
+        const accountId = accountRes.rows[0].id;
+        const accountName = accountRes.rows[0].name;
         const seasonId = await ensureCurrentSeason();
 
-        await updateSeasonStats(playerId, seasonId, { points: pts, wins: 0, losses: 0 });
+        await updateSeasonStats(accountId, seasonId, { points: pts, wins: 0, losses: 0 });
 
-        const totalRes = await pool.query('SELECT SUM(points) as total FROM season_stats WHERE player_id = $1 AND season_id = $2', [playerId, seasonId]);
-        const newTotal = parseInt(totalRes.rows[0].total) || 0;
+        const totalRes = await pool.query('SELECT points as total FROM season_stats WHERE account_id = $1 AND season_id = $2', [accountId, seasonId]);
+        const newTotal = parseInt(totalRes.rows[0]?.total) || 0;
 
-        res.json({ ok: true, pseudo: playerName, delta: pts, newTotal });
+        res.json({ ok: true, pseudo: accountName, delta: pts, newTotal });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -977,13 +1002,14 @@ app.get('/admin/api/nuggets/:seasonId', adminAuth, async (req, res) => {
     try {
         const seasonId = parseInt(req.params.seasonId);
         const r = await pool.query(`
-            SELECT 
-                COALESCE(MAX(p.discord_nickname), MAX(p.dofus_pseudo)) as name, 
-                SUM(ss.nuggets) as nuggets 
+            SELECT
+                COALESCE(a.discord_nickname, MIN(c.dofus_pseudo)) as name,
+                ss.nuggets as nuggets
             FROM season_stats ss
-            JOIN players p ON p.id = ss.player_id
-            WHERE ss.season_id = $1 AND ss.nuggets > 0 
-            GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
+            JOIN accounts a ON a.id = ss.account_id
+            LEFT JOIN characters c ON c.account_id = a.id
+            WHERE ss.season_id = $1 AND ss.nuggets > 0
+            GROUP BY a.id, ss.nuggets
             ORDER BY nuggets DESC
         `, [seasonId]);
         res.json(r.rows);
@@ -1048,12 +1074,11 @@ app.get('/admin/api/multi-accounts', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json([]);
     try {
         const r = await pool.query(`
-            SELECT 
-                array_agg(DISTINCT p.dofus_pseudo ORDER BY p.dofus_pseudo) as pseudos,
+            SELECT
+                array_agg(dofus_pseudo ORDER BY dofus_pseudo) as pseudos,
                 COUNT(*) as count
-            FROM players p
-            WHERE p.discord_id IS NOT NULL
-            GROUP BY p.discord_id
+            FROM characters
+            GROUP BY account_id
             HAVING COUNT(*) > 1
             ORDER BY count DESC
         `);
@@ -1061,7 +1086,8 @@ app.get('/admin/api/multi-accounts', adminAuth, async (req, res) => {
     } catch { res.json([]); }
 });
 
-// Historique matchs d'un joueur (25 derniers)
+// Historique matchs d'un joueur (25 derniers) — tous ses persos, pas seulement celui
+// qui porte le pseudo cherché (un compte peut en avoir plusieurs).
 app.get('/admin/api/player-matches/:pseudo', adminAuth, async (req, res) => {
     if (!req.adminAuth) return res.status(401).json([]);
     try {
@@ -1069,14 +1095,23 @@ app.get('/admin/api/player-matches/:pseudo', adminAuth, async (req, res) => {
         const seasonId = await ensureCurrentSeason();
         const r = await pool.query(`
             SELECT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at, m.cancelled,
-                (SELECT json_agg(json_build_object('name', COALESCE(p2.discord_nickname, p2.dofus_pseudo), 'is_winner', mp2.is_winner))
-                 FROM match_participants mp2 JOIN players p2 ON p2.id = mp2.player_id WHERE mp2.match_id = m.id) as participants
+                (SELECT json_agg(json_build_object('name', COALESCE(a2.discord_nickname, c2.dofus_pseudo), 'is_winner', mp2.is_winner))
+                 FROM match_participants mp2
+                 JOIN characters c2 ON c2.id = mp2.character_id
+                 JOIN accounts a2 ON a2.id = c2.account_id
+                 WHERE mp2.match_id = m.id) as participants
             FROM matches m
             WHERE m.season_id = $1
             AND m.id IN (
-                SELECT DISTINCT match_id FROM match_participants mp
-                JOIN players p ON p.id = mp.player_id
-                WHERE LOWER(COALESCE(p.discord_nickname, p.dofus_pseudo)) = LOWER($2)
+                SELECT DISTINCT mp.match_id FROM match_participants mp
+                JOIN characters c ON c.id = mp.character_id
+                WHERE c.account_id = (
+                    SELECT a.id FROM accounts a
+                    LEFT JOIN characters c3 ON c3.account_id = a.id
+                    WHERE a.discord_id = $2 OR LOWER(c3.dofus_pseudo) = LOWER($2)
+                       OR LOWER(a.discord_nickname) = LOWER($2) OR LOWER(a.discord_username) = LOWER($2)
+                    LIMIT 1
+                )
             )
             ORDER BY m.created_at DESC NULLS LAST, m.id DESC
             LIMIT 25
@@ -1102,10 +1137,11 @@ app.get('/admin/api/recent-matches', adminAuth, async (req, res) => {
         const seasonId = await ensureCurrentSeason();
         const r = await pool.query(`
             SELECT m.id, m.alliance_tier, m.points_awarded, m.context, m.has_won, m.created_at, m.cancelled,
-                json_agg(json_build_object('name', COALESCE(p.discord_nickname, p.dofus_pseudo), 'is_winner', mp.is_winner)) as participants
+                json_agg(json_build_object('name', COALESCE(a.discord_nickname, c.dofus_pseudo), 'is_winner', mp.is_winner)) as participants
             FROM matches m
             LEFT JOIN match_participants mp ON mp.match_id = m.id
-            LEFT JOIN players p ON p.id = mp.player_id
+            LEFT JOIN characters c ON c.id = mp.character_id
+            LEFT JOIN accounts a ON a.id = c.account_id
             WHERE m.season_id = $1
             GROUP BY m.id
             ORDER BY m.created_at DESC NULLS LAST, m.id DESC
@@ -1142,13 +1178,15 @@ app.patch('/admin/api/match/:id/points', adminAuth, async (req, res) => {
         const isWin = match.has_won;
 
         const allyRows = await pool.query(
-            'SELECT mp.player_id FROM match_participants mp WHERE mp.match_id = $1 AND mp.is_winner = $2',
+            `SELECT DISTINCT c.account_id FROM match_participants mp
+             JOIN characters c ON c.id = mp.character_id
+             WHERE mp.match_id = $1 AND mp.is_winner = $2`,
             [matchId, isWin]
         );
         for (const row of allyRows.rows) {
             await pool.query(
-                'UPDATE season_stats SET points = points + $1 WHERE player_id = $2 AND season_id = $3',
-                [delta, row.player_id, match.season_id]
+                'UPDATE season_stats SET points = points + $1 WHERE account_id = $2 AND season_id = $3',
+                [delta, row.account_id, match.season_id]
             );
         }
         await pool.query('UPDATE matches SET points_awarded = $1 WHERE id = $2', [newPts, matchId]);
@@ -1172,7 +1210,9 @@ app.delete('/admin/api/match/:id', adminAuth, async (req, res) => {
         const isWin = match.has_won;
 
         const allyRows = await pool.query(
-            'SELECT mp.player_id FROM match_participants mp WHERE mp.match_id = $1 AND mp.is_winner = $2',
+            `SELECT DISTINCT c.account_id FROM match_participants mp
+             JOIN characters c ON c.id = mp.character_id
+             WHERE mp.match_id = $1 AND mp.is_winner = $2`,
             [matchId, isWin]
         );
         for (const row of allyRows.rows) {
@@ -1181,8 +1221,8 @@ app.delete('/admin/api/match/:id', adminAuth, async (req, res) => {
                     points = GREATEST(0, points - $1),
                     wins = GREATEST(0, wins - $2),
                     losses = GREATEST(0, losses - $3)
-                WHERE player_id = $4 AND season_id = $5
-            `, [pts, isWin ? 1 : 0, isWin ? 0 : 1, row.player_id, match.season_id]);
+                WHERE account_id = $4 AND season_id = $5
+            `, [pts, isWin ? 1 : 0, isWin ? 0 : 1, row.account_id, match.season_id]);
         }
         await pool.query('UPDATE matches SET cancelled = true, points_awarded = 0 WHERE id = $1', [matchId]);
         res.json({ ok: true });
@@ -1262,53 +1302,12 @@ app.listen(config.WEB_PORT, () => { console.log(`Web server running on port ${co
 // ============================================
 // 4. BOT DISCORD
 // ============================================
-client.once(Events.ClientReady, async () => { 
+client.once(Events.ClientReady, async () => {
     console.log(`Bot Connecte : ${client.user.tag}`);
-    try {
-        await pool.query(`CREATE TABLE IF NOT EXISTS nuggets (id SERIAL PRIMARY KEY, discord_id TEXT, amount INT, image_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`);
-        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS bank_nuggets INTEGER DEFAULT 0`);
-        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS previous_rank INTEGER DEFAULT NULL`);
-        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS nuggets INTEGER DEFAULT 0`);
-        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
-        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS context TEXT DEFAULT 'attack'`);
-        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS has_won BOOLEAN DEFAULT true`);
-        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL`);
-        await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS cancelled BOOLEAN DEFAULT false`);
-        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS atk_points INTEGER DEFAULT 0`);
-        await pool.query(`ALTER TABLE season_stats ADD COLUMN IF NOT EXISTS def_points INTEGER DEFAULT 0`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS prism_requests (
-            id SERIAL PRIMARY KEY,
-            player_name VARCHAR(255),
-            discord_user_id TEXT,
-            discord_message_id TEXT,
-            image_url TEXT,
-            total_kamas INTEGER,
-            status VARCHAR(20) DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT NOW(),
-            validated_at TIMESTAMP,
-            validated_by VARCHAR(255)
-        )`);
-
-        const migCheck = await pool.query("SELECT value FROM settings WHERE key = 'nuggets_migrated'");
-        if (migCheck.rows.length === 0) {
-            console.log('[Migration] Report bank_nuggets vers season_stats...');
-            const playersWithNuggets = await pool.query('SELECT id, bank_nuggets FROM players WHERE bank_nuggets > 0');
-            if (playersWithNuggets.rows.length > 0) {
-                const seasonId = await ensureCurrentSeason();
-                for (const p of playersWithNuggets.rows) {
-                    await pool.query(`
-                        INSERT INTO season_stats (player_id, season_id, points, wins, losses, nuggets) 
-                        VALUES ($1, $2, 0, 0, 0, $3)
-                        ON CONFLICT (player_id, season_id) DO UPDATE SET nuggets = season_stats.nuggets + $3
-                    `, [p.id, seasonId, p.bank_nuggets]);
-                }
-                console.log(`[Migration] ${playersWithNuggets.rows.length} joueurs migrés.`);
-            }
-            await pool.query("INSERT INTO settings (key, value) VALUES ('nuggets_migrated', '1') ON CONFLICT (key) DO NOTHING");
-        }
-        
-        console.log('[Startup] DB verifiee.');
-    } catch (e) { console.error(e); }
+    // Le schéma (accounts, characters, seasons, season_stats, matches, match_participants,
+    // settings, nuggets, prism_requests) est géré par Alembic côté backend Python — plus de
+    // migration ad hoc au démarrage ici, la base est déjà dans la bonne forme.
+    console.log('[Startup] Pret.');
 });
 
 client.on('messageCreate', async message => {
@@ -1319,7 +1318,7 @@ client.on('messageCreate', async message => {
             const rawNickname = message.member ? message.member.displayName : message.author.username;
             const cleanNickname = removeAccents(rawNickname);
             const avatarUrl = message.author.displayAvatarURL({ size: 128, format: 'webp' });
-            await pool.query('UPDATE players SET discord_nickname = $1, avatar_url = $2 WHERE discord_id = $3', [cleanNickname, avatarUrl, message.author.id]);
+            await pool.query('UPDATE accounts SET discord_nickname = $1, avatar_url = $2 WHERE discord_id = $3', [cleanNickname, avatarUrl, message.author.id]);
         } catch (e) {}
     }
 
@@ -1328,7 +1327,7 @@ client.on('messageCreate', async message => {
         if (args.length < 2) return message.reply("Usage : `!addplayer <PseudoExact>`");
         try {
             const cleanArg = removeAccents(args[1]);
-            await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT (dofus_pseudo) DO NOTHING', [cleanArg]);
+            await getOrCreateCharacters([cleanArg]);
             return message.reply(`[OK] Joueur ${cleanArg} ajouté.`);
         } catch (err) { return message.reply("Erreur d'ajout."); }
     }
@@ -1338,12 +1337,12 @@ client.on('messageCreate', async message => {
         if (args.length < 2) return message.reply("Usage : `!deleteplayer <PseudoExact>`");
         try {
             const cleanArg = removeAccents(args[1]);
-            const found = await pool.query('SELECT id FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [cleanArg]);
+            const found = await pool.query('SELECT id FROM characters WHERE LOWER(dofus_pseudo) = LOWER($1)', [cleanArg]);
             if (found.rows.length === 0) return message.reply(`Joueur "${cleanArg}" introuvable.`);
-            const playerId = found.rows[0].id;
-            await pool.query('DELETE FROM match_participants WHERE player_id = $1', [playerId]);
-            await pool.query('DELETE FROM season_stats WHERE player_id = $1', [playerId]);
-            await pool.query('DELETE FROM players WHERE id = $1', [playerId]);
+            // Supprime uniquement ce personnage (cascade sur match_participants). Les stats
+            // de saison vivent sur le compte, pas sur le perso — inchangées si le compte a
+            // d'autres persos liés.
+            await pool.query('DELETE FROM characters WHERE id = $1', [found.rows[0].id]);
             return message.reply(`[OK] Joueur ${cleanArg} supprimé.`);
         } catch (err) { console.error(err); return message.reply("Erreur suppression."); }
     }
@@ -1353,14 +1352,15 @@ client.on('messageCreate', async message => {
         try {
             const seasonId = await ensureCurrentSeason();
             const res = await pool.query(`
-                SELECT 
-                    COALESCE(MAX(p.discord_nickname), MAX(p.dofus_pseudo)) as name, 
-                    SUM(ss.nuggets) as nuggets 
+                SELECT
+                    COALESCE(a.discord_nickname, MIN(c.dofus_pseudo)) as name,
+                    ss.nuggets as nuggets
                 FROM season_stats ss
-                JOIN players p ON p.id = ss.player_id
-                WHERE ss.season_id = $1 AND ss.nuggets > 0 
-                GROUP BY COALESCE(p.discord_id, p.dofus_pseudo)
-                ORDER BY nuggets DESC 
+                JOIN accounts a ON a.id = ss.account_id
+                LEFT JOIN characters c ON c.account_id = a.id
+                WHERE ss.season_id = $1 AND ss.nuggets > 0
+                GROUP BY a.id, ss.nuggets
+                ORDER BY nuggets DESC
             `, [seasonId]);
             if (res.rows.length === 0) return message.reply("Aucune pépite en banque pour cette saison.");
             const lines = res.rows.map((p, i) => `${i + 1}. **${p.name}** : ${p.nuggets}`);
@@ -1417,20 +1417,12 @@ client.on('messageCreate', async message => {
                 const recipientName = mentionedMember ? mentionedMember.displayName : (message.member?.displayName || message.author.username);
                 const displayName = recipientName.toLowerCase() === 'duma' ? 'Gros orteils' : recipientName;
                 
-                let playerRes = await pool.query('SELECT id FROM players WHERE discord_id = $1 LIMIT 1', [recipientId]);
-                if (playerRes.rows.length === 0) {
-                    const cleanName = removeAccents(recipientName);
-                    await pool.query(
-                        'INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4) ON CONFLICT (dofus_pseudo) DO UPDATE SET discord_id = $2, discord_nickname = $4',
-                        [cleanName, recipientId, recipientName, cleanName]
-                    );
-                    playerRes = await pool.query('SELECT id FROM players WHERE discord_id = $1 LIMIT 1', [recipientId]);
-                }
-                const playerId = playerRes.rows[0].id;
+                const cleanName = removeAccents(recipientName);
+                const accountId = await getOrCreateAccountForDiscord(recipientId, recipientName, cleanName);
                 const seasonId = await ensureCurrentSeason();
 
                 await pool.query('INSERT INTO nuggets (discord_id, amount, image_hash) VALUES ($1, $2, $3)', [recipientId, parsed.alliance_amount, imageHash]);
-                await updateSeasonStats(playerId, seasonId, { nuggets: playerShare });
+                await updateSeasonStats(accountId, seasonId, { nuggets: playerShare });
                 await msgRef.edit(`[OK] ${parsed.alliance_amount} pépites alliance.\n[+] ${playerShare} pour ${displayName}.`);
             }
         } catch (e) { console.error(e); try { await msgRef.edit(buildAIErrorMessage(e)); } catch {} }
@@ -1623,18 +1615,12 @@ client.on('interactionCreate', async interaction => {
             const discordNickname = removeAccents(interaction.member.displayName);
 
             if (interaction.customId === 'modal_link') {
-                const check = await pool.query('SELECT * FROM players WHERE LOWER(dofus_pseudo) = LOWER($1)', [pseudo]);
-                if (check.rows.length === 0) {
-                    await pool.query('INSERT INTO players (dofus_pseudo, discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3, $4)', [pseudo, discordId, discordName, discordNickname]);
-                } else {
-                    const ex = check.rows[0];
-                    if (ex.discord_id && ex.discord_id !== discordId) return interaction.reply({ content: 'Déjà lié à un autre compte.', ephemeral: true });
-                    await pool.query('UPDATE players SET discord_id = $1, discord_username = $2, discord_nickname = $3 WHERE LOWER(dofus_pseudo) = LOWER($4)', [discordId, discordName, discordNickname, pseudo]);
-                }
+                const { ok, error } = await linkCharacter(pseudo, discordId, discordName, discordNickname);
+                if (!ok) return interaction.reply({ content: error, ephemeral: true });
                 await interaction.reply({ content: `[OK] ${pseudo} lié au compte Discord.`, ephemeral: true });
             }
             if (interaction.customId === 'modal_unlink') {
-                await pool.query('UPDATE players SET discord_id = NULL WHERE LOWER(dofus_pseudo) = LOWER($1) AND discord_id = $2', [pseudo, discordId]);
+                await unlinkCharacter(pseudo, discordId);
                 await interaction.reply({ content: `[OK] ${pseudo} délié.`, ephemeral: true });
             }
             return;
@@ -1711,37 +1697,30 @@ client.on('interactionCreate', async interaction => {
             const matchRes = await pool.query("INSERT INTO matches (season_id, alliance_tier, points_awarded, context, has_won) VALUES ($1, $2, $3, $4, $5) RETURNING id", [seasonId, session.allianceTier, pts, session.context, hasWon]);
             const matchId = matchRes.rows[0].id;
             
-            const processedDiscordIds = new Set();
+            const processedAccountIds = new Set();
             const paid = [], skipped = [], defeated = [];
 
+            // Un compte peut avoir plusieurs persos alignés côté allié : on ne credite
+            // les points/victoire-défaite qu'une seule fois par compte et par match.
             const processPlayers = async (pseudos, isWinner, isAlly) => {
-                for (const p of pseudos) await pool.query('INSERT INTO players (dofus_pseudo) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
-                
-                const rows = await pool.query(`
-                    SELECT id, dofus_pseudo, discord_id 
-                    FROM players 
-                    WHERE LOWER(dofus_pseudo) = ANY($1::text[])
-                    ORDER BY discord_id NULLS LAST
-                `, [pseudos.map(x=>x.toLowerCase())]);
+                const characters = await getOrCreateCharacters(pseudos);
 
                 for (const pName of pseudos) {
-                    const pData = rows.rows.find(r => r.dofus_pseudo.toLowerCase() === pName.toLowerCase());
-                    if (!pData) continue;
+                    const cData = characters.find(c => c.dofus_pseudo.toLowerCase() === pName.toLowerCase());
+                    if (!cData) continue;
 
-                    await pool.query('INSERT INTO match_participants (match_id, player_id, is_winner) VALUES ($1, $2, $3)', [matchId, pData.id, isWinner]);
+                    await pool.query('INSERT INTO match_participants (match_id, character_id, is_winner) VALUES ($1, $2, $3)', [matchId, cData.id, isWinner]);
 
                     if (isAlly) {
                         let shouldCountStats = true;
-                        if (pData.discord_id) {
-                            if (processedDiscordIds.has(pData.discord_id)) {
-                                shouldCountStats = false;
-                            } else {
-                                processedDiscordIds.add(pData.discord_id);
-                            }
+                        if (processedAccountIds.has(cData.account_id)) {
+                            shouldCountStats = false;
+                        } else {
+                            processedAccountIds.add(cData.account_id);
                         }
 
                         if (shouldCountStats) {
-                            await updateSeasonStats(pData.id, seasonId, { points: pts, wins: isWinner ? 1 : 0, losses: isWinner ? 0 : 1, context: session.context });
+                            await updateSeasonStats(cData.account_id, seasonId, { points: pts, wins: isWinner ? 1 : 0, losses: isWinner ? 0 : 1, context: session.context });
                             if (isWinner) paid.push(pName);
                             else defeated.push(pName);
                         } else {
@@ -1763,13 +1742,15 @@ client.on('interactionCreate', async interaction => {
 
             const multiGroups = {};
             const allAllyPseudos = hasWon ? session.winners : session.losers;
-            const allyRows = await pool.query(`
-                SELECT dofus_pseudo, discord_id FROM players 
-                WHERE LOWER(dofus_pseudo) = ANY($1::text[]) AND discord_id IS NOT NULL
-            `, [allAllyPseudos.map(x=>x.toLowerCase())]);
-            for (const r of allyRows.rows) {
-                if (!multiGroups[r.discord_id]) multiGroups[r.discord_id] = [];
-                multiGroups[r.discord_id].push(r.dofus_pseudo);
+            if (allAllyPseudos.length > 0) {
+                const allyRows = await pool.query(`
+                    SELECT c.dofus_pseudo, c.account_id FROM characters c
+                    WHERE LOWER(c.dofus_pseudo) = ANY($1::text[])
+                `, [allAllyPseudos.map(x=>x.toLowerCase())]);
+                for (const r of allyRows.rows) {
+                    if (!multiGroups[r.account_id]) multiGroups[r.account_id] = [];
+                    multiGroups[r.account_id].push(r.dofus_pseudo);
+                }
             }
             const multiAccountLines = Object.values(multiGroups).filter(g => g.length > 1);
             
@@ -1802,30 +1783,152 @@ async function ensureCurrentSeason() {
 async function snapshotRanks(seasonId) {
     await pool.query(`
         WITH ranked AS (
-            SELECT ss.player_id, ss.season_id,
+            SELECT ss.account_id, ss.season_id,
                 ROW_NUMBER() OVER (ORDER BY ss.points DESC, ss.wins DESC) as current_rank
             FROM season_stats ss
             WHERE ss.season_id = $1 AND (ss.wins + ss.losses) > 0
         )
         UPDATE season_stats SET previous_rank = ranked.current_rank
         FROM ranked
-        WHERE season_stats.player_id = ranked.player_id AND season_stats.season_id = ranked.season_id
+        WHERE season_stats.account_id = ranked.account_id AND season_stats.season_id = ranked.season_id
     `, [seasonId]);
 }
 
-async function updateSeasonStats(pid, sid, { points=0, wins=0, losses=0, nuggets=0, context=null }) {
+async function updateSeasonStats(accountId, sid, { points=0, wins=0, losses=0, nuggets=0, context=null }) {
     const atkPoints = context === 'attack' ? points : 0;
     const defPoints = context === 'defense' ? points : 0;
     await pool.query(`
-        INSERT INTO season_stats (player_id, season_id, points, wins, losses, nuggets, atk_points, def_points) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-        ON CONFLICT (player_id, season_id) DO UPDATE SET
+        INSERT INTO season_stats (account_id, season_id, points, wins, losses, nuggets, atk_points, def_points) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        ON CONFLICT (account_id, season_id) DO UPDATE SET
         points = season_stats.points + EXCLUDED.points,
         wins = season_stats.wins + EXCLUDED.wins,
         losses = season_stats.losses + EXCLUDED.losses,
         nuggets = season_stats.nuggets + EXCLUDED.nuggets,
         atk_points = season_stats.atk_points + EXCLUDED.atk_points,
         def_points = season_stats.def_points + EXCLUDED.def_points
-    `, [pid, sid, points, wins, losses, nuggets, atkPoints, defPoints]);
+    `, [accountId, sid, points, wins, losses, nuggets, atkPoints, defPoints]);
+}
+
+// ============================================
+// 5. COMPTES / PERSONNAGES (schema accounts/characters)
+// ============================================
+
+// Résout une liste de pseudos vers leurs personnages (id, account_id). Tout pseudo
+// inconnu reçoit un compte autonome tout neuf (account_id non-NULL dès la création) —
+// plus jamais de personnage "orphelin" invisible du système de comptes (cf. le bug
+// multi-comptes capio_/Bella : un pseudo mal saisi restait hors de tout compte).
+async function getOrCreateCharacters(pseudos) {
+    if (!pseudos.length) return [];
+
+    const fetch = async () => {
+        const r = await pool.query(`
+            SELECT c.id, c.dofus_pseudo, c.account_id
+            FROM characters c
+            WHERE LOWER(c.dofus_pseudo) = ANY($1::text[])
+        `, [pseudos.map(p => p.toLowerCase())]);
+        return r.rows;
+    };
+
+    let existing = await fetch();
+    const known = new Set(existing.map(r => r.dofus_pseudo.toLowerCase()));
+    const missing = pseudos.filter(p => !known.has(p.toLowerCase()));
+
+    for (const pseudo of missing) {
+        const accountRes = await pool.query('INSERT INTO accounts DEFAULT VALUES RETURNING id');
+        await pool.query(
+            'INSERT INTO characters (dofus_pseudo, account_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [pseudo, accountRes.rows[0].id]
+        );
+    }
+    if (missing.length) existing = await fetch();
+
+    return existing;
+}
+
+async function getOrCreateAccountForDiscord(discordId, discordUsername, discordNickname) {
+    const existing = await pool.query('SELECT id FROM accounts WHERE discord_id = $1', [discordId]);
+    if (existing.rows.length > 0) return existing.rows[0].id;
+    const r = await pool.query(
+        'INSERT INTO accounts (discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3) RETURNING id',
+        [discordId, discordUsername, discordNickname]
+    );
+    return r.rows[0].id;
+}
+
+// Rattache `pseudo` au compte Discord `discordId`. Si ce personnage avait déjà son
+// propre compte autonome, on FUSIONNE : le perso rejoint le compte Discord existant
+// (ou en devient le premier), et l'ancien compte autonome est nettoyé s'il ne sert
+// plus à rien.
+async function linkCharacter(pseudo, discordId, discordUsername, discordNickname) {
+    const charRes = await pool.query(`
+        SELECT c.id, c.account_id, a.discord_id
+        FROM characters c JOIN accounts a ON a.id = c.account_id
+        WHERE LOWER(c.dofus_pseudo) = LOWER($1)
+    `, [pseudo]);
+    const character = charRes.rows[0];
+
+    const targetRes = await pool.query('SELECT id FROM accounts WHERE discord_id = $1', [discordId]);
+    const targetAccount = targetRes.rows[0];
+
+    if (!character) {
+        let accountId;
+        if (targetAccount) {
+            accountId = targetAccount.id;
+            await pool.query(
+                'UPDATE accounts SET discord_username = $1, discord_nickname = $2 WHERE id = $3',
+                [discordUsername, discordNickname, accountId]
+            );
+        } else {
+            const r = await pool.query(
+                'INSERT INTO accounts (discord_id, discord_username, discord_nickname) VALUES ($1, $2, $3) RETURNING id',
+                [discordId, discordUsername, discordNickname]
+            );
+            accountId = r.rows[0].id;
+        }
+        await pool.query('INSERT INTO characters (dofus_pseudo, account_id) VALUES ($1, $2)', [pseudo, accountId]);
+        return { ok: true };
+    }
+
+    if (character.discord_id && character.discord_id !== discordId) {
+        return { ok: false, error: 'Déjà lié à un autre compte.' };
+    }
+
+    const oldAccountId = character.account_id;
+
+    if (targetAccount && targetAccount.id !== oldAccountId) {
+        const newAccountId = targetAccount.id;
+        await pool.query('UPDATE characters SET account_id = $1 WHERE id = $2', [newAccountId, character.id]);
+        await pool.query(
+            'UPDATE accounts SET discord_username = $1, discord_nickname = $2 WHERE id = $3',
+            [discordUsername, discordNickname, newAccountId]
+        );
+        await pool.query(`
+            DELETE FROM accounts WHERE id = $1
+            AND NOT EXISTS (SELECT 1 FROM characters WHERE account_id = $1)
+            AND NOT EXISTS (SELECT 1 FROM season_stats WHERE account_id = $1)
+        `, [oldAccountId]);
+    } else {
+        await pool.query(
+            'UPDATE accounts SET discord_id = $1, discord_username = $2, discord_nickname = $3 WHERE id = $4',
+            [discordId, discordUsername, discordNickname, oldAccountId]
+        );
+    }
+    return { ok: true };
+}
+
+// Détache `pseudo` en le déplaçant vers un compte autonome flambant neuf. Les stats déjà
+// accumulées restent sur le compte d'origine (suivies par compte, pas par personnage) —
+// seuls les futurs matchs de ce perso compteront à part.
+async function unlinkCharacter(pseudo, discordId) {
+    const charRes = await pool.query(`
+        SELECT c.id FROM characters c JOIN accounts a ON a.id = c.account_id
+        WHERE LOWER(c.dofus_pseudo) = LOWER($1) AND a.discord_id = $2
+    `, [pseudo, discordId]);
+    if (charRes.rows.length === 0) return false;
+
+    const newAccountRes = await pool.query('INSERT INTO accounts DEFAULT VALUES RETURNING id');
+    await pool.query('UPDATE characters SET account_id = $1 WHERE id = $2', [newAccountRes.rows[0].id, charRes.rows[0].id]);
+    return true;
 }
 
 client.login(process.env.DISCORD_TOKEN);

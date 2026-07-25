@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ogre</title>
+    <title>Nemesis</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css">
-    <link rel="icon" type="image/png" href="web/assets/logo_ogre.png">
+    <link rel="icon" type="image/png" href="web/assets/logo_nemesis.png">
 </head>
 <body>
     <div class="bg-container">
@@ -24,8 +24,8 @@
     <header class="header">
         <div class="header-inner">
             <div class="header-brand">
-                <div class="logo"><img src="/web/assets/logo_ogre.png" alt="Logo"/></div>
-                <div class="brand-text"><h1 class="brand-title">OGRE</h1><span class="brand-sub">PVP TRACKER</span></div>
+                <div class="logo"><img src="/web/assets/logo_nemesis.png" alt="Logo"/></div>
+                <div class="brand-text"><h1 class="brand-title">NEMESIS</h1><span class="brand-sub">PVP TRACKER</span></div>
             </div>
             <div class="header-stats">
                 <div class="stat-item">
@@ -78,7 +78,7 @@
         <div class="panel" id="panel-stats"><div id="statsContent"><div class="feed-empty">Chargement…</div></div></div>
     </main>
 
-    <footer class="footer"><span>OGRE — ALLIANCE PVP TRACKER</span><span class="footer-dot"></span><span>Mise à jour : <%= new Date().toLocaleString('fr-FR') %></span></footer>
+    <footer class="footer"><span>NEMESIS — ALLIANCE PVP TRACKER</span><span class="footer-dot"></span><span>Mise à jour : <%= new Date().toLocaleString('fr-FR') %></span></footer>
 
 <script>
 let allPlayers=<%- JSON.stringify(players) %>,filteredPlayers=[...allPlayers],currentPage=1;
