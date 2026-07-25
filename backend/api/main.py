@@ -13,7 +13,8 @@ from .routers import admin, public
 
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 DIST_DIR = ROOT_DIR / "dist"
-ASSETS_DIR = ROOT_DIR / "web" / "assets"
+WEB_DIR = ROOT_DIR / "web"
+ASSETS_DIR = WEB_DIR / "assets"
 
 
 @asynccontextmanager
@@ -41,8 +42,13 @@ app.include_router(admin.router)
 
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
-if DIST_DIR.exists():
-    app.mount("/static", StaticFiles(directory=DIST_DIR), name="static")
+    # Le front référence aussi certaines images en /web/assets/... (favicon, logo header) —
+    # même dossier, deuxième préfixe, pour matcher les deux chemins utilisés côté client.
+    app.mount("/web/assets", StaticFiles(directory=ASSETS_DIR), name="web-assets")
+# Chunks JS/CSS buildés par Vite (assetsDir: 'app' dans vite.config.js — volontairement
+# pas /assets, déjà pris par ASSETS_DIR ci-dessus pour les images du jeu).
+if (DIST_DIR / "app").exists():
+    app.mount("/app", StaticFiles(directory=DIST_DIR / "app"), name="app-assets")
 
 
 @app.get("/")

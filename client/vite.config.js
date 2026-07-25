@@ -20,5 +20,9 @@ export default defineConfig({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+    // Vite met ses chunks JS/CSS sous /assets par défaut, ce qui entre en collision
+    // avec le mount FastAPI /assets -> web/assets (logos, avatars). Sortie renommée
+    // pour laisser /assets exclusivement aux images du jeu.
+    assetsDir: 'app',
   },
 });
