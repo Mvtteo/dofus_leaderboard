@@ -5,18 +5,6 @@ function isNazolas(pseudo) {
   return pseudo?.toLowerCase() === 'nazolas';
 }
 
-const barkAudio = typeof Audio !== 'undefined' ? new Audio('/assets/bark.mp3') : null;
-const BARK_LIMIT = 3;
-const BARK_STORAGE_KEY = 'nazolas_bark_count';
-function playBark() {
-  if (!barkAudio) return;
-  const count = parseInt(sessionStorage.getItem(BARK_STORAGE_KEY) || '0', 10);
-  if (count >= BARK_LIMIT) return;
-  sessionStorage.setItem(BARK_STORAGE_KEY, String(count + 1));
-  barkAudio.currentTime = 0;
-  barkAudio.play().catch(() => {});
-}
-
 function Avatar({ player }) {
   if (isNazolas(player.dofus_pseudo)) return <img src="/assets/dog.jpeg" alt={player.dofus_pseudo} />;
   return player.avatar_url
@@ -74,11 +62,10 @@ function PodiumCard({ player, allPlayers, cls, lbl, animDelay }) {
     <div
       className={`pod-card ${cls}${visible ? ' visible' : ''}`}
       style={{ transitionDelay: `${animDelay}s` }}
-      onMouseEnter={isNazolas(player.dofus_pseudo) ? playBark : undefined}
     >
       <div className="pod-rank-label">{lbl}</div>
       <div className="pod-avatar"><Avatar player={player} /></div>
-      <div className={`pod-player-name${isNazolas(player.dofus_pseudo) ? ' name-easter-egg' : ''}`}>{player.dofus_pseudo}</div>
+      <div className="pod-player-name">{player.dofus_pseudo}</div>
       <div className="pod-score">{parseInt(player.total_points).toLocaleString()} pts</div>
       <div className="pod-wr-bar">
         <div className={`pod-wr-fill ${wrClass(w)}`} style={{ width: `${w}%` }} />
@@ -206,7 +193,6 @@ function LeaderboardTable({ filteredPlayers, allPlayers, pools, defaultWinratePo
                 <tr
                   key={player.dofus_pseudo}
                   className={`player-row ${rowCls} visible`}
-                  onMouseEnter={isNazolas(player.dofus_pseudo) ? playBark : undefined}
                 >
                   <td className="cell-rank">
                     <div className="rank-badge">
@@ -218,7 +204,7 @@ function LeaderboardTable({ filteredPlayers, allPlayers, pools, defaultWinratePo
                   <td className="cell-player">
                     <div className="player-info">
                       <div className="player-avatar"><Avatar player={player} /></div>
-                      <span className={`player-name${isNazolas(player.dofus_pseudo) ? ' name-easter-egg' : ''}`}>{player.dofus_pseudo}</span>
+                      <span className="player-name">{player.dofus_pseudo}</span>
                     </div>
                   </td>
                   <td className="cell-perco"><PercoRingSmall level={pc} /></td>

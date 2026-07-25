@@ -1,4 +1,11 @@
 node_modules
 .env
+.env.local
 .DS_Store
 ./keys.json
+dist
+
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
+*.pyc

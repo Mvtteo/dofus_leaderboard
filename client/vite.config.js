@@ -6,7 +6,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Bare '/admin' is NOT proxied: in dev it must load Vite's own SPA shell
+      // (main.jsx picks AdminApp client-side based on pathname). Only the
+      // backend endpoints under it are forwarded.
       '/api': 'http://localhost:3000',
+      '/admin/api': 'http://localhost:3000',
+      '/admin/login': 'http://localhost:3000',
+      '/admin/logout': 'http://localhost:3000',
       '/web': 'http://localhost:3000',
     },
   },

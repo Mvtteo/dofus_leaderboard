@@ -13,10 +13,10 @@ export default function Header({ playerCount, totalCombats, seasons, selectedSea
       <div className="header-inner">
         <div className="header-brand">
           <div className="logo">
-            <img src="/web/assets/logo_ogre.png" alt="Logo" />
+            <img src="/web/assets/logo_nemesis.png" alt="Logo" />
           </div>
           <div className="brand-text">
-            <h1 className="brand-title">OGRE</h1>
+            <h1 className="brand-title">NEMESIS</h1>
             <span className="brand-sub">PVP TRACKER</span>
           </div>
         </div>
