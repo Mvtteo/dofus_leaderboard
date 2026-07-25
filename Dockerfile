@@ -20,5 +20,7 @@ COPY --from=client-builder /app/dist ./dist
 WORKDIR /app/backend
 ENV PYTHONPATH=/app/backend
 
+# Forme shell (pas exec JSON) pour que ${PORT} soit interpolé au démarrage — Railway assigne
+# son propre port via cette variable, comme le faisait l'ancien bot Node (process.env.PORT || 3000).
 # Le service "bot" (docker-compose) écrase cette commande avec `python -m bot.main`.
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "3000"]
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-3000}
