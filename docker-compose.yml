@@ -10,10 +10,19 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - dofus_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+  api:
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    env_file:
+      - .env
   bot:
     build: .
     restart: always
+    command: python -m bot.main
     depends_on:
       - db
     env_file:
