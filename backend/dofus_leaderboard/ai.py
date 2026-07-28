@@ -78,7 +78,7 @@ async def _call_classifier_once(base64_image: str, prompt: str, mime_type: str =
                 ],
             }
         ],
-        temperature=1,
+        temperature=0,
         max_completion_tokens=2048,
         reasoning_effort="none",
         top_p=1,
