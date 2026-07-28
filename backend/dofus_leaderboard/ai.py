@@ -81,9 +81,12 @@ async def _call_classifier_once(base64_image: str, prompt: str, mime_type: str =
         temperature=1,
         max_completion_tokens=2048,
         reasoning_effort="none",
-        reasoning_format="hidden",
         top_p=1,
         stream=True,
+        # reasoning_format est une extension Groq, pas un parametre du SDK openai
+        # (rejete en TypeError depuis openai>=2.x qui a durci sa signature) : il
+        # faut le glisser dans extra_body pour qu'il passe tel quel dans le JSON envoye.
+        extra_body={"reasoning_format": "hidden"},
         **extra_kwargs,
     )
     text = ""
