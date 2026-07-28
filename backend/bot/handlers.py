@@ -8,6 +8,7 @@ from dofus_leaderboard.ai import parse_nuggets_with_ai, queue_classifier, PVP_PR
 from dofus_leaderboard.config import settings
 from dofus_leaderboard.database import SessionLocal
 from dofus_leaderboard.services import (
+    correct_player_names,
     ensure_current_season,
     get_or_create_account_for_discord,
     get_or_create_characters,
@@ -299,6 +300,14 @@ async def _handle_pvp_upload(message: discord.Message) -> None:
 
         parsed["winners"] = parsed["winners"][:5]
         parsed["losers"] = parsed["losers"][:5]
+
+        db = SessionLocal()
+        try:
+            parsed["winners"] = correct_player_names(db, parsed["winners"])
+            parsed["losers"] = correct_player_names(db, parsed["losers"])
+        finally:
+            db.close()
+        logger.info("[PvP] Noms corriges: %s", parsed)
 
         user_session.winners = list(dict.fromkeys(user_session.winners + parsed["winners"]))
         user_session.losers = list(dict.fromkeys(user_session.losers + parsed["losers"]))

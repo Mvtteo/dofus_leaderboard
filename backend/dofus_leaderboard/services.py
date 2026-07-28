@@ -1,3 +1,5 @@
+import difflib
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -103,6 +105,30 @@ def get_or_create_account_for_discord(
     ).scalar_one()
     db.commit()
     return account_id
+
+
+def correct_player_names(db: Session, names: list[str], cutoff: float = 0.75) -> list[str]:
+    """Rapproche chaque nom détecté par l'IA du pseudo existant le plus proche en base
+    (typo/OCR foireuse type "Ketza1" -> "Ketzal"), pour éviter de créer un personnage
+    fantôme à chaque erreur de lecture. Un nom sans correspondance suffisamment proche
+    est laissé tel quel (probablement un joueur réellement nouveau)."""
+    if not names:
+        return names
+
+    known = [r[0] for r in db.execute(text("SELECT dofus_pseudo FROM characters")).all()]
+    if not known:
+        return names
+    known_by_lower = {p.lower(): p for p in known}
+
+    corrected = []
+    for name in names:
+        lower = name.lower()
+        if lower in known_by_lower:
+            corrected.append(known_by_lower[lower])
+            continue
+        match = difflib.get_close_matches(lower, known_by_lower.keys(), n=1, cutoff=cutoff)
+        corrected.append(known_by_lower[match[0]] if match else name)
+    return corrected
 
 
 def get_or_create_characters(db: Session, pseudos: list[str]) -> list[dict]:
