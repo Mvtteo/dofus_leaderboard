@@ -1,10 +1,34 @@
-import difflib
-
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .seasons import get_seasons
 from .settings_store import live_config
+
+
+def _levenshtein(a: str, b: str) -> int:
+    if a == b:
+        return 0
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        cur = [i] + [0] * len(b)
+        for j, cb in enumerate(b, start=1):
+            cur[j] = min(
+                prev[j] + 1,  # suppression
+                cur[j - 1] + 1,  # insertion
+                prev[j - 1] + (ca != cb),  # substitution
+            )
+        prev = cur
+    return prev[-1]
+
+
+def _max_allowed_distance(length: int) -> int:
+    # Tolère jusqu'a "2-3 lettres" d'ecart, mais moins pour les pseudos courts
+    # (Bouf/Ba a distance 2 sur 4 lettres est deja la moitie du nom -> trop risque).
+    if length <= 4:
+        return 1
+    if length <= 7:
+        return 2
+    return 3
 
 
 # ============================================
@@ -107,11 +131,14 @@ def get_or_create_account_for_discord(
     return account_id
 
 
-def correct_player_names(db: Session, names: list[str], cutoff: float = 0.75) -> list[str]:
+def correct_player_names(db: Session, names: list[str]) -> list[str]:
     """Rapproche chaque nom détecté par l'IA du pseudo existant le plus proche en base
-    (typo/OCR foireuse type "Ketza1" -> "Ketzal"), pour éviter de créer un personnage
-    fantôme à chaque erreur de lecture. Un nom sans correspondance suffisamment proche
-    est laissé tel quel (probablement un joueur réellement nouveau)."""
+    (typo/OCR foireuse type "Ketza1" -> "Ketzal", ou des ecarts de 2-3 lettres comme
+    "Ketzob" -> "Ketzal"), pour éviter de créer un personnage fantôme à chaque erreur
+    de lecture. Un nom sans correspondance suffisamment proche est laissé tel quel
+    (probablement un joueur réellement nouveau). Distance d'édition plutôt qu'un ratio
+    global : un ratio de similarité pénalise trop les pseudos courts (Dofus en a
+    beaucoup) là où une distance absolue de 2-3 caractères reste pertinente."""
     if not names:
         return names
 
@@ -126,8 +153,15 @@ def correct_player_names(db: Session, names: list[str], cutoff: float = 0.75) ->
         if lower in known_by_lower:
             corrected.append(known_by_lower[lower])
             continue
-        match = difflib.get_close_matches(lower, known_by_lower.keys(), n=1, cutoff=cutoff)
-        corrected.append(known_by_lower[match[0]] if match else name)
+
+        best_pseudo, best_distance = None, None
+        for candidate_lower, candidate_pseudo in known_by_lower.items():
+            distance = _levenshtein(lower, candidate_lower)
+            if best_distance is None or distance < best_distance:
+                best_pseudo, best_distance = candidate_pseudo, distance
+
+        allowed = _max_allowed_distance(len(lower))
+        corrected.append(best_pseudo if best_pseudo is not None and best_distance <= allowed else name)
     return corrected
 
 
