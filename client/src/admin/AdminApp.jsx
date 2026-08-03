@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { adminApi } from './api';
 import '../styles/admin.scss';
 
+const fmtDate = (raw) => {
+  if (!raw) return '-';
+  const [y, m, d] = raw.split('-');
+  return `${d}/${m}/${y}`;
+};
+
 function LoginScreen({ onLoggedIn }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -39,133 +45,11 @@ function LoginScreen({ onLoggedIn }) {
   );
 }
 
-function PoolsSection({ settings, reload }) {
-  const [pools, setPools] = useState(settings.pools);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const updatePool = (i, field, value) => {
-    const next = [...pools];
-    next[i] = { ...next[i], [field]: field === 'bonus' ? Number(value) : value };
-    setPools(next);
-  };
-
-  const addPool = () => {
-    if (pools.length >= settings.maxPools) return;
-    setPools([...pools, { id: `pool_${pools.length + 1}_${Date.now()}`, name: '', bonus: 0 }]);
-  };
-
-  const removePool = (i) => setPools(pools.filter((_, idx) => idx !== i));
-
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      await adminApi.savePools(pools);
-      await reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <section className="admin-card">
-      <div className="admin-card-header">
-        <h2>Pools d'alliances</h2>
-        <span className="admin-card-hint">{pools.length}/{settings.maxPools}</span>
-      </div>
-      {pools.map((p, i) => (
-        <div className="admin-row" key={p.id}>
-          <input value={p.name} placeholder="Nom" onChange={(e) => updatePool(i, 'name', e.target.value)} />
-          <input type="number" value={p.bonus} placeholder="Bonus %" onChange={(e) => updatePool(i, 'bonus', e.target.value)} />
-          <button className="admin-btn-danger" onClick={() => removePool(i)}>Retirer</button>
-        </div>
-      ))}
-      <div className="admin-actions">
-        <button onClick={addPool} disabled={pools.length >= settings.maxPools}>+ Ajouter un pool</button>
-        <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer</button>
-      </div>
-      {error && <p className="admin-error">{error}</p>}
-    </section>
-  );
-}
-
-function PointsGridSection({ settings, reload }) {
-  const [grids, setGrids] = useState({
-    pts_atk_win: settings.ptsAtkWin,
-    pts_atk_lose: settings.ptsAtkLose,
-    pts_def_win: settings.ptsDefWin,
-    pts_def_lose: settings.ptsDefLose,
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const updateCell = (gridKey, r, c, value) => {
-    const next = { ...grids, [gridKey]: grids[gridKey].map((row) => [...row]) };
-    next[gridKey][r][c] = Number(value);
-    setGrids(next);
-  };
-
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      await adminApi.savePointsGrid(grids);
-      await reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const gridLabels = {
-    pts_atk_win: 'Attaque — Victoire',
-    pts_atk_lose: 'Attaque — Défaite',
-    pts_def_win: 'Défense — Victoire',
-    pts_def_lose: 'Défense — Défaite',
-  };
-
-  return (
-    <section className="admin-card">
-      <h2>Grilles de points</h2>
-      {Object.entries(gridLabels).map(([key, label]) => (
-        <div key={key} className="admin-grid-block">
-          <h3>{label}</h3>
-          <table className="admin-grid-table">
-            <tbody>
-              {grids[key].map((row, r) => (
-                <tr key={r}>
-                  {row.map((val, c) => (
-                    <td key={c}>
-                      <input type="number" value={val} onChange={(e) => updateCell(key, r, c, e.target.value)} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-      <div className="admin-actions">
-        <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer les grilles</button>
-      </div>
-      {error && <p className="admin-error">{error}</p>}
-    </section>
-  );
-}
-
-const fmtDate = (raw) => {
-  if (!raw) return '-';
-  const [y, m, d] = raw.split('-');
-  return `${d}/${m}/${y}`;
-};
-
+// ============================================
+// SAISON & PEPITES
+// ============================================
 function SeasonSection({ settings, reload }) {
   const [endDate, setEndDate] = useState(settings.curSeasonEndRaw || '');
-  const [winratePool, setWinratePool] = useState(settings.defaultWinratePool || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -174,7 +58,6 @@ function SeasonSection({ settings, reload }) {
     setError(null);
     try {
       await adminApi.saveSeasonEnd(endDate || null);
-      await adminApi.saveDefaultWinratePool(winratePool || null);
       await reload();
     } catch (err) {
       setError(err.message);
@@ -203,13 +86,6 @@ function SeasonSection({ settings, reload }) {
       <div className="admin-row">
         <label>Fin de saison forcée</label>
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-      </div>
-      <div className="admin-row">
-        <label>Pool de référence pour le winrate</label>
-        <select value={winratePool} onChange={(e) => setWinratePool(e.target.value)}>
-          <option value="">Aucun (global)</option>
-          {settings.pools.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
       </div>
       <div className="admin-actions">
         <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer</button>
@@ -252,7 +128,7 @@ function NuggetsSection({ settings }) {
           {(settings.seasons || []).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
       </div>
-      {loading ? <p>Chargement...</p> : rows.length === 0 ? (
+      {loading ? <p>Chargement...</p> : error ? <p className="admin-error">{error}</p> : rows.length === 0 ? (
         <p className="admin-empty">Aucune pépite pour cette saison.</p>
       ) : (
         <table className="admin-table">
@@ -271,19 +147,216 @@ function NuggetsSection({ settings }) {
   );
 }
 
-function PlayerPointsSection() {
-  const [pseudo, setPseudo] = useState('');
-  const [points, setPoints] = useState('');
+function SaisonPepitesTab({ settings, reload }) {
+  return (
+    <>
+      <SeasonSection settings={settings} reload={reload} />
+      <NuggetsSection settings={settings} />
+    </>
+  );
+}
+
+// ============================================
+// BAREME & POOLS
+// ============================================
+function PoolsSection({ settings, reload }) {
+  const [pools, setPools] = useState(settings.pools);
+  const [winratePool, setWinratePool] = useState(settings.defaultWinratePool || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [savingWr, setSavingWr] = useState(false);
+  const [wrError, setWrError] = useState(null);
+
+  const updatePool = (i, field, value) => {
+    const next = [...pools];
+    next[i] = { ...next[i], [field]: field === 'bonus' ? Number(value) : value };
+    setPools(next);
+  };
+
+  const addPool = () => {
+    if (pools.length >= settings.maxPools) return;
+    setPools([...pools, { id: `pool_${pools.length + 1}_${Date.now()}`, name: '', bonus: 0 }]);
+  };
+
+  const removePool = (i) => setPools(pools.filter((_, idx) => idx !== i));
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await adminApi.savePools(pools);
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveWinratePool = async () => {
+    setSavingWr(true);
+    setWrError(null);
+    try {
+      await adminApi.saveDefaultWinratePool(winratePool || null);
+      await reload();
+    } catch (err) {
+      setWrError(err.message);
+    } finally {
+      setSavingWr(false);
+    }
+  };
+
+  return (
+    <section className="admin-card">
+      <div className="admin-card-header">
+        <h2>Pools d'alliances</h2>
+        <span className="admin-card-hint">{pools.length}/{settings.maxPools}</span>
+      </div>
+      {pools.map((p, i) => (
+        <div className="admin-row" key={p.id}>
+          <input value={p.name} placeholder="Nom" onChange={(e) => updatePool(i, 'name', e.target.value)} />
+          <input type="number" value={p.bonus} placeholder="Bonus %" onChange={(e) => updatePool(i, 'bonus', e.target.value)} />
+          <button className="admin-btn-danger" onClick={() => removePool(i)}>Retirer</button>
+        </div>
+      ))}
+      <div className="admin-actions">
+        <button onClick={addPool} disabled={pools.length >= settings.maxPools}>+ Ajouter un pool</button>
+        <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer</button>
+      </div>
+      {error && <p className="admin-error">{error}</p>}
+
+      <div className="admin-subsection">
+        <h3>Winrate affiché sur le leaderboard</h3>
+        <div className="admin-row">
+          <select value={winratePool} onChange={(e) => setWinratePool(e.target.value)}>
+            <option value="">Global (V/D total)</option>
+            {pools.map((p) => <option key={p.id} value={p.id}>WR vs {p.name}</option>)}
+          </select>
+          <button className="admin-btn-primary" onClick={saveWinratePool} disabled={savingWr}>Appliquer</button>
+        </div>
+        {wrError && <p className="admin-error">{wrError}</p>}
+      </div>
+    </section>
+  );
+}
+
+function PointsGridSection({ settings, reload }) {
+  const [grids, setGrids] = useState({
+    pts_atk_win: settings.ptsAtkWin,
+    pts_atk_lose: settings.ptsAtkLose,
+    pts_def_win: settings.ptsDefWin,
+    pts_def_lose: settings.ptsDefLose,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const updateCell = (gridKey, r, c, value) => {
+    const next = { ...grids, [gridKey]: grids[gridKey].map((row) => [...row]) };
+    next[gridKey][r][c] = Number(value);
+    setGrids(next);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await adminApi.savePointsGrid(grids);
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const gridLabels = {
+    pts_atk_win: 'Attaque — Victoire',
+    pts_atk_lose: 'Attaque — Défaite',
+    pts_def_win: 'Défense — Victoire',
+    pts_def_lose: 'Défense — Défaite',
+  };
+
+  return (
+    <section className="admin-card">
+      <h2>Barème de points</h2>
+      {Object.entries(gridLabels).map(([key, label]) => (
+        <div key={key} className="admin-grid-block">
+          <h3>{label}</h3>
+          <table className="admin-grid-table">
+            <tbody>
+              {grids[key].map((row, r) => (
+                <tr key={r}>
+                  {row.map((val, c) => (
+                    <td key={c}>
+                      <input type="number" value={val} onChange={(e) => updateCell(key, r, c, e.target.value)} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <div className="admin-actions">
+        <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer les grilles</button>
+      </div>
+      {error && <p className="admin-error">{error}</p>}
+    </section>
+  );
+}
+
+function BaremePoolsTab({ settings, reload }) {
+  return (
+    <>
+      <PoolsSection settings={settings} reload={reload} />
+      <PointsGridSection settings={settings} reload={reload} />
+    </>
+  );
+}
+
+// ============================================
+// JOUEURS
+// ============================================
+function PlayerPointsSection({ onSelectPlayer }) {
+  const [allNames, setAllNames] = useState([]);
+  const [query, setQuery] = useState('');
+  const [showList, setShowList] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [current, setCurrent] = useState(null);
+  const [delta, setDelta] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setError(null);
+  useEffect(() => { adminApi.players().then(setAllNames).catch(() => {}); }, []);
+
+  const suggestions = query.length > 0 && showList
+    ? allNames.filter((n) => n.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
+    : [];
+
+  const selectPlayer = async (name) => {
+    setQuery(name);
+    setSelected(name);
+    setShowList(false);
+    setDelta(0);
     setResult(null);
+    setError(null);
+    onSelectPlayer?.(name);
     try {
-      const r = await adminApi.setPlayerPoints(pseudo, Number(points));
+      const stats = await adminApi.playerStats(name);
+      setCurrent(stats.points);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const apply = async () => {
+    if (!selected || delta === 0) return;
+    setError(null);
+    try {
+      const r = await adminApi.setPlayerPoints(selected, delta);
       setResult(r);
+      setCurrent(r.newTotal);
+      setDelta(0);
     } catch (err) {
       setError(err.message);
     }
@@ -291,19 +364,123 @@ function PlayerPointsSection() {
 
   return (
     <section className="admin-card">
-      <h2>Ajuster les points d'un joueur</h2>
-      <form onSubmit={submit} className="admin-row">
-        <input placeholder="Pseudo" value={pseudo} onChange={(e) => setPseudo(e.target.value)} />
-        <input type="number" placeholder="Delta (+/-)" value={points} onChange={(e) => setPoints(e.target.value)} />
-        <button type="submit" className="admin-btn-primary">Appliquer</button>
-      </form>
+      <h2>Ajustement points</h2>
+      <div className="admin-autocomplete">
+        <input
+          placeholder="Rechercher un joueur..."
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setShowList(true); setSelected(null); }}
+          onFocus={() => setShowList(true)}
+          onBlur={() => setTimeout(() => setShowList(false), 150)}
+        />
+        {suggestions.length > 0 && (
+          <div className="admin-autocomplete-list">
+            {suggestions.map((n) => (
+              <div key={n} className="admin-autocomplete-item" onMouseDown={() => selectPlayer(n)}>{n}</div>
+            ))}
+          </div>
+        )}
+      </div>
+      {selected && (
+        <div className="admin-points-editor">
+          <div className="admin-row">
+            <label>Actuel</label>
+            <span className="admin-points-value">{current ?? '-'}</span>
+          </div>
+          <div className="admin-points-controls">
+            <button type="button" onClick={() => setDelta(delta - 5)}>-5</button>
+            <button type="button" onClick={() => setDelta(delta - 1)}>-1</button>
+            <span className={`admin-points-delta ${delta > 0 ? 'positive' : delta < 0 ? 'negative' : ''}`}>{delta > 0 ? `+${delta}` : delta}</span>
+            <button type="button" onClick={() => setDelta(delta + 1)}>+1</button>
+            <button type="button" onClick={() => setDelta(delta + 5)}>+5</button>
+            <button type="button" onClick={() => setDelta(0)}>Reset</button>
+          </div>
+          <div className="admin-row">
+            <label>Prévision</label>
+            <span className="admin-points-value accent">{current != null ? current + delta : '-'}</span>
+            <button className="admin-btn-primary" onClick={apply} disabled={delta === 0}>Appliquer</button>
+          </div>
+        </div>
+      )}
       {result && <p className="admin-success">{result.pseudo} : {result.delta > 0 ? '+' : ''}{result.delta} pts (total {result.newTotal})</p>}
       {error && <p className="admin-error">{error}</p>}
     </section>
   );
 }
 
-function MatchesSection() {
+function MultiAccountsSection() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    adminApi.multiAccounts().then(setRows).catch((err) => setError(err.message)).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <section className="admin-card">
+      <div className="admin-card-header">
+        <h2>Comptes multiples</h2>
+        <span className="admin-card-hint">{rows.length}</span>
+      </div>
+      {loading ? <p>Chargement...</p> : error ? <p className="admin-error">{error}</p> : rows.length === 0 ? (
+        <p className="admin-empty">Aucun compte avec plusieurs persos.</p>
+      ) : (
+        <table className="admin-table">
+          <thead><tr><th>Persos</th><th>Nombre</th></tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td>{(r.pseudos || []).join(', ')}</td>
+                <td>{r.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function PlayerMatchesSection({ pseudo }) {
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!pseudo) return;
+    setLoading(true);
+    setError(null);
+    adminApi.playerMatches(pseudo).then(setMatches).catch((err) => setError(err.message)).finally(() => setLoading(false));
+  }, [pseudo]);
+
+  if (!pseudo) return null;
+
+  return (
+    <section className="admin-card">
+      <h2>Historique — <span className="admin-card-accent">{pseudo}</span></h2>
+      {loading ? <p>Chargement...</p> : error ? <p className="admin-error">{error}</p> : matches.length === 0 ? (
+        <p className="admin-empty">Aucun match.</p>
+      ) : (
+        <table className="admin-table">
+          <thead><tr><th>Alliance</th><th>Contexte</th><th>Résultat</th><th>Points</th></tr></thead>
+          <tbody>
+            {matches.map((m) => (
+              <tr key={m.id} className={m.cancelled ? 'admin-row-cancelled' : ''}>
+                <td>{m.alliance}</td>
+                <td>{m.context}</td>
+                <td>{m.has_won ? 'Victoire' : 'Défaite'}</td>
+                <td>{m.points_awarded}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function RecentMatchesSection() {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -338,7 +515,10 @@ function MatchesSection() {
 
   return (
     <section className="admin-card">
-      <h2>Matchs récents</h2>
+      <div className="admin-card-header">
+        <h2>Derniers matchs</h2>
+        <button onClick={load}>Actualiser</button>
+      </div>
       {loading ? <p>Chargement...</p> : error ? <p className="admin-error">{error}</p> : matches.length === 0 ? (
         <p className="admin-empty">Aucun match enregistré pour la saison en cours.</p>
       ) : (
@@ -370,19 +550,31 @@ function MatchesSection() {
   );
 }
 
+function JoueursTab() {
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+
+  return (
+    <>
+      <div className="admin-grid-2col">
+        <PlayerPointsSection onSelectPlayer={setSelectedPlayer} />
+        <MultiAccountsSection />
+      </div>
+      <PlayerMatchesSection pseudo={selectedPlayer} />
+      <RecentMatchesSection />
+    </>
+  );
+}
+
 const TABS = [
-  { id: 'pools', label: 'Pools', Component: PoolsSection },
-  { id: 'grid', label: 'Grilles', Component: PointsGridSection },
-  { id: 'season', label: 'Saison', Component: SeasonSection },
-  { id: 'nuggets', label: 'Pépites', Component: NuggetsSection },
-  { id: 'player-points', label: 'Points joueur', Component: PlayerPointsSection },
-  { id: 'matches', label: 'Matchs', Component: MatchesSection },
+  { id: 'saison', label: 'Saison & Pépites', Component: SaisonPepitesTab },
+  { id: 'bareme', label: 'Barème & Pools', Component: BaremePoolsTab },
+  { id: 'joueurs', label: 'Joueurs', Component: JoueursTab },
 ];
 
 export default function AdminApp() {
   const [authed, setAuthed] = useState(null);
   const [settings, setSettings] = useState(null);
-  const [tab, setTab] = useState('pools');
+  const [tab, setTab] = useState('saison');
 
   const loadSettings = () => adminApi.settings().then(setSettings);
 

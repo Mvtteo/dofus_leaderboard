@@ -351,3 +351,86 @@ button {
   border-top: 1px solid var(--rule);
   border-bottom: none;
 }
+
+.admin-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-subsection {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+}
+
+.admin-card-accent { color: var(--accent-bright); }
+
+.admin-autocomplete {
+  position: relative;
+  margin-bottom: 1rem;
+
+  input { width: 100%; }
+}
+
+.admin-autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--color-darker);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 20;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.admin-autocomplete-item {
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+  transition: background 0.15s;
+
+  &:hover { background: rgba(42, 157, 143, 0.1); color: var(--ink); }
+}
+
+.admin-points-editor {
+  padding-top: 0.5rem;
+}
+
+.admin-points-value {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+
+  &.accent { color: var(--accent-bright); font-size: 1.2rem; }
+}
+
+.admin-points-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.75rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-points-delta {
+  min-width: 56px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--muted);
+
+  &.positive { color: var(--accent-bright); }
+  &.negative { color: var(--accent2); }
+}
