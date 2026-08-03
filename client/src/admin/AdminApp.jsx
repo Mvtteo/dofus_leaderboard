@@ -541,7 +541,7 @@ function MultiAccountsSection() {
                     <td>
                       <div className="admin-chip-list">
                         {characters.map((c, ci) => (
-                          <span key={ci} className={`admin-chip${ci === 0 ? ' main' : ''}`}>{c}</span>
+                          <span key={ci} className="admin-chip">{c}</span>
                         ))}
                       </div>
                     </td>
@@ -551,7 +551,7 @@ function MultiAccountsSection() {
               })}
             </tbody>
           </table>
-          <p className="admin-note">Les points sont agrégés par compte Discord ; la puce pleine indique le premier personnage lié à ce compte.</p>
+          <p className="admin-note">Les points sont agrégés par compte Discord.</p>
         </>
       )}
     </section>

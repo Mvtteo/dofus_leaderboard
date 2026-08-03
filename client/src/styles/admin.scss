@@ -630,12 +630,6 @@ button {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 600;
-
-  &.main {
-    background: rgba(42, 157, 143, 0.16);
-    border-color: rgba(42, 157, 143, 0.35);
-    color: var(--accent-bright);
-  }
 }
 
 .admin-note {
