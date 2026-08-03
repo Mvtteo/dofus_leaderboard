@@ -33,7 +33,7 @@ def get_seasons(season_end_override: str | None) -> tuple[list[SeasonWindow], in
             override_date = datetime.fromisoformat(season_end_override).replace(
                 hour=23, minute=59, second=59, microsecond=999000
             )
-            if start <= now <= override_date:
+            if start <= override_date <= end:
                 end = override_date
                 override_applied = True
 

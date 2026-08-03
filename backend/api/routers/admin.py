@@ -149,12 +149,6 @@ def admin_season_end(body: SeasonEndIn, db: Session = Depends(get_db)):
 
     seasons, current_season = get_seasons(live_config.season_end_override)
     cur_season = next((s for s in seasons if s.id == current_season), None)
-    if cur_season:
-        db.execute(
-            text("UPDATE seasons SET end_date = :end WHERE id = :id"),
-            {"end": cur_season.end, "id": cur_season.id},
-        )
-        db.commit()
 
     return {"ok": True, "curSeason": cur_season.end_raw if cur_season else None}
 

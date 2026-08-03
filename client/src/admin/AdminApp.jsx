@@ -148,13 +148,17 @@ function SeasonSection({ settings, reload }) {
   const [endDate, setEndDate] = useState(settings.curSeasonEndRaw || '');
   const [winratePool, setWinratePool] = useState(settings.defaultWinratePool || '');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const save = async () => {
     setSaving(true);
+    setError(null);
     try {
       await adminApi.saveSeasonEnd(endDate || null);
       await adminApi.saveDefaultWinratePool(winratePool || null);
       await reload();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -177,6 +181,7 @@ function SeasonSection({ settings, reload }) {
       <div className="admin-actions">
         <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer</button>
       </div>
+      {error && <p className="admin-error">{error}</p>}
     </section>
   );
 }
