@@ -162,6 +162,65 @@
   }
 }
 
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.85rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--rule);
+
+  h2 { margin: 0; padding-bottom: 0; border-bottom: none; }
+
+  select { margin-left: auto; }
+}
+
+.admin-card-hint {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted-2);
+  font-weight: 700;
+}
+
+.admin-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
+.season-info {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.season-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  .season-stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-2);
+  }
+
+  .season-stat-value {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent-bright);
+
+    &.gold { color: var(--color-yellow); }
+  }
+}
+
 .admin-row {
   display: flex;
   align-items: center;
@@ -284,4 +343,11 @@ button {
   }
 
   tbody tr:hover td { background: var(--hover-table); }
+}
+
+.admin-table-total td {
+  font-weight: 700;
+  color: var(--accent-bright);
+  border-top: 1px solid var(--rule);
+  border-bottom: none;
 }

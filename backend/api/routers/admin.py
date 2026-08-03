@@ -85,6 +85,7 @@ def admin_settings(db: Session = Depends(get_db)):
         "maxPools": 5,
         "seasons": [{"id": s.id, "label": s.label, "isCurrent": s.is_current} for s in seasons],
         "currentSeason": current_season,
+        "curSeasonStartRaw": cur_season.start.date().isoformat() if cur_season else None,
         "curSeasonEndRaw": cur_season.end_raw if cur_season else None,
         "ptsAtkWin": live_config.pts_atk_win,
         "ptsAtkLose": live_config.pts_atk_lose,

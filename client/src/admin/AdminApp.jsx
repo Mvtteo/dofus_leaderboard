@@ -42,6 +42,7 @@ function LoginScreen({ onLoggedIn }) {
 function PoolsSection({ settings, reload }) {
   const [pools, setPools] = useState(settings.pools);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const updatePool = (i, field, value) => {
     const next = [...pools];
@@ -58,9 +59,12 @@ function PoolsSection({ settings, reload }) {
 
   const save = async () => {
     setSaving(true);
+    setError(null);
     try {
       await adminApi.savePools(pools);
       await reload();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -68,7 +72,10 @@ function PoolsSection({ settings, reload }) {
 
   return (
     <section className="admin-card">
-      <h2>Pools d'alliances</h2>
+      <div className="admin-card-header">
+        <h2>Pools d'alliances</h2>
+        <span className="admin-card-hint">{pools.length}/{settings.maxPools}</span>
+      </div>
       {pools.map((p, i) => (
         <div className="admin-row" key={p.id}>
           <input value={p.name} placeholder="Nom" onChange={(e) => updatePool(i, 'name', e.target.value)} />
@@ -80,6 +87,7 @@ function PoolsSection({ settings, reload }) {
         <button onClick={addPool} disabled={pools.length >= settings.maxPools}>+ Ajouter un pool</button>
         <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer</button>
       </div>
+      {error && <p className="admin-error">{error}</p>}
     </section>
   );
 }
@@ -92,6 +100,7 @@ function PointsGridSection({ settings, reload }) {
     pts_def_lose: settings.ptsDefLose,
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const updateCell = (gridKey, r, c, value) => {
     const next = { ...grids, [gridKey]: grids[gridKey].map((row) => [...row]) };
@@ -101,9 +110,12 @@ function PointsGridSection({ settings, reload }) {
 
   const save = async () => {
     setSaving(true);
+    setError(null);
     try {
       await adminApi.savePointsGrid(grids);
       await reload();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -140,9 +152,16 @@ function PointsGridSection({ settings, reload }) {
       <div className="admin-actions">
         <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer les grilles</button>
       </div>
+      {error && <p className="admin-error">{error}</p>}
     </section>
   );
 }
+
+const fmtDate = (raw) => {
+  if (!raw) return '-';
+  const [y, m, d] = raw.split('-');
+  return `${d}/${m}/${y}`;
+};
 
 function SeasonSection({ settings, reload }) {
   const [endDate, setEndDate] = useState(settings.curSeasonEndRaw || '');
@@ -166,7 +185,21 @@ function SeasonSection({ settings, reload }) {
 
   return (
     <section className="admin-card">
-      <h2>Saison {settings.currentSeason}</h2>
+      <h2>Saison en cours</h2>
+      <div className="season-info">
+        <div className="season-stat">
+          <span className="season-stat-label">Saison</span>
+          <span className="season-stat-value gold">{settings.currentSeason}</span>
+        </div>
+        <div className="season-stat">
+          <span className="season-stat-label">Début</span>
+          <span className="season-stat-value">{fmtDate(settings.curSeasonStartRaw)}</span>
+        </div>
+        <div className="season-stat">
+          <span className="season-stat-label">Fin actuelle</span>
+          <span className="season-stat-value">{fmtDate(settings.curSeasonEndRaw)}</span>
+        </div>
+      </div>
       <div className="admin-row">
         <label>Fin de saison forcée</label>
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
@@ -187,32 +220,53 @@ function SeasonSection({ settings, reload }) {
 }
 
 function NuggetsSection({ settings }) {
+  const [seasonId, setSeasonId] = useState(settings.currentSeason);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const load = () => adminApi.nuggets(settings.currentSeason).then(setRows).finally(() => setLoading(false));
-  useEffect(() => { load(); }, [settings.currentSeason]);
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    adminApi.nuggets(seasonId).then(setRows).catch((err) => setError(err.message)).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, [seasonId]);
 
   const reset = async () => {
     if (!confirm('Remettre à zéro toutes les pépites de la saison en cours ?')) return;
-    await adminApi.resetNuggets();
-    await load();
+    try {
+      await adminApi.resetNuggets();
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
   };
+
+  const total = rows.reduce((s, r) => s + (Number(r.nuggets) || 0), 0);
 
   return (
     <section className="admin-card">
-      <h2>Pépites</h2>
-      {loading ? <p>Chargement...</p> : (
+      <div className="admin-card-header">
+        <h2>Pépites</h2>
+        <select value={seasonId} onChange={(e) => setSeasonId(Number(e.target.value))}>
+          {(settings.seasons || []).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </div>
+      {loading ? <p>Chargement...</p> : rows.length === 0 ? (
+        <p className="admin-empty">Aucune pépite pour cette saison.</p>
+      ) : (
         <table className="admin-table">
           <thead><tr><th>Joueur</th><th>Pépites</th></tr></thead>
           <tbody>
             {rows.map((r, i) => <tr key={i}><td>{r.name}</td><td>{r.nuggets}</td></tr>)}
+            <tr className="admin-table-total"><td>Total alliance</td><td>{total.toLocaleString()}</td></tr>
           </tbody>
         </table>
       )}
       <div className="admin-actions">
-        <button className="admin-btn-danger" onClick={reset}>Réinitialiser les pépites</button>
+        <button className="admin-btn-danger" onClick={reset}>Réinitialiser les pépites (saison en cours)</button>
       </div>
+      {error && <p className="admin-error">{error}</p>}
     </section>
   );
 }
@@ -252,27 +306,42 @@ function PlayerPointsSection() {
 function MatchesSection() {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const load = () => adminApi.recentMatches().then(setMatches).finally(() => setLoading(false));
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    adminApi.recentMatches().then(setMatches).catch((err) => setError(err.message)).finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []);
 
   const editPoints = async (id, current) => {
     const value = prompt('Nouveaux points pour ce match :', current);
     if (value === null || isNaN(Number(value))) return;
-    await adminApi.setMatchPoints(id, Number(value));
-    await load();
+    try {
+      await adminApi.setMatchPoints(id, Number(value));
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const cancelMatch = async (id) => {
     if (!confirm('Annuler ce match ? Les points seront retirés des joueurs concernés.')) return;
-    await adminApi.cancelMatch(id);
-    await load();
+    try {
+      await adminApi.cancelMatch(id);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
     <section className="admin-card">
       <h2>Matchs récents</h2>
-      {loading ? <p>Chargement...</p> : (
+      {loading ? <p>Chargement...</p> : error ? <p className="admin-error">{error}</p> : matches.length === 0 ? (
+        <p className="admin-empty">Aucun match enregistré pour la saison en cours.</p>
+      ) : (
         <table className="admin-table">
           <thead><tr><th>Alliance</th><th>Contexte</th><th>Résultat</th><th>Points</th><th>Gagnants</th><th>Perdants</th><th></th></tr></thead>
           <tbody>
