@@ -463,6 +463,8 @@ button {
 }
 
 .grid-heatmap-table {
+  width: 100%;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 3px;
 
@@ -479,7 +481,7 @@ button {
   }
 
   .grid-heatmap-axis {
-    width: 46px;
+    width: 17%;
     padding-bottom: 2px;
     font-family: var(--font-mono);
     font-size: 0.62rem;
@@ -487,7 +489,7 @@ button {
   }
 
   .grid-heatmap-corner {
-    width: 34px;
+    width: 15%;
     padding-right: 5px;
     text-align: right;
     font-family: var(--font-mono);
@@ -496,6 +498,7 @@ button {
   }
 
   .grid-heatmap-row-header {
+    width: 15%;
     padding-right: 5px;
     text-align: right;
     font-family: var(--font-mono);
@@ -503,10 +506,11 @@ button {
     color: rgba(61, 189, 173, 0.55);
   }
 
-  td { padding: 0; }
+  td { padding: 0; width: 17%; }
 
   input {
-    width: 46px;
+    width: 100%;
+    box-sizing: border-box;
     text-align: center;
     padding: 0.45rem 0.2rem;
     border-radius: 7px;

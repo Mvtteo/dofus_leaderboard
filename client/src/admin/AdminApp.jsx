@@ -551,7 +551,7 @@ function MultiAccountsSection() {
               })}
             </tbody>
           </table>
-          <p className="admin-note">Les points sont agrégés par compte Discord ; la puce pleine indique le perso principal affiché sur le leaderboard.</p>
+          <p className="admin-note">Les points sont agrégés par compte Discord ; la puce pleine indique le premier personnage lié à ce compte.</p>
         </>
       )}
     </section>
