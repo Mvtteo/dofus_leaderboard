@@ -356,6 +356,19 @@ button {
   & + button { margin-left: 0.5rem; }
 }
 
+.admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+
+  button + button { margin-left: 0; }
+}
+
+.admin-btn-sm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.7rem;
+}
+
 .admin-btn-primary {
   background: var(--gradient-silver);
   border-color: transparent;

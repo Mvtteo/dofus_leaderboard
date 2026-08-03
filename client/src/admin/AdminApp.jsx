@@ -651,10 +651,10 @@ function RecentMatchesSection() {
                 <td>{m.losers.join(', ')}</td>
                 <td>
                   {!m.cancelled && (
-                    <>
-                      <button onClick={() => editPoints(m.id, m.points_awarded)}>Modifier</button>
-                      <button className="admin-btn-danger" onClick={() => cancelMatch(m.id)}>Annuler</button>
-                    </>
+                    <div className="admin-row-actions">
+                      <button className="admin-btn-sm" onClick={() => editPoints(m.id, m.points_awarded)}>Modifier</button>
+                      <button className="admin-btn-sm admin-btn-danger" onClick={() => cancelMatch(m.id)}>Annuler</button>
+                    </div>
                   )}
                 </td>
               </tr>
