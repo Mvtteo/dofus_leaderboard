@@ -247,9 +247,12 @@ def admin_multi_accounts(db: Session = Depends(get_db)):
     rows = db.execute(
         text(
             """
-            SELECT array_agg(dofus_pseudo ORDER BY dofus_pseudo) as pseudos, COUNT(*) as count
-            FROM characters
-            GROUP BY account_id
+            SELECT a.discord_nickname, a.discord_username, a.avatar_url,
+                array_agg(c.dofus_pseudo ORDER BY c.created_at ASC) as characters,
+                COUNT(*) as count
+            FROM characters c
+            JOIN accounts a ON a.id = c.account_id
+            GROUP BY a.id, a.discord_nickname, a.discord_username, a.avatar_url
             HAVING COUNT(*) > 1
             ORDER BY count DESC
             """

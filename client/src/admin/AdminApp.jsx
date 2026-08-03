@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from './api';
+import Background from '../components/Background';
 import '../styles/admin.scss';
 
 const fmtDate = (raw) => {
@@ -7,6 +8,9 @@ const fmtDate = (raw) => {
   const [y, m, d] = raw.split('-');
   return `${d}/${m}/${y}`;
 };
+
+const DEFAULT_GRID_WIN = [[2, 4, 5, 5, 5], [1, 4, 5, 5, 5], [1, 2, 6, 6, 6], [1, 2, 3, 8, 8], [1, 2, 3, 5, 8]];
+const DEFAULT_GRID_LOSE = [[1, 2, 3, 3, 3], [1, 2, 3, 3, 3], [0, 2, 3, 3, 3], [0, 0, 3, 4, 4], [0, 0, 0, 4, 5]];
 
 function LoginScreen({ onLoggedIn }) {
   const [password, setPassword] = useState('');
@@ -29,8 +33,12 @@ function LoginScreen({ onLoggedIn }) {
 
   return (
     <div className="admin-login">
+      <Background />
       <form onSubmit={submit}>
-        <h1>Admin</h1>
+        <div className="admin-login-brand">
+          <img src="/web/assets/logo_nemesis_round.png" alt="Nemesis" />
+          <h1>Admin</h1>
+        </div>
         <input
           type="password"
           placeholder="Mot de passe"
@@ -52,6 +60,10 @@ function SeasonSection({ settings, reload }) {
   const [endDate, setEndDate] = useState(settings.curSeasonEndRaw || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  const daysLeft = settings.curSeasonEndRaw
+    ? Math.max(0, Math.round((new Date(settings.curSeasonEndRaw) - new Date()) / 86400000))
+    : '-';
 
   const save = async () => {
     setSaving(true);
@@ -81,6 +93,10 @@ function SeasonSection({ settings, reload }) {
         <div className="season-stat">
           <span className="season-stat-label">Fin actuelle</span>
           <span className="season-stat-value">{fmtDate(settings.curSeasonEndRaw)}</span>
+        </div>
+        <div className="season-stat">
+          <span className="season-stat-label">Jours restants</span>
+          <span className="season-stat-value">{daysLeft}</span>
         </div>
       </div>
       <div className="admin-row">
@@ -240,6 +256,26 @@ function PoolsSection({ settings, reload }) {
   );
 }
 
+const GRID_META = {
+  pts_atk_win: { label: 'Attaque — Victoire', win: true },
+  pts_atk_lose: { label: 'Attaque — Défaite', win: false },
+  pts_def_win: { label: 'Défense — Victoire', win: true },
+  pts_def_lose: { label: 'Défense — Défaite', win: false },
+};
+
+function heatmapCellStyle(v, max, win) {
+  const rgb = win ? '61,189,173' : '244,162,97';
+  if (v === 0) {
+    return { background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.22)' };
+  }
+  const k = v / max;
+  return {
+    background: `rgba(${rgb},${(0.06 + 0.4 * k).toFixed(3)})`,
+    borderColor: `rgba(${rgb},${(0.14 + 0.34 * k).toFixed(3)})`,
+    color: k > 0.6 ? '#fff' : 'rgba(255,255,255,0.85)',
+  };
+}
+
 function PointsGridSection({ settings, reload }) {
   const [grids, setGrids] = useState({
     pts_atk_win: settings.ptsAtkWin,
@@ -252,7 +288,7 @@ function PointsGridSection({ settings, reload }) {
 
   const updateCell = (gridKey, r, c, value) => {
     const next = { ...grids, [gridKey]: grids[gridKey].map((row) => [...row]) };
-    next[gridKey][r][c] = Number(value);
+    next[gridKey][r][c] = Number(value) || 0;
     setGrids(next);
   };
 
@@ -269,36 +305,86 @@ function PointsGridSection({ settings, reload }) {
     }
   };
 
-  const gridLabels = {
-    pts_atk_win: 'Attaque — Victoire',
-    pts_atk_lose: 'Attaque — Défaite',
-    pts_def_win: 'Défense — Victoire',
-    pts_def_lose: 'Défense — Défaite',
+  const resetDefaults = () => {
+    setGrids({
+      pts_atk_win: DEFAULT_GRID_WIN.map((row) => [...row]),
+      pts_atk_lose: DEFAULT_GRID_LOSE.map((row) => [...row]),
+      pts_def_win: DEFAULT_GRID_WIN.map((row) => [...row]),
+      pts_def_lose: DEFAULT_GRID_LOSE.map((row) => [...row]),
+    });
   };
 
   return (
     <section className="admin-card">
       <h2>Barème de points</h2>
-      {Object.entries(gridLabels).map(([key, label]) => (
-        <div key={key} className="admin-grid-block">
-          <h3>{label}</h3>
-          <table className="admin-grid-table">
-            <tbody>
-              {grids[key].map((row, r) => (
-                <tr key={r}>
-                  {row.map((val, c) => (
-                    <td key={c}>
-                      <input type="number" value={val} onChange={(e) => updateCell(key, r, c, e.target.value)} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="grid-intro">
+        <p>
+          Chaque grille croise le nombre d'<span className="grid-intro-ally">alliés</span> (lignes) et
+          d'<span className="grid-intro-enemy">ennemis</span> (colonnes). La valeur est le gain de points
+          par joueur ; plus la cellule est vive, plus le combat rapporte.
+        </p>
+        <div className="grid-legend">
+          <span>0 PT</span>
+          <span className="grid-legend-bar" />
+          <span>MAX</span>
         </div>
-      ))}
+      </div>
+      <div className="grid-heatmaps">
+        {Object.entries(GRID_META).map(([key, meta]) => {
+          const grid = grids[key];
+          const flat = grid.flat();
+          const max = Math.max(1, ...flat);
+          const min = Math.min(...flat);
+          const dotColor = meta.win ? '#3dbdad' : '#e76f51';
+          let best = { v: -1, r: 0, c: 0 };
+          grid.forEach((row, r) => row.forEach((v, c) => { if (v > best.v) best = { v, r, c }; }));
+          return (
+            <div key={key} className="grid-heatmap-card">
+              <div className="grid-heatmap-header">
+                <span className="grid-heatmap-dot" style={{ background: dotColor, boxShadow: `0 0 10px ${dotColor}` }} />
+                <h3>{meta.label}</h3>
+                <span className="grid-heatmap-range">{min} – {max} PTS</span>
+              </div>
+              <table className="grid-heatmap-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th colSpan={5} className="grid-heatmap-enemy-header">Ennemis</th>
+                  </tr>
+                  <tr>
+                    <th className="grid-heatmap-corner">A↓</th>
+                    {[1, 2, 3, 4, 5].map((n) => <th key={n} className="grid-heatmap-axis">{n}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grid.map((row, r) => (
+                    <tr key={r}>
+                      <th className="grid-heatmap-row-header">{r + 1}</th>
+                      {row.map((v, c) => {
+                        const style = heatmapCellStyle(v, max, meta.win);
+                        return (
+                          <td key={c}>
+                            <input
+                              type="number"
+                              value={v}
+                              onChange={(e) => updateCell(key, r, c, e.target.value)}
+                              style={{ background: style.background, borderColor: style.borderColor, color: style.color }}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="grid-heatmap-example">A↓ alliés · Ennemis → · meilleur gain : {best.r + 1}v{best.c + 1} → {best.v} pts</p>
+            </div>
+          );
+        })}
+      </div>
       <div className="admin-actions">
         <button className="admin-btn-primary" onClick={save} disabled={saving}>Enregistrer les grilles</button>
+        <button type="button" onClick={resetDefaults}>Valeurs par défaut</button>
       </div>
       {error && <p className="admin-error">{error}</p>}
     </section>
@@ -426,17 +512,47 @@ function MultiAccountsSection() {
       {loading ? <p>Chargement...</p> : error ? <p className="admin-error">{error}</p> : rows.length === 0 ? (
         <p className="admin-empty">Aucun compte avec plusieurs persos.</p>
       ) : (
-        <table className="admin-table">
-          <thead><tr><th>Persos</th><th>Nombre</th></tr></thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                <td>{(r.pseudos || []).join(', ')}</td>
-                <td>{r.count}</td>
+        <>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Compte Discord</th>
+                <th>Personnages liés</th>
+                <th className="admin-table-num">Nb</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const name = r.discord_nickname || r.discord_username || '?';
+                const characters = r.characters || [];
+                return (
+                  <tr key={i}>
+                    <td>
+                      <div className="admin-account-cell">
+                        <span className="admin-avatar">
+                          {r.avatar_url ? <img src={r.avatar_url} alt="" /> : name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="admin-account-names">
+                          <span className="admin-account-name">{name}</span>
+                          {r.discord_username && <span className="admin-account-tag">@{r.discord_username}</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="admin-chip-list">
+                        {characters.map((c, ci) => (
+                          <span key={ci} className={`admin-chip${ci === 0 ? ' main' : ''}`}>{c}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="admin-table-num">{r.count}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="admin-note">Les points sont agrégés par compte Discord ; la puce pleine indique le perso principal affiché sur le leaderboard.</p>
+        </>
       )}
     </section>
   );
@@ -595,9 +711,19 @@ export default function AdminApp() {
 
   return (
     <div className="admin-app">
+      <Background />
       <header className="admin-header">
-        <h1>Administration</h1>
-        <button onClick={() => adminApi.logout().then(() => setAuthed(false))}>Déconnexion</button>
+        <div className="admin-header-brand">
+          <img src="/web/assets/logo_nemesis_round.png" alt="Nemesis" />
+          <div className="admin-header-titles">
+            <h1>Administration</h1>
+            <span className="admin-header-subtitle">Nemesis · PvP Tracker</span>
+          </div>
+        </div>
+        <div className="admin-header-actions">
+          <span className="admin-header-season">Saison {settings.currentSeason} · En cours</span>
+          <button onClick={() => adminApi.logout().then(() => setAuthed(false))}>Déconnexion</button>
+        </div>
       </header>
       <nav className="admin-tabs">
         {TABS.map((t) => (
@@ -607,6 +733,7 @@ export default function AdminApp() {
       <main>
         <ActiveComponent settings={settings} reload={loadSettings} />
       </main>
+      <footer className="admin-footer">Nemesis · Panneau d'administration</footer>
     </div>
   );
 }
